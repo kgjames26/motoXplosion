@@ -38,7 +38,7 @@ export function tick(state:RiderState,input:Input,dt:number,terrain:Terrain,bike
   state.y-=hit*.32;
   const surfacePitch=(front.y-rear.y)/wb;
   state.omega+=(surfacePitch-state.angle)*11*dt-(state.omega*4.2*dt);
-  state.omega+=lean*1.9*dt;
+  state.omega+=(lean*1.9+input.throttle*.34-input.brake*.72)*dt;
   state.vx+=(-groundAhead.slope*48)*dt;
   state.vx*=1-(1-terrainGrip)*dt*.8;
   state.compression=Math.max(0,Math.min(1,(hit+Math.max(0,speedImpact)*.014)/30));
