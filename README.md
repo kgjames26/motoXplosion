@@ -39,7 +39,7 @@ The manifest declares a landscape-first installable PWA. The service worker cach
 - src/ui.ts — mode, stage, rider, garage, HUD and results interfaces.
 - src/save.ts — versioned local progression.
 - src/data.ts — rider, bike, mode and stage balance data.
-- sw.js and manifest.webmanifest — install and offline shell.
+- public/sw.js and manifest.webmanifest — install and offline shell.
 
 ## Next upgrades
 
