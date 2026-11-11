@@ -109,7 +109,7 @@ export class MultiUI {
     const m = new Multi(this.h.pseudo(), MULTI_BIKE.id, this.h.outfit());
     this.wire(m);
     try {
-      await m.join(code);
+      await m.join(code, (n) => this.msg(n === 1 ? 'Connexion au salon ' + code + '…' : `Recherche du salon ${code}… (essai ${n}/6)`));
       this.multi = m;
       this.msg('');
       this.render();
@@ -147,7 +147,10 @@ export class MultiUI {
         })
         .join('') +
       (L.running ? `<p class="mp-running">Épreuve ${L.stageNo} en cours…</p>${this.liveHtml()}` : '');
-    $('mp-settings').innerHTML = this.nextHtml(L, m.isHost) + `<p class="mp-share">Donne le code <b>${L.code}</b> à tes amis : Multijoueur → Rejoindre. Tout le monde roule en <b>${MULTI_BIKE.name}</b>, avec sa tenue.</p>`;
+    $('mp-settings').innerHTML =
+      this.nextHtml(L, m.isHost) +
+      `<p class="mp-share">Donne le code <b>${L.code}</b> à tes amis : Multijoueur → Rejoindre, ou envoie-leur le lien. Garde le jeu ouvert pendant qu’ils rejoignent. Tout le monde roule en <b>${MULTI_BIKE.name}</b>, avec sa tenue.</p>` +
+      (m.isHost ? `<button class="btn-secondary mp-share-btn">PARTAGER LE LIEN</button>` : '');
   }
 
   /** "Program the next round" panel (lobby before round 1, and the results screen after each). */
@@ -170,6 +173,13 @@ export class MultiUI {
     const m = this.multi;
     if (!m?.isHost) return;
     const t = e.target as HTMLElement;
+    if (t.closest('.mp-share-btn')) {
+      const url = `${location.origin}${location.pathname}?salon=${m.lobby.code}`;
+      const nav = navigator as Navigator & { share?: (d: { title: string; text: string; url: string }) => Promise<void> };
+      if (nav.share) nav.share({ title: 'MotoXplosion', text: `Rejoins mon salon MotoXplosion : code ${m.lobby.code}`, url }).catch(() => {});
+      else navigator.clipboard?.writeText(url).then(() => this.msg('Lien copié !')).catch(() => this.msg(url));
+      return;
+    }
     if (t.closest('.mp-start')) {
       m.startStage();
       return;

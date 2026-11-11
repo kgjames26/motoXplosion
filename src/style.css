@@ -3836,3 +3836,10 @@ html.no-fs-api #btn-fs-pause { display: none; }
   background: rgba(210, 50, 40, 0.85);
   border-color: #ffc8c0;
 }
+.mp-share-btn {
+  margin-top: calc(var(--u) * 1);
+  padding: calc(var(--u) * 1) calc(var(--u) * 2.4);
+  font-size: calc(var(--u) * 2.8);
+  background: #14d1c0;
+  color: var(--ink);
+}

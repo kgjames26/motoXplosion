@@ -970,4 +970,4 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 // Debug handle (dev server only) for automated visual checks.
-if (import.meta.env.DEV) (window as unknown as { __mx: unknown }).__mx = { game, renderer, audio, profile };
+if (import.meta.env.DEV) (window as unknown as { __mx: unknown }).__mx = { game, renderer, audio, profile, mp };

@@ -121,7 +121,17 @@ const COLORS = ['#ff6a12', '#14b8ff', '#7ad84a', '#e84a8a'];
 function peerOptions(): PeerOptions {
   // dev / tests: ?peer=host:port uses a local PeerServer instead of the public one
   const q = new URLSearchParams(location.search).get('peer');
-  const ice = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } };
+  // v2.22: STUN + the free PeerJS TURN relays (phones on mobile networks / behind strict NATs
+  // cannot connect directly: without a relay the connection never opens)
+  const ice = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+      ],
+    },
+  };
   if (q) {
     const [host, port] = q.split(':');
     return { host, port: Number(port || 9000), path: '/', secure: false, ...ice };
@@ -193,6 +203,7 @@ export class Multi {
             final: false,
           };
           peer.on('connection', (c) => this.accept(c));
+          this.keepReachable(peer);
           this.onLobby(this.lobby);
           resolve(code);
         });
@@ -207,26 +218,96 @@ export class Multi {
     });
   }
 
-  /** Join a room by its code. */
-  join(code: string): Promise<void> {
+  /**
+   * v2.22, host: stay registered on the signalling server. A phone that goes to the background
+   * (to send the code by message…) loses its connection to the server: the room then
+   * disappears for the others. Reconnect as soon as possible, keep the screen awake.
+   */
+  private keepReachable(peer: Peer): void {
+    const again = () => {
+      if (this.closed || peer.destroyed || !peer.disconnected) return;
+      try {
+        peer.reconnect();
+      } catch {
+        /* try again later */
+      }
+    };
+    peer.on('disconnected', () => setTimeout(again, 800));
+    peer.on('error', (e: { type?: string }) => {
+      if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error' || e.type === 'socket-closed') setTimeout(again, 2000);
+    });
+    const vis = () => {
+      if (document.visibilityState === 'visible') {
+        again();
+        this.wake();
+      }
+    };
+    document.addEventListener('visibilitychange', vis);
+    this.reachTimer = window.setInterval(again, 5000);
+    this.wake();
+  }
+
+  private wakeLock: { release: () => Promise<void> } | null = null;
+  private reachTimer = 0;
+  private wake(): void {
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
+    nav.wakeLock?.request('screen').then((l) => (this.wakeLock = l)).catch(() => {});
+  }
+
+  /** Join a room by its code (a few tries: the host may be reconnecting). */
+  join(code: string, onTry?: (n: number) => void): Promise<void> {
     this.isHost = false;
+    const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     return new Promise((resolve, reject) => {
       const peer = new Peer(peerOptions());
       this.peer = peer;
       let settled = false;
+      let tries = 0;
       const fail = (why: string) => {
         if (!settled) {
           settled = true;
           reject(new Error(why));
         }
       };
-      peer.on('error', (e: { type?: string }) => fail(e.type === 'peer-unavailable' ? 'Salon introuvable' : 'Connexion impossible'));
-      peer.on('open', (id) => {
-        this.myId = id;
-        const c = peer.connect(PREFIX + code.trim().toUpperCase(), { reliable: true });
-        this.hostConn = c;
-        c.on('open', () => c.send({ t: 'hello', name: this.name, color: '', bike: this.bike, outfit: this.outfit } satisfies Msg));
+      let pending: DataConnection | null = null;
+      const connect = () => {
+        if (settled) return;
+        tries++;
+        onTry?.(tries);
+        if (pending) {
+          try {
+            pending.close();
+          } catch {
+            /* never opened */
+          }
+        }
+        const c = peer.connect(PREFIX + clean, { reliable: true });
+        pending = c;
+        wire(c);
+      };
+      peer.on('error', (e: { type?: string }) => {
+        if (settled) return;
+        if (e.type === 'peer-unavailable') {
+          if (tries < 6) setTimeout(connect, 3000);
+          else fail('Salon introuvable : vérifie le code, et que l’hôte a bien le jeu ouvert');
+        } else if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') {
+          if (tries < 6) setTimeout(() => (peer.disconnected ? peer.reconnect() : connect()), 3000);
+          else fail('Connexion impossible (réseau)');
+        } else fail('Connexion impossible');
+      });
+      setTimeout(() => fail('Pas de réponse du salon : réessaie, ou essayez en Wi-Fi'), 30000);
+      const wire = (c: DataConnection) => {
+        c.on('open', () => {
+          // only one link to the host: the first that opens wins
+          if (this.hostConn && this.hostConn !== c && this.hostConn.open) {
+            c.close();
+            return;
+          }
+          this.hostConn = c;
+          c.send({ t: 'hello', name: this.name, color: '', bike: this.bike, outfit: this.outfit } satisfies Msg);
+        });
         c.on('data', (d) => {
+          if (c !== this.hostConn) return;
           const m = d as Msg;
           if (m.t === 'full') fail('Salon complet (4 pilotes)');
           if (m.t === 'lobby' && !settled) {
@@ -236,15 +317,20 @@ export class Multi {
           this.fromHost(m);
         });
         c.on('close', () => {
-          if (!this.closed) this.onClose('L’hôte a quitté le salon');
+          if (!this.closed && settled && c === this.hostConn) this.onClose('L’hôte a quitté le salon');
         });
-        setTimeout(() => fail('Pas de réponse du salon'), 12000);
+      };
+      peer.on('open', (id) => {
+        this.myId = id;
+        connect();
       });
     });
   }
 
   leave(): void {
     this.closed = true;
+    clearInterval(this.reachTimer);
+    this.wakeLock?.release().catch(() => {});
     try {
       this.peer?.destroy();
     } catch {
@@ -256,14 +342,31 @@ export class Multi {
 
   private accept(c: DataConnection): void {
     c.on('data', (d) => this.fromClient(c, d as Msg));
-    c.on('close', () => this.drop(c.peer));
-    c.on('error', () => this.drop(c.peer));
+    // a replaced (older) link closing must not drop the rider
+    c.on('close', () => this.conns.get(c.peer) === c && this.drop(c.peer));
+    c.on('error', () => this.conns.get(c.peer) === c && this.drop(c.peer));
   }
 
   private fromClient(c: DataConnection, m: Msg): void {
     const L = this.lobby;
     switch (m.t) {
       case 'hello': {
+        // the same rider again (a retry got through twice): keep the newest link only
+        const known = L.players.find((q) => q.id === c.peer);
+        if (known) {
+          const old = this.conns.get(c.peer);
+          if (old && old !== c) {
+            this.conns.set(c.peer, c);
+            try {
+              old.close();
+            } catch {
+              /* already closed */
+            }
+          }
+          c.send({ t: 'welcome', id: c.peer } satisfies Msg);
+          this.broadcastLobby();
+          return;
+        }
         if (L.players.length >= MAX_PLAYERS) {
           c.send({ t: 'full' } satisfies Msg);
           setTimeout(() => c.close(), 300);

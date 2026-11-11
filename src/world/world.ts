@@ -83,32 +83,17 @@ export class World {
 
   /** Weather kind of the 2000 m stretch k (random, never the same twice in a row). */
   private kindOf(k: number): Weather {
-    const h = (n: number) => {
-      let v = (this.seed ^ Math.imul(n + 7, 0x9e3779b1)) >>> 0;
-      v = Math.imul(v ^ (v >>> 15), 0x85ebca6b) >>> 0;
-      return ((v ^ (v >>> 13)) >>> 0) % 3;
-    };
-    let kind = h(k);
-    // v2.21: the ride starts dry 70 % of the time
-    if (k === 0) {
-      let v = (this.seed ^ 0x51ed27) >>> 0;
-      v = Math.imul(v ^ (v >>> 15), 0x2c1b3c6d) >>> 0;
-      if ((v % 100) < 70) return 0 as Weather;
-      if (this.region.id === 'desert') return 1 as Weather;
-      return (1 + (v % 2)) as Weather;
-    }
-    if (this.region.id === 'desert') {
-      // no snow in the desert: mostly sun, a rain shower now and then (never two in a row)
-      kind = kind === 1 ? 1 : 0;
-      if (k > 0 && kind === 1 && this.kindOf(k - 1) === 1) kind = 0;
-      return kind as Weather;
-    }
-    if (k > 0) {
-      const prev = this.kindOf(k - 1);
-      if (kind === prev) kind = (kind + 1 + (h(k + 99) % 2)) % 3;
-    }
-    return kind as Weather;
+    // v2.22: each 2000 m stretch: snow 10 % (none in the desert), rain 25 %, dry the rest
+    let v = (this.seed ^ Math.imul(k + 7, 0x9e3779b1)) >>> 0;
+    v = Math.imul(v ^ (v >>> 15), 0x85ebca6b) >>> 0;
+    v = Math.imul(v ^ (v >>> 13), 0xc2b2ae35) >>> 0;
+    const p = ((v ^ (v >>> 16)) >>> 0) % 1000 / 1000;
+    const snow = this.region.id === 'desert' ? 0 : 0.1;
+    if (p < snow) return 2 as Weather;
+    if (p < snow + 0.25) return 1 as Weather;
+    return 0 as Weather;
   }
+
   private kindCache = new Map<number, Weather>();
   private kindAt(k: number): Weather {
     let v = this.kindCache.get(k);

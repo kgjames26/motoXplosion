@@ -397,7 +397,7 @@ export class Game {
       const misalign = ev.landingAngle;
       const loss = clamp((hard - 8.5) * 1.5 + Math.max(0, misalign - 0.6) * 8, 0, 14);
       // v2.21 cruising: a landing far too hard (flat from high up) or badly crooked is a fall
-      if (this.mode === 'cruising' && (hard > 12 || (misalign > 0.95 && hard > 5)) && !ev.crashed) {
+      if (this.mode === 'cruising' && (hard > 13.2 || (misalign > 1.05 && hard > 5.5)) && !ev.crashed) {
         this.crash();
       }
       if (loss > 1) {

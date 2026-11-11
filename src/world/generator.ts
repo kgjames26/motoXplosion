@@ -880,7 +880,7 @@ export class Generator {
   private speedJump(d: number): Segment[] {
     const r = this.rng;
     const g = 9.81;
-    const width = (22 - d * 8) / 3.6; // window width (m/s), narrower further on
+    const width = ((22 - d * 8) * 1.1) / 3.6; // window width (m/s), narrower further on (v2.22: +10 %)
     const lo = r.range(38, 62) / 3.6; // approach speed (m/s) at the low end
     const hi = lo + width;
     const Hk = r.range(1.3, 2.0);
