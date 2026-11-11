@@ -1,1 +1,166 @@
-<!doctype html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#11151b"><meta name="description" content="MotoXplosion — arcade motocross physics game"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg"><title>MotoXplosion — Ride the chaos</title></head><body><div id="app"><canvas id="game" aria-label="Jeu MotoXplosion"></canvas><div id="hud"></div><div id="overlay"></div><div id="touch-controls"></div></div><script type="module" src="/src/main.ts"></script></body></html>
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6fe0" />
+    <meta name="description" content="MotoXplosion — cruising motocross infini en 2,5D cel-shading." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MotoXplosion" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>MotoXplosion</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="MotoXplosion"></canvas>
+
+      <!-- HUD -->
+      <div id="hud" class="hidden">
+        <div class="hud-tl">
+          <div class="speedo panel">
+            <svg viewBox="0 0 60 40" class="gauge" aria-hidden="true">
+              <path d="M8 34 A22 22 0 0 1 52 34" class="gauge-bg" />
+              <path d="M8 34 A22 22 0 0 1 52 34" class="gauge-fill" id="gauge-fill" pathLength="100" />
+              <path d="M44 15 A22 22 0 0 1 52 34" class="gauge-red" />
+              <line x1="30" y1="34" x2="30" y2="15" class="gauge-needle" id="gauge-needle" />
+              <circle cx="30" cy="34" r="3.5" class="gauge-hub" />
+            </svg>
+            <div class="speed"><span id="speed">0</span><small>km/h</small></div>
+            <div class="speed-underline"></div>
+          </div>
+          <div class="energies">
+            <div class="energy fuel" aria-label="Essence">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M5 4h9l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm2 4l7 7m0-7l-7 7" /><path d="M14 2h5v4" class="spout" /></svg>
+              <div class="bar"><i id="fuel-bar"></i></div>
+            </div>
+            <div class="energy water" aria-label="Énergie du pilote">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 2.5C9 7 6 10.5 6 14.5a6 6 0 0 0 12 0c0-4-3-7.5-6-12z" /></svg>
+              <div class="bar"><i id="stamina-bar"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-tc">
+          <div class="progress">
+            <span class="dot start"></span>
+            <div class="track"><i id="progress-fill"></i></div>
+            <span class="dot end"></span>
+            <svg viewBox="0 0 40 26" class="moto-ico" id="progress-moto" aria-hidden="true">
+              <circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" />
+              <path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" />
+            </svg>
+            <svg viewBox="0 0 24 30" class="flag-ico" aria-hidden="true">
+              <path d="M3 29V2" class="pole" />
+              <path d="M4 3h16v11H4z" class="cloth" />
+              <path d="M4 3h4v3.7H4zm8 0h4v3.7h-4zM8 6.7h4v3.6H8zm8 0h4v3.6h-4zM4 10.3h4V14H4zm8 0h4V14h-4z" class="check" />
+            </svg>
+          </div>
+          <div class="distance"><span id="distance">0</span> m</div>
+        </div>
+
+        <button class="hud-tr panel btn-pause" id="btn-pause" aria-label="Pause">
+          <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+        </button>
+      </div>
+
+      <!-- Touch controls -->
+      <div id="controls" class="hidden">
+        <button class="brake" id="ctl-brake" aria-label="Frein">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="34" class="disc" />
+            <circle cx="50" cy="50" r="13" class="hub" />
+            <g class="holes">
+              <circle cx="50" cy="26" r="3.2" /><circle cx="71" cy="38" r="3.2" /><circle cx="71" cy="62" r="3.2" />
+              <circle cx="50" cy="74" r="3.2" /><circle cx="29" cy="62" r="3.2" /><circle cx="29" cy="38" r="3.2" />
+            </g>
+            <path d="M76 26 A36 36 0 0 1 84 58 L74 56 A26 26 0 0 0 68 33 Z" class="caliper" />
+          </svg>
+        </button>
+
+        <div class="balance panel" id="ctl-balance">
+          <div class="bal-side left">
+            <svg viewBox="0 0 48 36" class="bal-ico" aria-hidden="true">
+              <circle cx="10" cy="27" r="7" /><circle cx="38" cy="22" r="7" />
+              <path d="M10 27 L20 16 L32 13 L38 22" /><path d="M14 9 l4 -5 M12 12 l6 6 l6 -6" class="rider" />
+            </svg>
+            <span>ARRIÈRE</span>
+          </div>
+          <div class="bal-track" id="bal-track">
+            <i class="bal-fill" id="bal-fill"></i>
+            <i class="bal-knob" id="bal-knob"></i>
+          </div>
+          <div class="bal-side right">
+            <svg viewBox="0 0 48 36" class="bal-ico" aria-hidden="true">
+              <circle cx="10" cy="27" r="7" /><circle cx="38" cy="27" r="7" />
+              <path d="M10 27 L18 18 L30 18 L38 27" /><path d="M28 8 l4 -3 M22 12 l8 2 l2 6" class="rider" />
+            </svg>
+            <span>AVANT</span>
+          </div>
+        </div>
+
+        <div class="throttle" id="ctl-throttle" aria-label="Accélérateur">
+          <div class="thr-track">
+            <i class="thr-fill" id="thr-fill"></i>
+            <div class="thr-grip" id="thr-grip"><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+          <svg viewBox="0 0 24 24" class="thr-arrow" aria-hidden="true"><path d="M6 6l6 6 6-6M6 12l6 6 6-6" /></svg>
+        </div>
+      </div>
+
+      <!-- Screens -->
+      <div id="screen-title" class="screen">
+        <div class="logo">
+          <span class="l1">MOTO</span><span class="l2">XPLOSION</span>
+        </div>
+        <p class="tagline">Roule le plus loin possible. Garde de l'essence et de l'eau !</p>
+        <button class="btn-primary" id="btn-play">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> JOUER
+        </button>
+        <div class="best">Record : <b id="best-title">0</b> m</div>
+        <div class="howto">
+          <div><b>Poignée</b> glisser vers le bas = gaz</div>
+          <div><b>Balance</b> arrière / avant = équilibre et rotation en l'air</div>
+          <div><b>Disque</b> = frein</div>
+        </div>
+      </div>
+
+      <div id="screen-pause" class="screen hidden">
+        <h2>PAUSE</h2>
+        <button class="btn-primary" id="btn-resume"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> REPRENDRE</button>
+        <div class="row">
+          <button class="btn-secondary" id="btn-restart">RECOMMENCER</button>
+          <button class="btn-secondary" id="btn-home">ACCUEIL</button>
+          <button class="btn-secondary" id="btn-sound">SON : OUI</button>
+        </div>
+      </div>
+
+      <div id="screen-over" class="screen hidden">
+        <h2 id="over-title">PANNE D'ESSENCE !</h2>
+        <div class="over-stats">
+          <div><span>Distance</span><b id="over-distance">0 m</b></div>
+          <div><span>Temps</span><b id="over-time">0:00</b></div>
+          <div><span>Record</span><b id="over-best">0 m</b></div>
+        </div>
+        <div class="new-record hidden" id="over-record">NOUVEAU RECORD !</div>
+        <div class="row">
+          <button class="btn-primary" id="btn-again"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" /></svg> REJOUER</button>
+          <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
+        </div>
+      </div>
+
+      <div id="rotate">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="20" y="8" width="24" height="44" rx="4" class="phone" />
+          <path d="M10 40 a24 24 0 0 0 20 16" class="arrow" />
+          <path d="M26 52 l4 4 l-5 2" class="arrow" />
+        </svg>
+        <p>Tournez votre téléphone</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

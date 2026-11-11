@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f6fe0"/><stop offset="1" stop-color="#9fd6ff"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sky)"/>
+  <path d="M0 330 L90 230 L150 280 L240 170 L330 270 L400 210 L512 300 V512 H0Z" fill="#7d9cc9" stroke="#1c1a2b" stroke-width="6"/>
+  <path d="M240 170 L270 205 L250 200 L232 215 L215 200 Z M400 210 L425 232 L405 230 L390 240 Z" fill="#f4f8ff"/>
+  <path d="M0 400 Q130 340 260 390 T512 370 V512 H0Z" fill="#6cbf3f" stroke="#1c1a2b" stroke-width="6"/>
+  <path d="M0 440 Q140 400 270 430 T512 420 V512 H0Z" fill="#b97a48" stroke="#1c1a2b" stroke-width="6"/>
+  <g stroke="#1c1a2b" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="160" cy="330" r="52" fill="#2b2930"/>
+    <circle cx="360" cy="320" r="54" fill="#2b2930"/>
+    <circle cx="160" cy="330" r="16" fill="#ff7a1a"/>
+    <circle cx="360" cy="320" r="16" fill="#ff7a1a"/>
+    <path d="M160 330 L225 290 L330 270 L360 320" fill="none" stroke="#b9bfcc" stroke-width="14"/>
+    <path d="M200 255 L330 245 L350 210 L290 200 L215 225 Z" fill="#ff7a1a"/>
+    <path d="M300 215 L345 165 L370 172" fill="none" stroke="#f0a92e" stroke-width="16"/>
+    <path d="M150 250 L235 255 L250 240 L150 238 Z" fill="#2a2833"/>
+    <circle cx="262" cy="130" r="34" fill="#ff7a1a"/>
+    <path d="M240 160 L215 235 L270 240 L290 175 Z" fill="#ff7a1a"/>
+    <path d="M285 180 L345 172" fill="none" stroke="#ff7a1a" stroke-width="22"/>
+    <path d="M272 120 h28 v18 h-28z" fill="#20222e"/>
+  </g>
+</svg>

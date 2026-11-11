@@ -1,58 +1,157 @@
 import './style.css';
-import {bikes,stages,Mode,stageFor,riders} from './data';
-import {Input,newRide,RiderState,tick} from './physics';
-import {Renderer} from './renderer';
-import {Terrain} from './terrain';
-import {loadSave,saveGame,SaveData} from './save';
-import {UI,UIState,Screen} from './ui';
-const canvas=document.querySelector<HTMLCanvasElement>('#game')!,overlay=document.querySelector<HTMLElement>('#overlay')!,hud=document.querySelector<HTMLElement>('#hud')!,touch=document.querySelector<HTMLElement>('#touch-controls')!;
-const renderer=new Renderer(canvas);let save:SaveData=loadSave(),mode:Mode='freestyle',stageIndex=0,screen:Screen='home',ride:RiderState=newRide(),terrain=new Terrain(21,5000,'freestyle'),last=performance.now(),acc=0,hudTimer=0;
-const keys=new Set<string>();let paused=false;let touchState={throttle:0,brake:0,left:0,right:0,trick:0};let resultSnapshot:UIState['result'];
-const ui=new UI(overlay,hud,touch,(a,v)=>action(a,v));
-const uiState=():UIState=>({screen,mode,stageIndex,save,result:resultSnapshot});
-const selectedBike=()=>bikes.find(b=>b.id===save.bike)||bikes[0],selectedRider=()=>riders.find(r=>r.id===save.rider)||riders[0];
-function draw(){ui.draw(uiState());}
-function drawHud(){ui.drawHud(uiState(),ride.time,ride.distance,ride.score,ride.combo,ride.crashes,ride.speed,ride.distance/stageFor(mode,stageIndex).distance*100);}
-function startRace(){const st=stageFor(mode,stageIndex);terrain=new Terrain(st.seed,st.distance*4+1000,mode);ride=newRide();ride.x=100;ride.y=terrain.sample(100).y-32;screen='playing';paused=false;last=performance.now();acc=0;overlay.innerHTML='';overlay.style.pointerEvents='none';hud.style.display='block';drawHud();}
-function endRace(){
- const st=stageFor(mode,stageIndex);let medal=0;
- if(mode==='freestyle'){const bronze=450*st.difficulty,silver=850*st.difficulty,gold=1350*st.difficulty;medal=ride.score>=gold?3:ride.score>=silver?2:ride.score>=bronze?1:0;}
- else if(mode==='survival')medal=ride.crashes<=1?3:ride.crashes<=3?2:ride.crashes<=6?1:0;
- else medal=ride.time<=st.gold?3:ride.time<=st.silver?2:ride.time<=st.bronze?1:0;
- const prior=save.records[st.id]||{bestTime:Infinity,bestScore:0,medal:0,clears:0};
- save.records[st.id]={bestTime:Math.min(prior.bestTime,ride.time),bestScore:Math.max(prior.bestScore,ride.score),medal:Math.max(prior.medal,medal),clears:prior.clears+1};
- save.coins+=st.reward+Math.round(ride.score*.04)+medal*100;saveGame(save);resultSnapshot={time:ride.time,score:ride.score,crashes:ride.crashes,distance:ride.distance};screen='result';overlay.style.pointerEvents='auto';hud.style.display='none';ui.draw(uiState());
+import { Audio } from './audio/audio';
+import { Game } from './game';
+import { Renderer } from './render/renderer';
+import { Controls } from './ui/controls';
+import { formatTime, Hud } from './ui/hud';
+
+/**
+ * Entry point: wires the game loop, renderer, HUD, controls, screens, audio and PWA.
+ */
+const $ = (id: string) => document.getElementById(id)!;
+
+const canvas = $('game') as HTMLCanvasElement;
+const renderer = new Renderer(canvas);
+const game = new Game();
+const controls = new Controls();
+const hud = new Hud();
+const audio = new Audio();
+
+const screens = {
+  title: $('screen-title'),
+  pause: $('screen-pause'),
+  over: $('screen-over'),
+};
+const hudEl = $('hud');
+const controlsEl = $('controls');
+
+function show(which: 'title' | 'pause' | 'over' | 'none'): void {
+  for (const [k, el] of Object.entries(screens)) el.classList.toggle('hidden', k !== which);
+  const playing = which === 'none' || which === 'pause';
+  hudEl.classList.toggle('hidden', !playing);
+  controlsEl.classList.toggle('hidden', which !== 'none');
 }
-function action(a:string,v?:string){
- if(a==='home'){screen='home';paused=false;}
- if(a==='modes')screen='modes';
- if(a==='mode'&&v){mode=v as Mode;stageIndex=0;screen='stages';}
- if(a==='select-stage'&&v!==undefined){const i=Number(v),list=stages.filter(x=>x.mode===mode);if(i===0||!!save.records[list[i-1]?.id]?.clears)stageIndex=i;draw();return;}
- if(a==='start-ride')startRace();
- if(a==='garage')screen='garage';
- if(a==='rider'&&v){save.rider=v;saveGame(save);}
- if(a==='bike'&&v){const bike=bikes.find(b=>b.id===v);if(bike){if(!save.ownedBikes.includes(v)){if(save.coins>=bike.price){save.coins-=bike.price;save.ownedBikes.push(v);}else return;}save.bike=v;saveGame(save);}}
- if(a==='pause'){paused=true;screen='pause';overlay.style.pointerEvents='auto';overlay.innerHTML='<section class="screen result-screen"><div class="result-card"><div class="eyebrow orange">RACE PAUSED</div><h2>TAKE A BREATHER</h2><p>GAS, LEAN AND TRICK. BACK TO IT.</p><div class="result-actions"><button class="btn ghost" data-action="quit">QUIT</button><button class="btn primary" data-action="resume">RESUME →</button></div></div></section>';hud.style.display='none';return;}
- if(a==='resume'){paused=false;screen='playing';last=performance.now();overlay.innerHTML='';overlay.style.pointerEvents='none';hud.style.display='block';}
- if(a==='quit'){screen='stages';paused=false;overlay.style.pointerEvents='auto';hud.style.display='none';}
- if(a==='retry')startRace();
- if(a==='shop')screen='shop';
- if(a==='upgrade'&&v){const costs:Record<string,number>={engine:600,suspension:520,tyres:420,frame:650};const level=save.upgrades[v]||0,price=costs[v]*(level+1);if(level<3&&save.coins>=price){save.coins-=price;save.upgrades[v]=level+1;saveGame(save);}}
- if(a==='continue'){const next=stageIndex+1,list=stages.filter(x=>x.mode===mode);if(next<list.length){stageIndex=next;screen='stages';}else screen='modes';}
- if(a!=='pause'&&a!=='resume'&&a!=='quit')draw();
+
+function updateBest(): void {
+  $('best-title').textContent = game.best.toLocaleString('fr-FR');
 }
-const keyNames:Record<string,string>={ArrowUp:'w',ArrowDown:'s',ArrowLeft:'a',ArrowRight:'d',' ':'q',Shift:'e',w:'w',s:'s',a:'a',d:'d',q:'q',e:'e'};
-addEventListener('keydown',e=>{const k=keyNames[e.key];if(k){e.preventDefault();keys.add(k);}if(e.key==='Escape'&&screen==='playing')action('pause');});
-addEventListener('keyup',e=>{const k=keyNames[e.key];if(k)keys.delete(k);});
-touch.addEventListener('pointerdown',e=>{const el=(e.target as HTMLElement).closest<HTMLElement>('[data-key]');if(!el)return;el.setPointerCapture(e.pointerId);const k=el.dataset.key;if(k==='w')touchState.throttle=1;if(k==='s')touchState.brake=1;if(k==='a')touchState.left=1;if(k==='d')touchState.right=1;if(k==='q')touchState.trick=1;if(k==='e')touchState.trick=-1;});
-touch.addEventListener('pointerup',e=>{const el=(e.target as HTMLElement).closest<HTMLElement>('[data-key]');if(!el)return;const k=el.dataset.key;if(k==='w')touchState.throttle=0;if(k==='s')touchState.brake=0;if(k==='a')touchState.left=0;if(k==='d')touchState.right=0;if(k==='q'||k==='e')touchState.trick=0;});
-touch.addEventListener('pointercancel',()=>touchState={throttle:0,brake:0,left:0,right:0,trick:0});
-function inputNow():Input {const pad=navigator.getGamepads?.()[0],axis=pad?.axes[0]||0,padThrottle=Math.max(pad?.buttons[7]?.value||0,pad?.buttons[0]?.pressed?1:0),padBrake=Math.max(pad?.buttons[6]?.value||0,pad?.buttons[1]?.pressed?1:0),throttle=Math.max(touchState.throttle,keys.has('w')?1:0,padThrottle),brake=Math.max(touchState.brake,keys.has('s')?1:0,padBrake),lean=(keys.has('d')?1:0)-(keys.has('a')?1:0)+touchState.right-touchState.left+axis,trick=(keys.has('e')?1:0)-(keys.has('q')?1:0)+touchState.trick+(pad?.buttons[5]?.pressed?1:0)-(pad?.buttons[4]?.pressed?1:0);return {throttle,brake,lean:Math.max(-1,Math.min(1,lean)),trick:Math.max(-1,Math.min(1,trick))};}
-function frame(now:number){
- const dt=Math.min(.05,(now-last)/1000);last=now;
- if(screen==='playing'&&!paused){const input=inputNow();acc+=dt;const step=1/120;let n=0;while(acc>=step&&n++<8){tick(ride,input,step,terrain,selectedBike(),selectedRider(),mode,save.upgrades,100+stageFor(mode,stageIndex).distance*4);acc-=step;}renderer.render(ride,terrain,selectedBike(),selectedRider(),mode,true);hudTimer+=dt;if(hudTimer>.075){hudTimer=0;drawHud();}if(ride.finished)endRace();}
- else {const st=stageFor(mode,stageIndex),scene=new Terrain(st.seed,st.distance*4+1000,mode),dummy=newRide();dummy.x=920;dummy.y=scene.sample(dummy.x).y-34;dummy.vx=105;dummy.speed=105;dummy.angle=-.2;renderer.render(dummy,scene,selectedBike(),selectedRider(),screen==='home'?'freestyle':mode,false);}
- requestAnimationFrame(frame);
+
+/** Fullscreen + landscape lock where the platform allows it (Android Chrome, installed PWA). */
+async function immersive(): Promise<void> {
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen && matchMedia('(pointer: coarse)').matches) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    }
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    await o.lock?.('landscape');
+  } catch {
+    /* not supported: the CSS rotate screen covers portrait */
+  }
 }
-screen='home';draw();requestAnimationFrame(frame);
-if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
+
+function start(): void {
+  audio.unlock();
+  void immersive();
+  controls.reset();
+  game.newRun();
+  renderer.render(game, 0, true);
+  show('none');
+}
+
+function pause(): void {
+  if (game.state !== 'playing') return;
+  game.state = 'paused';
+  controls.reset();
+  show('pause');
+}
+
+function resume(): void {
+  if (game.state !== 'paused') return;
+  audio.unlock();
+  game.state = 'playing';
+  show('none');
+}
+
+function home(): void {
+  game.newRun();
+  game.state = 'title';
+  updateBest();
+  renderer.render(game, 0, true);
+  show('title');
+}
+
+$('btn-play').addEventListener('click', start);
+$('btn-again').addEventListener('click', start);
+$('btn-restart').addEventListener('click', start);
+$('btn-resume').addEventListener('click', resume);
+$('btn-home').addEventListener('click', home);
+$('btn-home2').addEventListener('click', home);
+$('btn-pause').addEventListener('click', pause);
+const soundBtn = $('btn-sound');
+const refreshSound = () => (soundBtn.textContent = `SON : ${audio.enabled ? 'OUI' : 'NON'}`);
+refreshSound();
+soundBtn.addEventListener('click', () => {
+  audio.setEnabled(!audio.enabled);
+  refreshSound();
+});
+controls.onPause = () => (game.state === 'paused' ? resume() : pause());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause();
+});
+window.addEventListener('resize', () => renderer.resize());
+// Pause automatically when the phone is turned to portrait (the rotate screen covers the game).
+matchMedia('(orientation: portrait)').addEventListener('change', (e) => {
+  if (e.matches && matchMedia('(pointer: coarse)').matches) pause();
+});
+window.addEventListener('orientationchange', () => setTimeout(() => renderer.resize(), 200));
+// Block the iOS context menu / double-tap zoom on long presses.
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+updateBest();
+show('title');
+renderer.render(game, 0, true);
+
+// ---------------------------------------------------------------- loop
+let last = performance.now();
+function frame(now: number): void {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  controls.update(dt);
+  game.input.throttle = controls.throttle;
+  game.input.brake = controls.brake;
+  game.input.balance = controls.balance;
+  game.update(dt);
+  const ev = game.consumeEvents();
+  if (ev.pickup) audio.pickup(ev.pickup);
+  if (ev.landing) audio.landing(ev.landing);
+  if (ev.crash) {
+    audio.crash();
+    navigator.vibrate?.(120);
+  }
+  if (ev.checkpoint) audio.checkpoint();
+  if (ev.over) {
+    audio.over();
+    $('over-title').textContent = game.overReason === 'fuel' ? "PANNE D'ESSENCE !" : 'PILOTE ÉPUISÉ !';
+    $('over-distance').textContent = `${Math.round(game.distance).toLocaleString('fr-FR')} m`;
+    $('over-time').textContent = formatTime(game.time);
+    $('over-best').textContent = `${game.best.toLocaleString('fr-FR')} m`;
+    $('over-record').classList.toggle('hidden', Math.round(game.distance) < game.best || game.best === 0);
+    show('over');
+  }
+  const running = game.state === 'playing' && game.fuel > 0;
+  audio.engine(game.bike.rpm, game.input.throttle, game.bike.speed, running || game.state === 'title');
+  if (game.state !== 'paused') renderer.render(game, dt);
+  if (game.state === 'playing') hud.update(game);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------- PWA
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+// Debug handle (dev server only) for automated visual checks.
+if (import.meta.env.DEV) (window as unknown as { __mx: unknown }).__mx = { game, renderer };
