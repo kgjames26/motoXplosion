@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { fbm1, hash1, noise1 } from '../core/math';
 import { propSprite, Sprite } from '../render/sprites';
-import { assetSprite } from '../catalog';
+import { assetDef, assetSprite } from '../catalog';
 import { Biome, CHUNK_SAMPLES, DX, PropKind, Surface } from '../world/types';
 import type { World } from '../world/world';
 import { spriteGeometry, TextureBank } from './textures';
@@ -24,11 +24,13 @@ const FG_END = 42;
 export interface ChunkVisual {
   index: number;
   group: THREE.Group;
+  /** Animated billboards (cheering supporters): base y in userData.y, phase in userData.p. */
+  anims: THREE.Mesh[];
 }
 
 export interface TerrainStyle {
   /** Ground set: green (Alpes, Forêt), canyon (red rock), desert (sand dunes). */
-  kind: 'green' | 'canyon' | 'desert';
+  kind: 'green' | 'canyon' | 'desert' | 'city';
   treeDensity: number; // quality multiplier
   /** Weather: 0 dry, 1 damp, 2 wet (darker ground). */
   wet?: number;
@@ -132,6 +134,7 @@ export class TerrainBuilder {
   };
   private spriteGeo = new Map<Sprite, THREE.PlaneGeometry>();
   private snow = false;
+  private lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f0e6, side: THREE.DoubleSide });
   private shadowGeo = new THREE.PlaneGeometry(1, 1);
   private shadowMaterial: THREE.Material | null = null;
   private shadowMat(): THREE.Material {
@@ -168,6 +171,13 @@ export class TerrainBuilder {
       water: new THREE.MeshLambertMaterial({ color: 0x3aa6e0, transparent: true, opacity: 0.88 }),
       lip: lambert(bank.groundTex('dirt', 3.2), style.kind === 'canyon' ? 0x4e3a30 : 0x8a6a52),
     };
+    // San Francisco: asphalt road with a pale pavement field and city lawns behind
+    if (style.kind === 'city') {
+      this.mats.track = lambert(bank.groundTex('asphalt', 4), 0xffffff);
+      this.mats.ground = lambert(bank.groundTex('stone', 3), 0xd8d6d2);
+      this.mats.hills = lambert(bank.groundTex('grass', 9), 0xc8dcb8);
+      this.mats.lip = lambert(bank.groundTex('stone', 2), 0xb8b6b2);
+    }
     // snow: a thin white cover on the ground and hills (the track keeps a cleared line)
     this.snow = style.wet === 2;
     if (this.snow) {
@@ -186,6 +196,7 @@ export class TerrainBuilder {
   dispose(): void {
     for (const m of Object.values(this.mats)) m.dispose();
     this.shadowMaterial?.dispose();
+    this.lineMat.dispose();
     this.shadowGeo.dispose();
     for (const m of this.spriteMat.values()) m.dispose();
     for (const g of this.spriteGeo.values()) g.dispose();
@@ -265,6 +276,22 @@ export class TerrainBuilder {
         const m = new THREE.Mesh(geo, this.mats.track);
         m.receiveShadow = true;
         group.add(m);
+      }
+      // city: white dashed lane line and a kerb line on the road
+      if (this.style.kind === 'city') {
+        const pos: number[] = [];
+        const xs = (i0 + a) * DX;
+        const xe = (i0 + b) * DX;
+        for (let x = Math.ceil(xs / 3) * 3; x + 1.5 <= xe; x += 3) {
+          const ya = w.sampleVisual(Math.round(x / DX)) + 0.012;
+          const yb = w.sampleVisual(Math.round((x + 1.5) / DX)) + 0.012;
+          pos.push(x, ya, -0.95, x + 1.5, yb, -0.95, x, ya, -0.85, x + 1.5, yb, -0.95, x + 1.5, yb, -0.85, x, ya, -0.85);
+        }
+        if (pos.length) {
+          const lg = new THREE.BufferGeometry();
+          lg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+          group.add(new THREE.Mesh(lg, this.lineMat));
+        }
       }
       // front lip: from the track edge down to the ground in front
       const lip = grid(
@@ -369,11 +396,24 @@ export class TerrainBuilder {
       m.setPosition(x, y, z);
       arr.push(m);
     };
+    const anims: THREE.Mesh[] = [];
     for (const p of w.props) {
       if (p.x < x0 || p.x >= x1) continue;
       const biome = w.biomeAt(p.x);
       const isAsset = p.kind === 'asset';
       const s = isAsset ? assetSprite(p.asset!) : propSprite(p.kind as PropKind, p.variant, biome);
+      if (isAsset && p.depth > 0 && p.depth < 0.5 && assetDef(p.asset!)?.anim) {
+        // supporters jump and cheer: own mesh, moved every frame by the renderer
+        const z = Z_BACK - 0.4 - p.depth * 9.5;
+        const m = new THREE.Mesh(this.billboardGeo(s), this.billboardMat(s));
+        const y = backFieldY(w, p.x, z) - 0.05;
+        m.position.set(p.x, y, z);
+        m.scale.setScalar(p.scale);
+        m.userData = { y, p: (p.x * 1.7) % 6.28, shared: true };
+        group.add(m);
+        anims.push(m);
+        continue;
+      }
       if (p.depth > 0) {
         const z = Z_BACK - 0.4 - p.depth * 9.5;
         // tall trees just behind the track are kept moderate so the far relief stays visible
@@ -413,7 +453,7 @@ export class TerrainBuilder {
     const density = this.style.treeDensity;
     for (let x = x0; x < x1; x += 2.2) {
       const biome = w.biomeAt(x);
-      const per = biome === Biome.Forest ? 3 : biome === Biome.Canyon ? 0.6 : biome === Biome.Desert ? 0.5 : biome === Biome.Meadow ? 0.9 : 1.6;
+      const per = biome === Biome.Forest ? 3 : biome === Biome.Canyon ? 0.6 : biome === Biome.Desert ? 0.5 : biome === Biome.Meadow ? 0.9 : biome === Biome.City ? 1.1 : 1.6;
       const count = Math.floor(per * density + hash1(Math.floor(x * 7), 3));
       for (let k = 0; k < count; k++) {
         const h = hash1(Math.floor(x * 13) + k * 101, 9);
@@ -422,7 +462,14 @@ export class TerrainBuilder {
         let kind: PropKind = biome === Biome.Canyon ? (h > 0.5 ? 'cactus' : 'boulder') : h > 0.92 ? 'pineDead' : 'pine';
         if (biome === Biome.Meadow && h < 0.35) kind = 'bush';
         if (biome === Biome.Desert) kind = h > 0.75 ? 'cactus' : h > 0.55 ? 'sandstone' : h > 0.45 ? 'deadTree' : 'shrub';
-        const s = propSprite(kind, Math.floor(h * 3), biome);
+        // San Francisco: the hills are covered with little houses
+        const city = this.style.kind === 'city';
+        const s = city ? assetSprite(h > 0.25 ? `sf.hill.${Math.floor(h * 8) % 8}.${Math.floor(h * 31) % 3}.${Math.floor(h * 57) % 4}` : `sf.tree.${Math.floor(h * 13) % 5}.${Math.floor(h * 23) % 5}.0`) : propSprite(kind, Math.floor(h * 3), biome);
+        if (city) {
+          const farC = 0.75 - Math.min(1, (FIELD_END - z) / (FIELD_END - HILLS_END)) * 0.35;
+          add(s, xx, hillsY(w, xx, z) - 0.3, z, (h > 0.25 ? 0.55 : 0.6) * farC, false);
+          continue;
+        }
         // far trees are smaller so their tops stay under the backdrop's horizon
         const farK = 0.8 - Math.min(1, (FIELD_END - z) / (FIELD_END - HILLS_END)) * 0.4;
         add(s, xx, hillsY(w, xx, z) - 0.3, z, (0.65 + h * 0.5) * farK, h > 0.5);
@@ -435,6 +482,6 @@ export class TerrainBuilder {
       im.computeBoundingSphere();
       group.add(im);
     }
-    return { index: ci, group };
+    return { index: ci, group, anims };
   }
 }

@@ -1,4 +1,5 @@
 import type { Outfit } from '../outfits';
+import { Backdrop, paintPanorama, panoramaAt } from './panoramas';
 import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { approach, clamp } from '../core/math';
@@ -99,6 +100,11 @@ export class GLRenderer {
   private backdropTex: Record<string, { tex: THREE.Texture; aspect: number; horizon: number; sky: string; ground: string }> = {};
   private backdropKey = '';
   private lower: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private fade!: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private fadeBd: Backdrop | undefined;
+  private prevBd: Backdrop | undefined;
+  private fadeT = 0;
+  private frameDt = 0;
   bike3d = new Bike3D();
   private rivals = new Map<Opponent, Bike3D>();
   private coinMesh: THREE.InstancedMesh;
@@ -159,6 +165,11 @@ export class GLRenderer {
     this.lower.renderOrder = -2;
     this.lower.frustumCulled = false;
     this.scene.add(this.backdrop, this.lower);
+    this.fade = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ fog: false, depthWrite: false, toneMapped: false, transparent: true }));
+    this.fade.renderOrder = -2;
+    this.fade.frustumCulled = false;
+    this.fade.visible = false;
+    this.scene.add(this.fade);
 
     // overcast sky: a soft grey cloud deck drawn over the painted sky
     this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: cloudTexture(), transparent: true, opacity: 0, fog: false, depthWrite: false, toneMapped: false }));
@@ -395,7 +406,7 @@ export class GLRenderer {
     if (!this.bank) return;
     this.terrain?.dispose();
     this.bridgeBuilder?.dispose();
-    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : 'green', treeDensity: PRESETS[this.quality].trees, wet: w.weather });
+    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : w.region.id === 'sf' ? 'city' : 'green', treeDensity: PRESETS[this.quality].trees, wet: w.weather });
     this.bridgeBuilder = new BridgeBuilder(this.bank, this.terrain.waterMaterial);
   }
 
@@ -443,6 +454,7 @@ export class GLRenderer {
 
   render(game: Game, dt: number, snap = false): void {
     this.time += dt;
+    this.frameDt = dt;
     const w = game.world;
     if (w !== this.world) this.setWorld(w);
     const b = game.bike;
@@ -500,6 +512,13 @@ export class GLRenderer {
 
     // ---- streaming visuals
     this.updateChunks(w);
+    // cheering supporters: little jumps and side-to-side sway
+    for (const c of this.chunks.values())
+      for (const m of c.anims) {
+        const ph = this.time * 7 + m.userData.p;
+        m.position.y = m.userData.y + Math.max(0, Math.sin(ph)) * 0.22;
+        m.rotation.z = Math.sin(ph * 0.5) * 0.06;
+      }
     this.updateBridges(w);
     this.updateBackdrop(w, D, visH);
     this.updateWeather(dt, D, visH);
@@ -566,14 +585,25 @@ export class GLRenderer {
   }
 
   private updateBackdrop(w: World, D: number, visH: number): void {
-    const key = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
-    const bd = this.backdropTex[key];
+    const base = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.id === 'sf' ? 'sf.0' : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
+    // v2.8: painted panoramas take turns while riding (not behind the home screen)
+    const pano = this.sunset < 0.5 || w.region.id === 'sf' ? panoramaAt(w.region.id, w.seed, Math.max(this.camX, w.region.id === 'sf' ? 250 : 0)) : null;
+    const key = pano ? pano.id : base;
+    const bd = pano ? paintPanorama(pano) : this.backdropTex[key];
     if (!bd) {
       this.backdrop.visible = this.lower.visible = false;
       return;
     }
     this.backdrop.visible = this.lower.visible = true;
     if (key !== this.backdropKey) {
+      // cross-fade: the old painting stays on top and fades out
+      if (this.backdropKey && this.backdrop.material.map && this.prevBd !== bd) {
+        this.fade.material.map = this.backdrop.material.map;
+        this.fade.material.needsUpdate = true;
+        this.fadeBd = this.prevBd;
+        this.fadeT = 1;
+      }
+      this.prevBd = bd;
       this.backdropKey = key;
       this.backdrop.material.map = bd.tex;
       this.backdrop.material.needsUpdate = true;
@@ -598,6 +628,19 @@ export class GLRenderer {
     this.backdrop.position.set(this.camX, bottomY + imgH / 2, -dist);
     bd.tex.repeat.set(planeW / imgW, 1);
     bd.tex.offset.x = (this.camX * 0.6) / imgW - planeW / imgW / 2;
+    this.fadeT = Math.max(0, this.fadeT - this.frameDt / 3);
+    this.fade.visible = this.fadeT > 0 && !!this.fadeBd;
+    if (this.fade.visible && this.fadeBd) {
+      const fb = this.fadeBd;
+      const fH = (0.2 * screenH) / (1 - fb.horizon);
+      const fW = fH * fb.aspect;
+      this.fade.scale.set(planeW, fH, 1);
+      this.fade.position.set(this.camX, bottomY + fH / 2, -dist + 2);
+      fb.tex.repeat.set(planeW / fW, 1);
+      fb.tex.offset.x = (this.camX * 0.6) / fW - planeW / fW / 2;
+      this.fade.material.opacity = this.fadeT;
+      this.fade.material.color.copy(this.backdrop.material.color);
+    }
     // below the painting: its ground colour down to the bottom of the screen
     this.lower.scale.set(planeW, screenH, 1);
     this.lower.position.set(this.camX, bottomY - screenH / 2 + 0.5, -dist - 1);

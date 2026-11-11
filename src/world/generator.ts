@@ -65,6 +65,22 @@ interface BiomeDef {
 }
 
 const BIOMES: Record<Biome, BiomeDef> = {
+  [Biome.City]: {
+    // San Francisco: very steep streets (climbs and descents), kerbs, crossings, overpasses
+    length: [400, 700],
+    baseAmp: 1.2,
+    baseWave: 60,
+    trend: 0.12,
+    surface: Surface.Rock,
+    features: { climb: 4, descent: 4, stepUp: 2, drop: 1.5, tabletop: 2, rollers: 1.5, bridge: 2.5, berm: 1 },
+    props: [
+      { kind: 'grass', weight: 4 },
+      { kind: 'bush', weight: 3 },
+      { kind: 'rock', weight: 0.5 },
+      { kind: 'flower', weight: 2 },
+    ],
+    treeDensity: 0.25,
+  },
   [Biome.Forest]: {
     length: [450, 750],
     baseAmp: 1.43,
@@ -405,13 +421,15 @@ export class Generator {
     const r = this.rng;
     const g = this.grade;
     const forest = this.region.id === 'foret' || this.region.id === 'alpes';
-    const tech = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tech && a.obstacle!.h <= hi + 0.05);
+    const city = this.region.id === 'sf';
+    const tech = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tech && a.obstacle!.h <= hi + 0.05 && (!a.world || a.world === this.region.id));
     const pickTech = (maxH: number) => {
       const list = tech.filter((a) => a.obstacle!.h <= maxH + 0.05 && a.obstacle!.h >= Math.min(maxH - 0.6, lo - 0.2));
       const pool = list.length ? list : tech;
-      return r.weighted(pool, pool.map((a) => (a.obstacle!.tech === 'nature' ? (forest ? 1.6 : 0.8) : forest ? 0.8 : 1.4)));
+      // San Francisco: parked cars, skips, planters and street stairs first
+      return r.weighted(pool, pool.map((a) => (a.world ? 6 : city ? (a.obstacle!.tech === 'nature' ? 0.2 : 1) : a.obstacle!.tech === 'nature' ? (forest ? 1.6 : 0.8) : forest ? 0.8 : 1.4)));
     };
-    const pick = (h: number) => (r.chance(0.45) || !tech.length ? pickRock(h) : pickTech(h));
+    const pick = (h: number) => (r.chance(city ? 0.12 : 0.45) || !tech.length ? pickRock(h) : pickTech(h));
     const height = () => lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
     const gap = () => r.range(1.1, 2.2) + (1 - g) * 1.5;
     let left = count;
@@ -554,6 +572,8 @@ export class Generator {
     switch (this.biome) {
       case Biome.Canyon:
         return n > 0.45 ? Surface.Rock : Surface.Sand;
+      case Biome.City:
+        return Surface.Rock;
       case Biome.Desert:
         // mostly sand, packed-earth tracks (better grip) and the odd rock slab
         return n > 0.6 ? Surface.Rock : n < -0.25 ? Surface.Dirt : Surface.Sand;
@@ -738,6 +758,13 @@ export class Generator {
             L = spans * r.range(14, 18);
             D = water ? r.range(5, 7) : r.range(7, 12);
             sag = 0;
+            break;
+          case 'urban':
+            // concrete overpass over a street, a railway or the bay
+            spans = r.int(2, 4);
+            L = spans * r.range(12, 16);
+            D = water ? r.range(5, 8) : r.range(6, 10);
+            sag = -r.range(0.2, 0.5);
             break;
           case 'viaduct':
           default:
@@ -1186,6 +1213,7 @@ export class Generator {
   private groups(): AssetGroup[] {
     if (this.biome === Biome.Canyon) return ['canyon'];
     if (this.biome === Biome.Desert) return ['desert'];
+    if (this.region.id === 'sf') return ['sf'];
     if (this.region.id === 'alpes') return ['green', 'alpes'];
     if (this.region.id === 'foret') return ['green', 'foret'];
     return ['green'];
@@ -1206,9 +1234,12 @@ export class Generator {
         for (let k = 0; k < n && list.length; k++) res.push(r.weighted(list, list.map((a) => a.weight ?? 1)));
         return res;
       };
-      this.palette = { tree: pick('tree', 6), bush: pick('bush', 5), ground: pick('ground', 6), structure: pick('structure', 2), animal: pick('animal', 2) };
+      const city = this.region.id === 'sf';
+      this.palette = { tree: pick('tree', 6), bush: pick('bush', 5), ground: pick('ground', 6), structure: pick('structure', city ? 14 : 2), animal: pick('animal', city ? 5 : 2) };
       if (this.mode === 'enduro') this.palette.trackside = assetsFor(['enduro'], 'trackside');
       if (this.mode === 'course') this.palette.trackside = assetsFor(['course'], 'trackside');
+      // San Francisco: cheering supporters along the street in every mode
+      if (this.region.id === 'sf') this.palette.trackside = [...(this.palette.trackside ?? []), ...pick('trackside', 10)];
       this.paletteEnd = x0 + r.range(100, 150);
     }
     const P = this.palette;
@@ -1223,11 +1254,21 @@ export class Generator {
     const k = Math.max(0.2, density);
     for (let x = x0; x < x1; x += r.range(3, 7) / k) put(r.chance(0.55) ? 'tree' : 'bush', x, r.range(0.2, 1));
     for (let x = x0; x < x1; x += r.range(2, 5) / k) put('ground', x, r.range(0.04, 0.6));
-    for (let x = x0 + r.range(0, 40); x < x1; x += r.range(45, 90)) put('structure', x, r.range(0.65, 1), 1);
+    if (this.region.id === 'sf') {
+      // a street: cars, lamps and benches close by, houses and shops behind, towers far away
+      for (let x = x0 + r.range(0, 6); x < x1; x += r.range(5, 12)) {
+        const list = P.structure ?? [];
+        if (!list.length) break;
+        const a = r.weighted(list, list.map((d) => d.weight ?? 1));
+        const id = a.id;
+        const depth = /tower|\.wh\./.test(id) ? r.range(0.85, 1) : /vic|shop|hill|mural|board/.test(id) ? r.range(0.4, 0.8) : r.range(0.08, 0.3);
+        this.world.props.push({ x, kind: 'asset', asset: id, depth, scale: 1, variant: 0, flip: false });
+      }
+    } else for (let x = x0 + r.range(0, 40); x < x1; x += r.range(45, 90)) put('structure', x, r.range(0.65, 1), 1);
     for (let x = x0 + r.range(0, 50); x < x1; x += r.range(60, 120)) put('animal', x, r.range(0.3, 0.9), 1);
     for (let x = x0; x < x1; x += r.range(5, 11)) put('ground', x, -r.range(0.2, 0.9), r.range(0.9, 1.3));
     // mode decor along the track
-    if (this.mode === 'course' || this.mode === 'enduro') {
+    if (this.mode === 'course' || this.mode === 'enduro' || this.region.id === 'sf') {
       const dense = (x: number) => this.mode === 'course' && (x < 120 || Math.abs(x - (this.raceLen + 5)) < 80);
       for (let x = x0; x < x1; x += dense(x) ? r.range(2.5, 5) : r.range(12, 24)) put('trackside', x, r.range(0.04, 0.4), 1);
       if (this.mode === 'course' && x0 <= this.raceLen + 5 && x1 > this.raceLen + 5) this.decor(this.raceLen + 6, 'course', 'c.finish.' + r.int(0, 3), 0.02);

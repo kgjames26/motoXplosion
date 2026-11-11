@@ -5,7 +5,7 @@ import type { Sprite } from '../render/sprites';
  * season; a chalet with blue shutters; a stack of three red pallets...). Assets are produced by
  * parameterised families and drawn procedurally on first use.
  */
-export type AssetGroup = 'green' | 'alpes' | 'foret' | 'canyon' | 'desert' | 'trial' | 'enduro' | 'course';
+export type AssetGroup = 'green' | 'alpes' | 'foret' | 'canyon' | 'desert' | 'trial' | 'enduro' | 'course' | 'sf';
 
 /** Where the generator may place it. */
 export type Slot = 'tree' | 'bush' | 'ground' | 'structure' | 'animal' | 'trackside' | 'obstacle';
@@ -32,6 +32,10 @@ export interface AssetDef {
   slot: Slot;
   draw: () => Sprite;
   obstacle?: Obstacle;
+  /** Animated on screen (supporters cheering). */
+  anim?: boolean;
+  /** Only in this world (trial obstacles of San Francisco). */
+  world?: string;
   /** Relative frequency inside its slot (default 1). */
   weight?: number;
 }

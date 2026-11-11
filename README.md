@@ -6,7 +6,7 @@ sept motos à gagner au garage.
 
 ## Accueil
 
-L'accueil tient sur un seul écran paysage : la carte **MODE** (Cruising, Trial, Enduro, Course, chacun avec son icône et son nombre de circuits terminés) à côté de la carte **MONDE** (Alpes, Grande Forêt, Canyon, Désert), puis en bas **GARAGE**, une phrase qui explique le mode, et le gros bouton **JOUER**. Les options sont sous l'engrenage, le porte-monnaie en haut à gauche. En Cruising, JOUER part directement ; dans les trois autres modes, il ouvre le **choix du circuit**.
+L'accueil est épuré : sous le logo, seulement deux mots, **MODE** (Cruising, Trial, Enduro, Course) et **MONDE** (Alpes, Grande Forêt, Canyon, Désert, San Francisco). Un toucher sur l'un ouvre le choix (cartes avec icônes et nombre de circuits terminés, ou vignettes des mondes), puis il se referme. En bas : **GARAGE**, une phrase qui explique le mode, les boutons de difficulté/météo du cruising et le gros bouton **JOUER**. Les options sont sous l'engrenage, le porte-monnaie en haut à gauche. En Cruising, JOUER part directement ; dans les trois autres modes, il ouvre le **choix du circuit**.
 
 ## Modes de jeu
 
@@ -23,28 +23,25 @@ Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a
 | Difficulté | Météo | Effets |
 | --- | --- | --- |
 | Facile | ☀ Sec | conditions de base |
-| Moyen | ☁ Nuageux | ciel couvert, lumière plus terne, sol un peu humide (adhérence −5 à −10 %) |
-| Difficile | 🌧 Pluie | pluie qui tombe, bruit de pluie, sol sombre et mouillé, flaques de boue, beaucoup moins d'adhérence (terre −12 %, herbe −20 %, rochers −12 %, bois −18 % ; le sable, lui, se tasse) |
+| Moyen | 🌧 Pluie | pluie qui tombe, bruit de pluie, ciel gris, sol sombre et mouillé, flaques de boue ; adhérence terre −12 %, herbe −20 %, rochers −12 %, bois −18 % (le sable se tasse : +5 %) |
+| Difficile | ❄ Neige | flocons qui tombent, fin manteau neigeux sur tout le décor mais obstacles bien visibles, piste **à moitié déneigée** avec deux traces de roues boueuses qui montrent la voie ; glissant et boueux (terre −20 %, herbe −26 %, rochers −20 %, bois −24 %) |
 
-- On débloque les difficultés une par une : sur chaque circuit, finir en Facile ouvre Moyen, finir en Moyen ouvre Difficile. En cruising, rouler 2 km dans une difficulté ouvre la suivante, monde par monde. Le choix se fait par des boutons à icône (soleil, nuage, pluie) sur l'écran des circuits ou, pour le cruising, au-dessus de JOUER.
-- Ce qui change en plus selon le mode : le cruising est un peu plus relevé (+6 % en Moyen, +12 % en Difficile), les collines d'enduro plus hautes (+8 % / +15 %), les rivaux de course plus forts. En trial, les rochers sont un peu moins hauts quand c'est mouillé, sinon les derniers circuits seraient impossibles.
-- Les gains sont multipliés par 1,25 en Moyen et 1,5 en Difficile ; les temps cibles des médailles sont un peu plus larges quand le sol est mouillé. Les records et médailles sont gardés par difficulté.
+- On débloque les difficultés une par une : sur chaque circuit, finir en Facile ouvre Moyen, finir en Moyen ouvre Difficile. En cruising, rouler 2 km dans une difficulté ouvre la suivante, monde par monde.
+- **Personne ne reste bloqué à cause de la météo** : par mauvais temps les tracés sont adoucis (obstacles de trial −10 % sous la pluie et −18 % dans la neige, collines d'enduro −5 % / −12 %, cruising et course un peu moins relevés), les zones de trial gardent une terre tassée, et la hauteur des rochers ne dépasse jamais ce que grimpe la moto attendue à ce circuit dans cette météo. Vérifié avec un pilote automatique sur les circuits durs, sous la pluie et la neige.
+- Les gains sont multipliés par 1,25 en Moyen et 1,5 en Difficile ; les temps cibles sont un peu plus larges par mauvais temps. Records et médailles sont gardés par difficulté.
 
-### Rochers de trial et choix de la moto
-- **300 rochers** à franchir (granit dans les Alpes, rochers moussus en forêt, grès rouge au canyon, roche ocre au désert ; formes bloc, dôme et dalle ; **0,5 à 2,5 m**). Ils grandissent avec les circuits : 0,6 m au plus sur le circuit 1, jusqu'à 2,5 m sur le circuit 25, et la dernière zone garde toujours le plus gros.
-- La face à monter devient plus raide quand le rocher grandit (40° pour les petits, 58° à partir de 1,2 m). C'est la physique qui décide : couple, poids et adhérence des pneus. **Une moto trop faible glisse et ne passe pas.** Hauteur maximale mesurée (sec / nuageux / pluie) :
+### Objectifs calés sur une moto qu'on peut se payer
+Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés pour la moto qu'un joueur est censé avoir pu acheter à ce stade (et non la moto de départ, sauf pour les tout premiers circuits) : Explorer pour les circuits 1-2, Sprint 3-6, puis Trailblazer (ou Ridge en trial) 7-11, Fury 12-16, Volt 17-21, Dakar 22-25. Il faut donc **cruiser** pour gagner l'argent des meilleures motos et de leurs améliorations.
 
-| Moto | Sec | Nuageux | Pluie |
-| --- | --- | --- | --- |
-| Explorer 98 | 1,3 m | 1,3 m | 1,15 m |
-| Sprint 125 | 1,5 m | 1,35 m | 1,3 m |
-| Trailblazer 250 | 2,0 m | 1,9 m | 1,5 m |
-| Fury 450 | 2,15 m | 2,15 m | 2,0 m |
-| Dakar 690 | 2,15 m | 2,0 m | 2,0 m |
-| Volt X | 2,5 m | 2,35 m | 2,15 m |
-| Ridge T300 (trial) | 2,5 m | 2,35 m | 2,35 m |
+### Rochers et obstacles de trial
+- Le trial est **plus technique** : chaque zone mélange rochers, **mobilier** crédible (pneus de tracteur, escaliers de traverses, buses béton, tourets, poutres IPN, palettes, cuves IBC, fûts couchés, séparateurs, palettes de briques, big bags, bottes de foin, abreuvoirs et charrettes, bancs, bacs, escaliers de bordures, madriers sur tréteaux) et **éléments naturels** (troncs couchés, souches déracinées, souches, dalles en escalier, paires de rochers, marches rocheuses, tas de rondins, talus à racines, éboulis, arbres morts, gués de pierres, troncs posés sur rochers), enchaînés en lignes : paires serrées, escaliers d'obstacles, obstacle posé sur une montée, obstacle suivi d'une marche descendante. Les objets hauts ont une rampe d'accès (planche, sacs ou terre) dessinée exactement sur la pente que suit la roue.
+- On voit tout de suite que ce n'est pas du décor : ombre de contact sur la piste et **piquets de zone** de part et d'autre de chaque obstacle.
+- **Ressenti** : quand une roue tape un obstacle, la moto le transmet — vibration proportionnelle au choc, bruit sourd, petite secousse de caméra.
+- **300 rochers** (granit, moussus, grès rouge, ocre ; bloc, dôme, dalle ; 0,5 à 2,5 m) qui grandissent avec les circuits. La face à monter se raidit avec la taille (40° → 58°) : c'est la physique (couple, poids, adhérence) qui décide si la moto passe. Une moto trop faible glisse ; l'écran des circuits le signale (« il faut une Fury 450 ») et, en jeu, un message le rappelle après trois essais ratés. Hauteur max des motos d'origine (sec / pluie / neige) : Explorer 1,33 / 1,25 / 1,17 m ; Sprint 1,5 / 1,33 / 1,25 ; Trailblazer 2,0 / 1,5 / 1,33 ; Fury 2,17 / 1,5 / 1,42 ; Dakar 2,0 / 1,83 / 1,42 ; Volt 2,5 / 2,0 / 1,42 ; Ridge 2,5 / 2,33 / 2,17. Les améliorations et les pneus font monter ces chiffres (le garage les recalcule avec la physique).
 
-- L'écran des circuits indique la hauteur des rochers et prévient si la moto est trop faible (« il faut une Fury 450 »). En trial, après trois essais ratés sur un rocher trop haut, un message le rappelle aussi. Le garage affiche une barre « Rochers ».
+### Enduro et cruising : les collines
+- **Enduro** : des collines de types mélangés sur chaque circuit — classique, double bosse, terrasses, courte et raide, longue et douce, vallon à traverser, crête avec des bosses — avec des bosses sur les pentes. Difficiles à passer sans tomber, mais jamais du trial : uniquement des pentes, pas de murs.
+- **Cruising** : un voyage plutôt qu'un piège. Grandes collines aux pentes changeantes (2 à 4 tronçons de 7 à 24 %), plateaux, **longues descentes variées** ; si la route est déjà haute, elle redescend.
 
 ### Circuits et médailles
 - Chaque circuit est toujours le même (graine fixe par mode, monde et numéro) et devient plus dur avec son numéro : obstacles plus gros en trial, collines plus hautes en enduro, rivaux plus forts et piste plus longue en course.
@@ -58,9 +55,11 @@ Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a
 
 ## Garage et économie
 
-Le **garage** est accessible depuis l'accueil (bouton GARAGE à côté d'OPTIONS) et depuis l'écran de fin de partie, pour dépenser juste après avoir gagné. Deux onglets :
-- **MOTOS** : vitrine 3D qui tourne (on peut la faire pivoter du doigt), barres de caractéristiques (en vert quand c'est mieux que la moto actuelle), achat et choix de la moto.
-- **TENUES** : 10 tenues de pilote de couleurs différentes (maillot, pantalon, gants, casque), essayées sur la moto en vitrine : Rouge Feu 300, Bleu Océan 400, Jaune Citron 500, Vert Jungle 650, Orange Volcan 800, Violet Galaxie 1 000, Rose Flash 1 250, Blanc Arctique 1 500, Noir Minuit 2 000, Or Champion 3 000. La tenue « aux couleurs de la moto » est offerte.
+Le **garage** (la boutique) est accessible depuis l'accueil et depuis l'écran de fin de partie. Quatre onglets :
+- **MOTOS** : vitrine 3D qui tourne (on la fait pivoter du doigt), caractéristiques **en chiffres** (puissance en ch, couple, vitesse max, poids, suspensions, adhérence, freins, agilité, autonomie, hauteur de rocher franchissable) avec les améliorations déjà montées, et un repère blanc qui montre la moto que tu as ; achat et choix.
+- **PIÈCES** : 7 améliorations par moto, 3 niveaux chacune, chacune dit exactement ce qu'elle apporte : préparation moteur (+5 % de puissance, +4 % de couple par niveau), échappement sport (+3 % de puissance, +2,5 % de vitesse), transmission courte (+6 % de couple), suspensions réglables (+7 % de fermeté, +5 % de débattement), freins gros disque (+10 %), allègement carbone (−4 % de poids, +4 % d'agilité), grand réservoir/batterie (−8 % de consommation). Toucher une pièce montre en **vert** ce que le niveau suivant change sur chaque barre (et sur la hauteur de rocher, recalculée avec la physique) ; un repère blanc montre la **moto suivante d'origine** pour comparer. Une moto bien améliorée dépasse la suivante d'origine ; la suivante a besoin de quelques améliorations pour reprendre l'avantage. Prix selon la moto (150 → 3 150 pièces par niveau).
+- **PNEUS** : Pneus Sec (+7 % d'adhérence sur le sec, 900), Pneus Pluie (+12 % sous la pluie, 1 600), Pneus Neige (+20 % dans la neige, 2 400), pour toutes les motos, montés tout seuls quand leur météo arrive.
+- **TENUES** : 10 tenues de pilote de couleurs différentes (300 à 3 000), plus la tenue offerte aux couleurs de la moto.
 
 | Moto | Style | Prix | Points forts |
 | --- | --- | --- | --- |
@@ -108,11 +107,17 @@ But du jeu : **aller le plus loin possible** en gérant deux énergies :
 
 Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record est enregistré dans le navigateur.
 
+## Mondes et panoramas
+
+- **5 mondes** : Alpes, Grande Forêt, Canyon, Désert et **San Francisco** (rues très pentues en asphalte avec ligne blanche, maisons victoriennes, boutiques, tours au loin, collines couvertes de petites maisons, **ponts urbains** en béton avec rambardes et lampadaires, supporters qui sautent et applaudissent au bord de la rue dans tous les modes, voitures garées à franchir en trial).
+- **60 panoramas peints** (12 par monde) qui se relaient en **fondu** tous les 650 m environ pendant qu'on roule, dans tous les modes : glaciers, lacs qui reflètent les sommets, couchers de soleil, forêts dorées, buttes rouges, mers de dunes, baie et pont rouge, skyline… Certains sont grandioses (plusieurs plans, perspective atmosphérique, reflets), d'autres plus bancals exprès (ciel gris, pylônes, carrière, antenne, éoliennes), comme dans un vrai voyage. Ils sont peints par le code (`src/gl/panoramas.ts`).
+
 ## Contrôles
 
 - **Balance ARRIÈRE / AVANT** (en bas à gauche) : déplace le poids du pilote. Au sol, elle change le centre de gravité (balance à moitié en arrière = wheelie, tout en arrière plein gaz = on se retourne). En l'air, elle fait tourner la moto pour préparer l'atterrissage. Elle revient au centre quand on la lâche.
 - **Disque de frein** (juste à gauche de l'accélérateur) : freins avant + arrière.
 - **Poignée d'accélérateur** (à droite) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
+- **Marche arrière** : à l'arrêt, garder le frein appuyé plus de 2 secondes : la moto recule doucement, jusqu'à 3 km/h.
 - **Pause** en haut à droite. Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
 - **Options** (accueil et menu pause) : volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
 - Le numéro de version est affiché en tout petit en bas à gauche de l'accueil (`public/version.json`, incrémenté automatiquement, voir CLAUDE.md).
@@ -152,13 +157,13 @@ Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des su
 
 ## Son
 
-- Le moteur ne s'entend **qu'en jeu** : il est coupé sur l'accueil et dans tous les menus.
+- Le moteur ne s'entend **qu'en jeu** : il est coupé sur l'accueil et dans tous les menus. Les rapports virtuels sont calés sur la vitesse max de chaque moto : à fond, le moteur chante en haut du 5e rapport au lieu de s'étouffer.
 - Sous la pluie, un bruit de pluie (bruit filtré) accompagne la course ; plus léger par temps nuageux.
 - **Pause** : la musique et tous les sons s'arrêtent, ils reprennent au retour en jeu.
 - **Musiques** : `public/audio/music-menu.mp3` (accueil, pause, fin de partie) et `music-game.mp3` (en course, en boucle). La boucle saute le silence du début et de la fin et enchaîne avec un fondu de 4 s, sans coupure. Les musiques passent de l'une à l'autre en fondu.
 - **Moteur** : synthétisé en temps réel (AudioWorklet, `src/audio/engineWorklet.ts`), modèle d'un monocylindre 4 temps de cross : une explosion tous les deux tours, avec des irrégularités aléatoires, excitant deux résonateurs (échappement et carter). S'y ajoutent le claquement de combustion sous charge et des pétarades à la décélération, puis un filtre passe-bas qui donne un son un peu sourd.
 
-## Catalogue d'assets (1 397 éléments)
+## Catalogue d'assets (7 247 éléments)
 
 Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en familles paramétrées : chaque élément est une variante distincte (espèce, taille, saison, couleur, forme), dessinée au premier usage puis mise en cache.
 
@@ -175,6 +180,9 @@ Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en fa
 | v2.6 — Désert | 55 | caravanes de dromadaires, mares d'oasis, étals de marché, poteries, tapis, feux de camp, fennecs, piliers de roche, acacias, fort en ruine, obélisques, camions de rallye… |
 | v2.6 — Trial | 80 | 64 **gros obstacles** physiques (0,4 à 1,3 m) avec rampes de terre tassée + arches de chrono, banderoles, fanions, spectateurs, mécaniciens |
 | v2.6 — Enduro | 70 | grosses racines, marches en rondins et en pierre (physiques), drapeaux et panneaux de colline, rochers de crête, arbres penchés, arches d'arrivée, photographes, quad de secours… |
+| v2.8 — Obstacles techniques de trial | 350 | 189 mobilier + 161 nature (voir « Rochers et obstacles de trial ») |
+| v2.8 — Décors des 4 mondes | 2 000 | 500 par monde : arbres des espèces locales (5 tailles, 4 teintes, 3 formes), buissons, plantes, maisons et dépendances dans le style local, clôtures, mobilier (bidons de lait, ruches, roues de chariot, jarres, puits, lanternes…), rochers |
+| v2.8 — San Francisco | 3 500 | 864 maisons victoriennes, 720 immeubles et tours, 288 boutiques, 180 entrepôts, garages et casernes, 96 maisons de colline, 100 murs peints, 100 panneaux publicitaires, 200 meubles urbains, 60 lampadaires, 120 voitures garées, 48 food trucks, 24 cable cars/trams/bus, 60 bateaux, 50 arbres de rue, 60 massifs, 288 **supporters animés**, 96 passants, 16 animaux, 30 vélos, et 100 obstacles de trial (**voitures garées à franchir**, bennes, bacs, bancs, escaliers de rue) |
 | v2.7 — Rochers de trial | 300 | 4 roches × 3 formes × 25 hauteurs de 0,5 à 2,5 m, physiques (face raide, dessus, descente plus douce), fissures, strates, lichens, mousse |
 | Course | 111 | arche d'arrivée, grille de départ, banderoles de sponsors inventés, tribunes, tentes et camions d'équipe, murs de pneus, foule, tours TV… |
 
@@ -199,11 +207,14 @@ src/
   modes.ts                modes de jeu et leurs constantes
   circuits.ts             25 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
   outfits.ts              tenues du pilote vendues au garage
-  weather.ts              météo par difficulté : adhérence par surface, icônes
+  weather.ts              météo par difficulté (sec, pluie, neige) : adhérence, pneus, adoucissement des tracés
+  upgrades.ts             pièces d'amélioration des motos et chiffres du comparateur
+  climb.ts                hauteur de rocher franchissable mesurée avec la physique (motos améliorées)
+  gl/panoramas.ts         60 panoramas peints par le code et leur rotation
   bikes.ts                les 7 motos : style, couleurs, caractéristiques, prix
   profile.ts              progression sauvegardée : pièces, motos, tenues, records, circuits et médailles
   ai.ts                   pilotes IA de la course (niveaux 1-10)
-  catalog/                catalogue d'assets procéduraux (nature, trial, enduro, course, extra v2.6)
+  catalog/                catalogue d'assets procéduraux (nature, trial, enduro, course, extra v2.6, rochers, obstacles techniques, décors, San Francisco)
   ui/garage.ts            garage avec vitrine 3D (motos et tenues)
   settings.ts             paramètres enregistrés (volumes, disposition, région, vibrations)
   assets.ts               chargement des images et métadonnées (public/res)

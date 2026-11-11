@@ -5,8 +5,8 @@ import { Biome } from './types';
  * crossing its different environments (biomes). Each region has its own biome mix,
  * bridge styles and backdrop art.
  */
-export type BridgeKind = 'wood' | 'stone' | 'iron' | 'viaduct';
-export type RegionId = 'alpes' | 'canyon' | 'foret' | 'desert';
+export type BridgeKind = 'wood' | 'stone' | 'iron' | 'viaduct' | 'urban';
+export type RegionId = 'alpes' | 'canyon' | 'foret' | 'desert' | 'sf';
 
 export interface RegionDef {
   id: RegionId;
@@ -58,6 +58,16 @@ export const REGIONS: Record<RegionId, RegionDef> = {
     backdrop: {},
     tint: '#fff4e0',
   },
+  sf: {
+    id: 'sf',
+    name: 'San Francisco',
+    subtitle: 'Rues en pente, maisons victoriennes, ponts et baie',
+    biomes: { [Biome.City]: 6, [Biome.River]: 1, [Biome.Meadow]: 1 },
+    start: Biome.City,
+    bridges: { urban: 4, iron: 2, viaduct: 1 },
+    backdrop: {},
+    tint: '#f2f4f8',
+  },
   canyon: {
     id: 'canyon',
     name: 'Canyon',
@@ -70,4 +80,4 @@ export const REGIONS: Record<RegionId, RegionDef> = {
   },
 };
 
-export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon', 'desert'];
+export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon', 'desert', 'sf'];

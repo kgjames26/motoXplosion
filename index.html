@@ -136,15 +136,11 @@
           <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
         </button>
         <div class="title-menu">
-          <div class="pick-box">
-            <div class="pick-label">MODE</div>
-            <div class="mode-cards" id="modes"></div>
-          </div>
-          <div class="pick-box">
-            <div class="pick-label">MONDE</div>
-            <div class="world-cards" id="regions"></div>
-          </div>
+          <button class="selector" id="sel-mode"><small>MODE</small><b id="sel-mode-name">Cruising</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
+          <button class="selector" id="sel-world"><small>MONDE</small><b id="sel-world-name">Alpes</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
         </div>
+        <div class="picker hidden" id="picker-mode"><div class="pick-box"><div class="pick-label">MODE</div><div class="mode-cards" id="modes"></div></div></div>
+        <div class="picker hidden" id="picker-world"><div class="pick-box"><div class="pick-label">MONDE</div><div class="world-cards" id="regions"></div></div></div>
         <div class="title-bottom">
           <button class="btn-slant garage-big" id="btn-garage">
             <svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg>GARAGE

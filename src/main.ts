@@ -157,6 +157,8 @@ function updateBest(): void {
 function refreshTitle(): void {
   for (const el of $('modes').querySelectorAll('.mode-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.mode === profile.mode);
   const m = MODES.find((x) => x.id === profile.mode)!;
+  $('sel-mode-name').textContent = m.name;
+  $('sel-world-name').textContent = REGIONS[settings.region].name;
   $('mode-desc').textContent = m.description;
   updateBest();
 }
@@ -168,6 +170,7 @@ function buildModes(): void {
       profile.mode = (el as HTMLElement).dataset.mode as ModeId;
       saveP();
       refreshTitle();
+      closePickers();
     });
   for (const id of ['circ-diffs', 'cruise-diffs'])
     $(id).addEventListener('click', (e) => {
@@ -179,6 +182,24 @@ function buildModes(): void {
       else updateBest();
     });
 }
+
+// ---------------------------------------------------------------- mode / world pickers
+
+/** The home screen only shows the chosen mode and world as words; a tap opens the choice. */
+function closePickers(): void {
+  $('picker-mode').classList.add('hidden');
+  $('picker-world').classList.add('hidden');
+}
+for (const [btn, pick] of [['sel-mode', 'picker-mode'], ['sel-world', 'picker-world']])
+  $(btn).addEventListener('click', () => {
+    const open = $(pick).classList.contains('hidden');
+    closePickers();
+    $(pick).classList.toggle('hidden', !open);
+  });
+for (const pick of ['picker-mode', 'picker-world'])
+  $(pick).addEventListener('click', (e) => {
+    if (e.target === $(pick)) closePickers();
+  });
 
 // ---------------------------------------------------------------- circuits screen
 
@@ -274,7 +295,9 @@ function buildRegions(): void {
     b.className = 'world-card' + (id === settings.region ? ' selected' : '');
     b.dataset.region = id;
     const thumb =
-      id === 'desert'
+      id === 'sf'
+        ? 'linear-gradient(180deg,#3a7ad8 0%,#ffd2a8 42%,#8a96aa 43%,#6a7488 58%,#3a6a9a 59%,#2a4a6a 100%)'
+        : id === 'desert'
         ? 'linear-gradient(180deg,#5d9be6 0%,#fbe3b8 48%,#f6d39a 49%,#e8b676 70%,#cf9152 100%)'
         : id === 'canyon'
           ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
@@ -286,6 +309,8 @@ function buildRegions(): void {
       settings.region = id as RegionId;
       saveSettings(settings);
       for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
+      $('sel-world-name').textContent = r.name;
+      closePickers();
       game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
       game.state = 'title';
       updateBest();

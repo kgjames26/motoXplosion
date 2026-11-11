@@ -58,6 +58,21 @@ const BASE: BiomePalette = {
 
 export const PALETTES: Record<Biome, BiomePalette> = {
   [Biome.Forest]: { ...BASE },
+  [Biome.City]: {
+    ...BASE,
+    skyTop: '#2f7ad8',
+    skyBottom: '#d8e8f4',
+    far: '#9aa8bc',
+    mid: '#7f8a9c',
+    midShade: '#68738a',
+    near: '#7aa05a',
+    grass: '#7ab05a',
+    dirt: '#8e8a86',
+    dirtLight: '#a8a49e',
+    dirtDark: '#6a6662',
+    soil: '#5a5652',
+    rock: '#a0a0a6',
+  },
   [Biome.Meadow]: {
     ...BASE,
     grass: '#78c844',

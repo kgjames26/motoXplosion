@@ -2401,3 +2401,82 @@ u.mk {
 .g-action.hidden {
   display: none;
 }
+
+/* ------------------------------------------------------------------ v2.8 airy home screen */
+
+#screen-title .title-menu {
+  flex-direction: row;
+  justify-content: center;
+  gap: calc(var(--u) * 6);
+}
+.selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: calc(var(--u) * 0.6) calc(var(--u) * 5) calc(var(--u) * 0.9);
+  background: none;
+  border: none;
+  color: #fff;
+  text-shadow: 0 calc(var(--u) * 0.4) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.7);
+}
+.selector small {
+  font-size: calc(var(--u) * 2.2);
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  opacity: 0.85;
+}
+.selector b {
+  font-size: calc(var(--u) * 6.4);
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.selector svg {
+  width: calc(var(--u) * 3.4);
+  height: calc(var(--u) * 3.4);
+  fill: none;
+  stroke: #ffb05a;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.selector::after {
+  content: '';
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: calc(var(--u) * 3.6);
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 176, 90, 0.9), transparent);
+}
+.selector:active {
+  transform: scale(0.97);
+}
+.picker {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 6, 4, 0.55);
+  z-index: 5;
+  animation: pickin 0.18s ease-out;
+}
+@keyframes pickin {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.picker.hidden {
+  display: none;
+}
+.picker .pick-box {
+  background: rgba(24, 16, 12, 0.92);
+  padding: calc(var(--u) * 3.4) calc(var(--u) * 2.4) calc(var(--u) * 2.4);
+}
+.picker .world-cards {
+  grid-template-columns: repeat(3, calc(var(--u) * 30));
+}

@@ -10,8 +10,10 @@ export enum Biome {
   Canyon = 3,
   River = 4,
   Desert = 5,
+  /** San Francisco streets. */
+  City = 6,
 }
-export const BIOME_COUNT = 6;
+export const BIOME_COUNT = 7;
 
 export enum Surface {
   Dirt = 0,
@@ -97,7 +99,7 @@ export interface Pickup {
 
 /** A wooden bridge spanning a ravine or a river. Physics uses the deck height stored in the heightfield. */
 export interface Bridge {
-  kind: 'wood' | 'stone' | 'iron' | 'viaduct';
+  kind: 'wood' | 'stone' | 'iron' | 'viaduct' | 'urban';
   x0: number;
   x1: number;
   deckY0: number;

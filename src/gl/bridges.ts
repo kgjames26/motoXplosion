@@ -76,6 +76,9 @@ export class BridgeBuilder {
       case 'iron':
         this.ironBridge(g, w, br);
         break;
+      case 'urban':
+        this.urbanBridge(g, w, br);
+        break;
       case 'viaduct':
         this.arched(g, w, br, { pier: 2.2, crownDrop: 1.3, ext: 3, bottom: (x) => w.visualAt(x) - 2 });
         break;
@@ -98,6 +101,36 @@ export class BridgeBuilder {
     this.steel.dispose();
     this.stone.dispose();
     this.stoneDark.dispose();
+  }
+
+  // ---------------------------------------------------------------- urban (San Francisco)
+
+  /** Concrete overpass: slab deck, round piers, steel railings, street lamps. */
+  private urbanBridge(g: THREE.Group, w: World, br: Bridge): void {
+    const deck = (x: number) => w.heightAt(x);
+    const slab = new Members();
+    const steel = new Members();
+    const concrete = new THREE.Color(0.86, 0.85, 0.82);
+    for (let x = br.x0 - 1; x < br.x1 + 1; x += 1) slab.beam(x, deck(x) - 0.35, (ZB + ZF) / 2, x + 1.02, deck(x + 1) - 0.35, (ZB + ZF) / 2, 0.7, ZF - ZB + 0.6, concrete);
+    const n = Math.max(1, br.spans);
+    for (let i = 1; i < n; i++) {
+      const x = br.x0 + ((br.x1 - br.x0) * i) / n;
+      const bottom = Math.min(w.visualAt(x), br.floorY) - 1;
+      for (const z of [ZB + 0.3, ZF - 0.3]) slab.beam(x, bottom, z, x, deck(x) - 0.6, z, 1.1, 1.1, concrete);
+      slab.beam(x, deck(x) - 1.1, ZB, x, deck(x) - 1.1, ZF, 0.6, 1.4, concrete);
+    }
+    const rail = new THREE.Color(0.35, 0.4, 0.48);
+    for (const z of [ZB - 0.25, ZF + 0.25]) {
+      for (let x = br.x0; x <= br.x1; x += 1.5) steel.beam(x, deck(x), z, x, deck(x) + 1.05, z, 0.06, 0.06, rail);
+      for (const h of [0.55, 1.05]) for (let x = br.x0; x < br.x1; x += 1.5) steel.beam(x, deck(x) + h, z, x + 1.5, deck(x + 1.5) + h, z, 0.05, 0.05, rail);
+    }
+    // street lamps on the back side
+    for (let x = br.x0 + 3; x < br.x1 - 2; x += 9) {
+      steel.beam(x, deck(x), ZB - 0.45, x, deck(x) + 4.2, ZB - 0.45, 0.1, 0.1, rail);
+      steel.beam(x, deck(x) + 4.2, ZB - 0.45, x + 0.9, deck(x) + 4.1, ZB - 0.45, 0.08, 0.08, rail);
+      steel.beam(x + 0.75, deck(x) + 4.0, ZB - 0.45, x + 1.05, deck(x) + 4.0, ZB - 0.45, 0.12, 0.2, new THREE.Color(1, 0.95, 0.75));
+    }
+    g.add(slab.mesh(this.box, this.stone), steel.mesh(this.box, this.steel));
   }
 
   // ---------------------------------------------------------------- wood
