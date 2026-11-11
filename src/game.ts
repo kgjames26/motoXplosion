@@ -107,6 +107,8 @@ export class Game {
   weather: Weather = 0;
   spec: BikeSpec = BIKES[0].spec;
   tyres: string[] = [];
+  /** Player name (settings). */
+  pseudo = '';
   /** Grip bonus of the tyres mounted for this weather (1 = none). */
   tyreK = 1;
   /** Circuit chrono (s), started at GO, stopped at the finish. */
@@ -282,8 +284,8 @@ export class Game {
     // brake held for 2 s at a standstill: the bike starts rolling backwards (up to 3 km/h)
     if (inp.brake > 0.5 && inp.throttle < 0.05 && bike.forwardSpeed < 0.35 && bike.grounded && this.crashTimer <= 0) this.brakeHold += dt;
     else if (inp.brake < 0.3 || inp.throttle >= 0.05) this.brakeHold = 0;
-    if (this.brakeHold > 2) {
-      inp.reverse = Math.min(1, (this.brakeHold - 2) / 1.5);
+    if (this.brakeHold > 1) {
+      inp.reverse = Math.min(1, (this.brakeHold - 1) / 0.35);
       inp.brake = 0;
     }
     this.stepPhysics(dt, inp, true);
@@ -380,8 +382,9 @@ export class Game {
     this.updateFx(dt);
   }
 
+  /** Fuel and water: enduro only (cruising is a free ride since v2.9). */
   get usesEnergy(): boolean {
-    return this.mode === 'cruising' || this.mode === 'enduro';
+    return this.mode === 'enduro';
   }
 
   /** Cruising distance multiplier (×1 → ×4). */
@@ -605,7 +608,7 @@ export class Game {
           // final standings: finishers in order, then the others by distance
           const rest = this.opponents.filter((o) => !o.finished).sort((a, b) => b.bike.x - a.bike.x);
           const order = [...this.finishOrder.map((n) => (n === '__you' ? null : this.opponents.find((o) => o.name === n)!)), ...rest];
-          standings = order.map((o) => (o ? { name: o.name, level: o.level, you: false } : { name: 'Toi', level: 0, you: true }));
+          standings = order.map((o) => (o ? { name: o.name, level: o.level, you: false } : { name: this.pseudo || 'Toi', level: 0, you: true }));
         } else scoreLabel = 'Abandon';
         break;
       }

@@ -10,6 +10,9 @@ export interface Part {
   name: string;
   /** What one level brings, shown in the shop. */
   effect: string;
+  /** Short badge (e.g. "+5 % PUISSANCE") and the card colour. */
+  chip: string;
+  color: string;
   icon: string;
   apply: (s: BikeSpec, level: number) => BikeSpec;
 }
@@ -19,6 +22,8 @@ const svg = (d: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d=
 export const PARTS: Part[] = [
   {
     id: 'moteur',
+    chip: '+5 % PUISSANCE',
+    color: '#ff6a3a',
     name: 'Préparation moteur',
     effect: '+5 % de puissance et +4 % de couple par niveau',
     icon: svg('M4 9h3l2-2h6v3h2l2-2h1v8h-1l-2-2h-2v3H9l-2-2H4zM9 4h6'),
@@ -26,6 +31,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'echappement',
+    chip: '+3 % PUISSANCE · +2,5 % VITESSE',
+    color: '#ffb020',
     name: 'Échappement sport',
     effect: '+3 % de puissance et +2,5 % de vitesse max par niveau',
     icon: svg('M3 14h10l4-3h4v6h-4l-4-3M6 14v3M17 9l2-3'),
@@ -33,6 +40,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'transmission',
+    chip: '+6 % COUPLE',
+    color: '#e84a8a',
     name: 'Transmission courte',
     effect: '+6 % de couple par niveau (reprises, montées, rochers)',
     icon: svg('M8 12a4 4 0 1 0 0 .01M18 12a2.5 2.5 0 1 0 0 .01M8 8l10 1.5M8 16l10-1.5'),
@@ -40,6 +49,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'suspensions',
+    chip: '+7 % SUSPENSIONS',
+    color: '#3fa8ff',
     name: 'Suspensions réglables',
     effect: '+7 % de fermeté et +5 % de débattement par niveau',
     icon: svg('M12 2v4M12 18v4M8 6h8M8 18h8M9 8l6 2-6 2 6 2-6 2'),
@@ -47,6 +58,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'freins',
+    chip: '+10 % FREINAGE',
+    color: '#d8261f',
     name: 'Freins gros disque',
     effect: '+10 % de freinage par niveau',
     icon: svg('M12 4a8 8 0 1 0 0 16 8 8 0 1 0 0-16M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6M18 6l3-2'),
@@ -54,6 +67,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'allegement',
+    chip: '−4 % POIDS · +4 % AGILITÉ',
+    color: '#14d1c0',
     name: 'Allègement carbone',
     effect: '−4 % de poids et +4 % d’agilité en l’air par niveau',
     icon: svg('M12 3l7 4v10l-7 4-7-4V7zM12 3v18M5 7l14 10M19 7L5 17'),
@@ -61,6 +76,8 @@ export const PARTS: Part[] = [
   },
   {
     id: 'reservoir',
+    chip: '−8 % CONSOMMATION',
+    color: '#7ad84a',
     name: 'Grand réservoir / batterie',
     effect: '−8 % de consommation par niveau (roule plus longtemps)',
     icon: svg('M6 5h9l3 3v11H6zM9 9h5M18 8h2v6'),

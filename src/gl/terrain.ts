@@ -136,6 +136,72 @@ export class TerrainBuilder {
   private snow = false;
   private lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f0e6, side: THREE.DoubleSide });
   private shadowGeo = new THREE.PlaneGeometry(1, 1);
+  private haloMats = new Map<Sprite, THREE.Material>();
+  private postGeo = new THREE.BoxGeometry(0.05, 0.8, 0.05);
+  private postMat = new THREE.MeshLambertMaterial({ color: 0xf2efe6 });
+  private tape: THREE.Material | null = null;
+  private tapeMat(): THREE.Material {
+    if (!this.tape) {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 8;
+      const g = c.getContext('2d')!;
+      for (let k = 0; k < 4; k++) {
+        g.fillStyle = k % 2 ? '#ffffff' : '#e02a1f';
+        g.beginPath();
+        g.moveTo(k * 16, 8);
+        g.lineTo(k * 16 + 8, 0);
+        g.lineTo(k * 16 + 24, 0);
+        g.lineTo(k * 16 + 16, 8);
+        g.fill();
+      }
+      g.fillStyle = '#e02a1f';
+      g.beginPath();
+      g.moveTo(-16 + 64, 8);
+      g.lineTo(-8 + 64, 0);
+      g.lineTo(8 + 64, 0);
+      g.lineTo(0 + 64, 8);
+      g.fill();
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = THREE.RepeatWrapping;
+      t.repeat.set(1 / 0.8, 1);
+      t.colorSpace = THREE.SRGBColorSpace;
+      this.tape = new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide });
+    }
+    return this.tape;
+  }
+  private haloMat(s: Sprite): THREE.Material {
+    let m = this.haloMats.get(s);
+    if (!m) {
+      m = new THREE.ShaderMaterial({
+        uniforms: { map: { value: this.bank.spriteTex(s) } },
+        transparent: true,
+        depthWrite: false,
+        vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform sampler2D map; varying vec2 vUv; void main() { float a = texture2D(map, vUv).a; if (a < 0.25) discard; gl_FragColor = vec4(1.0, 0.95, 0.78, 0.92); }',
+      });
+      this.haloMats.set(s, m);
+    }
+    return m;
+  }
+  private detail: THREE.Material | null = null;
+  /** Transparent decal of road details tiled along the track, per world style. */
+  private detailMat(): THREE.Material {
+    if (!this.detail) {
+      const t = new THREE.CanvasTexture(roadDetail(this.style.kind, this.style.wet ?? 0));
+      t.wrapS = THREE.RepeatWrapping;
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.repeat.set(1 / 9, 1);
+      t.anisotropy = 4;
+      const m = new THREE.MeshLambertMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      // uv: x in metres → repeat over 9 m; z across the band → 0..1
+      m.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(position.x / 9.0, (position.z - (' + Z_BACK.toFixed(2) + ')) / ' + (Z_FRONT - Z_BACK).toFixed(2) + ');');
+      };
+      this.detail = m;
+    }
+    return this.detail;
+  }
   private shadowMaterial: THREE.Material | null = null;
   private shadowMat(): THREE.Material {
     if (!this.shadowMaterial) {
@@ -196,6 +262,11 @@ export class TerrainBuilder {
   dispose(): void {
     for (const m of Object.values(this.mats)) m.dispose();
     this.shadowMaterial?.dispose();
+    this.detail?.dispose();
+    this.tape?.dispose();
+    this.postGeo.dispose();
+    this.postMat.dispose();
+    for (const m of this.haloMats.values()) m.dispose();
     this.lineMat.dispose();
     this.shadowGeo.dispose();
     for (const m of this.spriteMat.values()) m.dispose();
@@ -232,46 +303,74 @@ export class TerrainBuilder {
     const warm = this.style.kind !== 'green';
     hillKind = this.style.kind;
 
+    // trial zones of this chunk (between the start and end gates)
+    const zones: [number, number][] = [];
+    for (const m of w.marks)
+      if (m.kind === 'sectionStart') {
+        const e = w.marks.find((q) => q.kind === 'sectionEnd' && q.n === m.n);
+        const z1 = e ? e.x1 : m.x0 + 60;
+        if (z1 >= x0 && m.x0 <= x1) zones.push([m.x0 - 1, z1 + 1]);
+      }
+
     // ---- track band (skipping bridge decks)
     let runStart = -1;
     const flushTrack = (a: number, b: number) => {
       if (b - a < 1) return;
       const cols = b - a + 1;
+      // 5 rows across the band: worn lane where the bikes ride, patches of colour along the
+      // road, trial zones in a lighter packed earth so their obstacles stand out
+      const TZ = [Z_BACK, -0.62, -0.25, 0.12, Z_FRONT];
       const geo = grid(
         cols,
-        2,
+        TZ.length,
         (c, r) => {
           const i = i0 + a + c;
-          return [i * DX, w.sampleVisual(i), r === 0 ? Z_BACK : Z_FRONT];
+          return [i * DX, w.sampleVisual(i), TZ[r]];
         },
         (x, _y, z) => [x, z],
-        (c) => SURF_COLOR[w.sampleSurface(i0 + a + c)],
+        (c, r, x) => {
+          const [cr, cg, cb] = SURF_COLOR[w.sampleSurface(i0 + a + c)];
+          const patch = 0.88 + 0.24 * fbm1(x / 6.5 + r * 0.31, 71, 3);
+          const rut = r === 2 ? 0.86 : r === 0 || r === 4 ? 1.06 : 1;
+          const zone = zones.some(([z0, z1]) => x >= z0 && x <= z1);
+          const k = patch * rut;
+          return zone ? [cr * k * 1.22, cg * k * 1.12, cb * k * 0.95] : [cr * k, cg * k, cb * k];
+        },
       );
+      // detail decal on top (ruts, pebbles, cracks, leaves…)
+      if (!this.snow) {
+        const dm = new THREE.Mesh(geo, this.detailMat());
+        dm.renderOrder = 1;
+        dm.userData.shared = true;
+        group.add(dm);
+      }
       if (this.snow) {
-        // snowy edges, a muddy half-cleared line where the bikes ride (with two tyre ruts)
-        const zs = [Z_BACK, -0.95, -0.62, -0.42, -0.08, 0.12, 0.42, Z_FRONT];
-        const lane = (r: number) => r >= 1 && r <= 6;
-        const strip = (r0: number, r1: number, mat: THREE.Material, shade: (r: number) => number) => {
-          const g2 = grid(
-            cols,
-            r1 - r0 + 1,
-            (c, r) => {
-              const i = i0 + a + c;
-              return [i * DX, w.sampleVisual(i) + (lane(r + r0) ? 0 : 0.03), zs[r + r0]];
-            },
-            (x, _y, z) => [x, z],
-            (c, r) => {
-              const k = shade(r + r0) * (0.94 + 0.06 * noise1((i0 + a + c) * 0.37, r + r0));
-              return [k, k, k];
-            },
-          );
-          const mm = new THREE.Mesh(g2, mat);
-          mm.receiveShadow = true;
-          group.add(mm);
-        };
-        strip(0, 1, this.snowMat!, (r) => (r === 0 ? 1 : 0.92));
-        strip(1, 6, this.mats.track, (r) => [0, 0.86, 0.62, 0.8, 0.6, 0.86, 0][r]);
-        strip(6, 7, this.snowMat!, (r) => (r === 7 ? 1 : 0.92));
+        // snow-covered road: white across the band, the bikes' passage left two slushy brown
+        // ruts and a trampled grey line between them
+        const zs = [Z_BACK, -0.5, -0.4, -0.33, -0.27, -0.17, -0.1, -0.02, 0.25, Z_FRONT];
+        const W: [number, number, number] = [1, 1, 1];
+        const Wt: [number, number, number] = [0.93, 0.93, 0.95];
+        const G: [number, number, number] = [0.82, 0.82, 0.86];
+        const B: [number, number, number] = [0.6, 0.5, 0.42];
+        const cols3 = [W, Wt, B, B, G, B, B, Wt, W, W];
+        const g2 = grid(
+          cols,
+          zs.length,
+          (c, r) => {
+            const i = i0 + a + c;
+            return [i * DX, w.sampleVisual(i) + (r >= 2 && r <= 6 ? 0 : 0.02), zs[r]];
+          },
+          (x, _y, z) => [x, z],
+          (c, r) => {
+            const k = 0.94 + 0.06 * noise1((i0 + a + c) * 0.37, r);
+            const [cr, cg, cb] = cols3[r];
+            return [cr * k, cg * k, cb * k];
+          },
+        );
+        const mm = new THREE.Mesh(g2, this.snowMat!);
+        mm.receiveShadow = true;
+        group.add(mm);
+        geo.dispose();
       } else {
         const m = new THREE.Mesh(geo, this.mats.track);
         m.receiveShadow = true;
@@ -313,6 +412,33 @@ export class TerrainBuilder {
       if ((onBridge || k === n - 1) && runStart >= 0) {
         flushTrack(runStart, onBridge ? k - 1 : k);
         runStart = -1;
+      }
+    }
+
+    // ---- trial zones: red-and-white tape on stakes along the back of the track
+    for (const [z0, z1] of zones) {
+      const xa = Math.max(z0, x0);
+      const xb = Math.min(z1, x1);
+      if (xb - xa < 0.5) continue;
+      const pos: number[] = [];
+      const uvs: number[] = [];
+      const zt = Z_BACK - 0.15;
+      for (let x = xa; x < xb; x += 0.5) {
+        const xe = Math.min(xb, x + 0.5);
+        const ya = w.visualAt(x) + 0.62;
+        const yb = w.visualAt(xe) + 0.62;
+        pos.push(x, ya, zt, xe, yb, zt, x, ya + 0.12, zt, xe, yb, zt, xe, yb + 0.12, zt, x, ya + 0.12, zt);
+        uvs.push(x, 0, xe, 0, x, 1, xe, 0, xe, 1, x, 1);
+      }
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      tg.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      group.add(new THREE.Mesh(tg, this.tapeMat()));
+      for (let x = Math.ceil(xa / 3) * 3; x <= xb; x += 3) {
+        const post = new THREE.Mesh(this.postGeo, this.postMat);
+        post.position.set(x, w.visualAt(x) + 0.4, zt - 0.02);
+        post.userData.shared = true;
+        group.add(post);
       }
     }
 
@@ -425,6 +551,12 @@ export class TerrainBuilder {
       } else if (isAsset) {
         // physical obstacle: exact size, base on the ground it was built on, just behind the bike
         add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5, 1, false);
+        // light halo around it: an obstacle of the course, not a piece of scenery
+        const halo = new THREE.Mesh(this.billboardGeo(s), this.haloMat(s));
+        halo.position.set(p.x, (p.baseY ?? w.heightAt(p.x)) - 0.02, -0.56);
+        halo.scale.set(1 + 0.16 / Math.max(0.5, s.w), 1 + 0.14 / Math.max(0.5, s.h), 1);
+        halo.userData.shared = true;
+        group.add(halo);
         // dark contact shadow on the track: obstacles read as solid objects, not scenery
         const sh = new THREE.Mesh(this.shadowGeo, this.shadowMat());
         sh.rotation.x = -Math.PI / 2;
@@ -484,4 +616,114 @@ export class TerrainBuilder {
     }
     return { index: ci, group, anims };
   }
+}
+
+/**
+ * Road details painted on a transparent strip (9 m × the track width), tiled along the track:
+ * tyre ruts in the riding lane, stones, cracks, tufts, leaves, tar patches… per world.
+ */
+function roadDetail(kind: TerrainStyle['kind'], wet: number): HTMLCanvasElement {
+  const W = 1152;
+  const H = 128;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  let seed = kind.length * 97 + wet * 13 + 5;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const laneY = ((-0.25 - Z_BACK) / (Z_FRONT - Z_BACK)) * H;
+  const dark = kind === 'city' ? 'rgba(20,20,24,' : kind === 'desert' ? 'rgba(120,80,40,' : 'rgba(60,38,20,';
+  const light = kind === 'city' ? 'rgba(210,210,215,' : 'rgba(255,240,210,';
+  // tyre ruts (two wavy lines in the lane)
+  for (const dy of [-9, 9]) {
+    g.beginPath();
+    for (let x = 0; x <= W; x += 8) g.lineTo(x, laneY + dy + Math.sin(x * 0.011 + dy) * 3);
+    g.strokeStyle = dark + (kind === 'city' ? '0.18)' : '0.28)');
+    g.lineWidth = 7;
+    g.stroke();
+  }
+  // tread marks in the ruts
+  for (let x = 0; x < W; x += 6) {
+    g.fillStyle = dark + '0.18)';
+    g.fillRect(x, laneY - 12 + (x % 12 ? 0 : 1), 3, 5);
+    g.fillRect(x + 2, laneY + 7, 3, 5);
+  }
+  if (kind === 'city') {
+    // cracks, tar patches, a manhole
+    for (let k = 0; k < 9; k++) {
+      let x = rnd() * W;
+      let y = rnd() * H;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let q = 0; q < 6; q++) g.lineTo((x += (rnd() - 0.3) * 30), (y += (rnd() - 0.5) * 18));
+      g.strokeStyle = 'rgba(15,15,18,0.45)';
+      g.lineWidth = 1.6;
+      g.stroke();
+    }
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = 'rgba(25,25,30,0.35)';
+      g.fillRect(rnd() * W, rnd() * H * 0.8, 60 + rnd() * 90, 20 + rnd() * 30);
+    }
+    g.fillStyle = 'rgba(40,40,46,0.8)';
+    g.beginPath();
+    g.ellipse(W * 0.62, H * 0.75, 26, 12, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = 'rgba(150,150,155,0.5)';
+    g.stroke();
+  } else {
+    // stones and gravel
+    for (let k = 0; k < 260; k++) {
+      const x = rnd() * W;
+      const y = rnd() * H;
+      const r = rnd() < 0.08 ? 3 + rnd() * 4 : 0.8 + rnd() * 1.8;
+      g.fillStyle = rnd() < 0.5 ? dark + (0.25 + rnd() * 0.3) + ')' : light + (0.25 + rnd() * 0.35) + ')';
+      g.beginPath();
+      g.ellipse(x, y, r * 1.3, r, rnd() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    // tufts at the edges (green worlds), dry twigs elsewhere
+    for (let k = 0; k < 40; k++) {
+      const x = rnd() * W;
+      const y = rnd() < 0.5 ? rnd() * 18 : H - rnd() * 18;
+      g.strokeStyle = kind === 'green' ? `rgba(70,${120 + rnd() * 60},40,0.7)` : 'rgba(120,90,50,0.5)';
+      g.lineWidth = 1.5;
+      for (let q = 0; q < 5; q++) {
+        g.beginPath();
+        g.moveTo(x + q * 2, y);
+        g.lineTo(x + q * 2 + (rnd() - 0.5) * 6, y - 6 - rnd() * 8);
+        g.stroke();
+      }
+    }
+    if (kind === 'green')
+      for (let k = 0; k < 30; k++) {
+        g.fillStyle = ['rgba(200,120,40,0.55)', 'rgba(220,180,60,0.5)', 'rgba(160,80,30,0.5)'][k % 3];
+        g.beginPath();
+        g.ellipse(rnd() * W, rnd() * H, 4, 2.2, rnd() * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+  }
+  // wet worlds: shiny puddles
+  if (wet === 1)
+    for (let k = 0; k < 6; k++) {
+      const x = rnd() * W;
+      const y = laneY + (rnd() - 0.5) * 40;
+      const gr = g.createRadialGradient(x, y, 2, x, y, 40);
+      gr.addColorStop(0, 'rgba(180,200,220,0.55)');
+      gr.addColorStop(1, 'rgba(180,200,220,0)');
+      g.fillStyle = gr;
+      g.beginPath();
+      g.ellipse(x, y, 46, 12, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  // seamless: copy the first 60 px faded onto the end
+  const strip = g.getImageData(0, 0, 60, H);
+  const end = g.getImageData(W - 60, 0, 60, H);
+  for (let x = 0; x < 60; x++)
+    for (let y = 0; y < H; y++) {
+      const i = (y * 60 + x) * 4;
+      const t = x / 60;
+      for (let k = 0; k < 4; k++) end.data[i + k] = end.data[i + k] * (1 - t) + strip.data[i + k] * t;
+    }
+  g.putImageData(end, W - 60, 0);
+  return c;
 }

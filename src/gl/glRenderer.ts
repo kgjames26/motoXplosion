@@ -362,7 +362,22 @@ export class GLRenderer {
         tag.style.transform = `translate(${((v.x + 1) / 2) * this.W}px, ${((1 - v.y) / 2) * this.H}px) translate(-50%, -50%)`;
       } else tag.style.display = 'none';
     }
+    // the player's own name tag in races
+    if (!this.youTag) {
+      this.youTag = document.createElement('div');
+      this.youTag.className = 'rider-tag you';
+      this.tagLayer.appendChild(this.youTag);
+    }
+    const showYou = game.mode === 'course' && game.state === 'playing' && !!game.pseudo;
+    this.youTag.style.display = showYou ? 'block' : 'none';
+    if (showYou) {
+      if (this.youTag.textContent !== game.pseudo) this.youTag.textContent = game.pseudo;
+      const [px, py] = game.bike.pointWorld(0, 0);
+      v.set(px, py + 1.7, -0.25).project(this.camera);
+      this.youTag.style.transform = `translate(${((v.x + 1) / 2) * this.W}px, ${((1 - v.y) / 2) * this.H}px) translate(-50%, -50%)`;
+    }
   }
+  private youTag: HTMLElement | null = null;
 
   private coinMatrix = new THREE.Matrix4();
   private updateCoins(game: Game): void {

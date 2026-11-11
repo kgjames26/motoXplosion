@@ -90,6 +90,14 @@ const MODE_ICONS: Record<ModeId, string> = {
   enduro: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 34 C12 12 19 9 24 9 C30 9 37 14 46 34Z"/><path d="M24 9V2 l8 2.6 -8 2.6"/><path d="M10 29 l3 -3 M36 27 l3 3"/></svg>',
   course: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M9 35V3"/><path d="M9 4h30v17H9z"/><path d="M9 4h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 8.25H24v4.25h-7.5zm15 0H39v4.25h-7.5zM9 12.5h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 16.75H24V21h-7.5zm15 0H39V21h-7.5z" fill="currentColor" stroke="none"/></svg>',
 };
+const WORLD_ICONS: Record<RegionId, string> = {
+  alpes: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 20l7-12 4 6 3-4 6 10z"/><path d="M7.5 10.5L9 8l1.6 2.6"/></svg>',
+  foret: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3l5 8H3zM8 9l6 9H2zM8 18v3M17 7l4 7h-8zM17 14v6"/></svg>',
+  canyon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 20V9h6v4h3V6h6v8h5v6z"/></svg>',
+  desert: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="6" r="2.5"/><path d="M2 19c4-5 8-5 12-1 3-3 5-3 8-1"/><path d="M7 19v-7M5 14v-2h2M9 15v-2H7"/></svg>',
+  sf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 18h20M5 18V8M17 18V8M5 9c3 4 9 4 12 0M2 14l3-5M22 14l-3-5"/></svg>',
+};
+
 const MODE_SHORT: Record<ModeId, string> = {
   cruising: 'Balade',
   trial: 'Obstacles',
@@ -144,6 +152,7 @@ function updateBest(): void {
     cd.innerHTML = diffButtons((d) => diffIndex(d) <= cruiseLevel());
   }
   $('title-coins').textContent = profile.coins.toLocaleString('fr-FR');
+  $('title-pseudo').textContent = settings.pseudo.trim();
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card')) {
     const m = el.dataset.mode as ModeId;
     const box = el.querySelector('.medals')!;
@@ -159,6 +168,8 @@ function refreshTitle(): void {
   const m = MODES.find((x) => x.id === profile.mode)!;
   $('sel-mode-name').textContent = m.name;
   $('sel-world-name').textContent = REGIONS[settings.region].name;
+  $('sel-mode-ico').innerHTML = MODE_ICONS[m.id];
+  $('sel-world-ico').innerHTML = WORLD_ICONS[settings.region];
   $('mode-desc').textContent = m.description;
   updateBest();
 }
@@ -310,6 +321,7 @@ function buildRegions(): void {
       saveSettings(settings);
       for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
       $('sel-world-name').textContent = r.name;
+      $('sel-world-ico').innerHTML = WORLD_ICONS[id];
       closePickers();
       game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
       game.state = 'title';
@@ -341,6 +353,7 @@ function openSettings(from: ScreenName): void {
   $('set-music-v').textContent = m.value;
   $('set-sfx-v').textContent = s.value;
   ($('set-vibration') as HTMLInputElement).checked = settings.vibration;
+  ($('set-pseudo') as HTMLInputElement).value = settings.pseudo;
   applyLayout(settings.layout);
   applyQuality(settings.quality);
   show('settings');
@@ -374,6 +387,11 @@ function bindSettings(): void {
       saveSettings(settings);
     });
   }
+  ($('set-pseudo') as HTMLInputElement).addEventListener('input', (e) => {
+    settings.pseudo = (e.target as HTMLInputElement).value.slice(0, 14);
+    saveSettings(settings);
+    updateBest();
+  });
   ($('set-vibration') as HTMLInputElement).addEventListener('change', (e) => {
     settings.vibration = (e.target as HTMLInputElement).checked;
     saveSettings(settings);
@@ -418,6 +436,7 @@ function start(): void {
   const model = bikeById(profile.bike);
   renderer.setPlayerModel(model, outfit());
   audio.setElectric(!!model.electric);
+  game.pseudo = settings.pseudo.trim();
   game.newRun(runOpts());
   renderer.render(game, 0, true);
   show('none');
@@ -455,6 +474,7 @@ function home(): void {
   refreshTitle();
   renderer.render(game, 0, true);
   show('title');
+  flashSplash();
 }
 
 const OVER_TITLES: Record<string, string> = {
@@ -619,6 +639,110 @@ loadAssets()
   });
 show('title');
 renderer.render(game, 0, true);
+
+// ---------------------------------------------------------------- launch screen
+
+/**
+ * Launch screen: the poster fades in from black with a slow zoom, the rider rumbles, dust
+ * flies off the rear wheel and a light sweeps the logo; JOUER / options. Returning to the menu
+ * from a run shows it again for 1.5 s, without buttons, with a fade from and to black.
+ */
+const splash = $('splash');
+const splashBlack = $('splash-black');
+const fxCanvas = $('splash-fx') as HTMLCanvasElement;
+let fxRunning = false;
+let splashTimer = 0;
+
+function black(on: boolean, ms: number): void {
+  splashBlack.style.transition = `opacity ${ms}ms ease`;
+  splashBlack.classList.toggle('out', !on);
+}
+
+function runDust(): void {
+  if (fxRunning) return;
+  fxRunning = true;
+  const g = fxCanvas.getContext('2d')!;
+  const parts: { x: number; y: number; vx: number; vy: number; r: number; life: number }[] = [];
+  let last = performance.now();
+  const tick = (now: number) => {
+    if (splash.classList.contains('hidden')) {
+      fxRunning = false;
+      return;
+    }
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+    last = now;
+    const W = (fxCanvas.width = fxCanvas.clientWidth);
+    const H = (fxCanvas.height = fxCanvas.clientHeight);
+    // rear wheel of the painted bike
+    for (let k = 0; k < 3; k++)
+      parts.push({ x: 0.11 * W, y: 0.86 * H, vx: -(0.05 + Math.random() * 0.12) * W, vy: -(0.02 + Math.random() * 0.08) * H, r: 0.006 * W, life: 1 });
+    g.clearRect(0, 0, W, H);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.life -= dt * 0.8;
+      if (p.life <= 0) {
+        parts.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 0.01 * H * dt;
+      p.r += 0.012 * W * dt;
+      g.fillStyle = `rgba(214,170,120,${0.32 * p.life})`;
+      g.beginPath();
+      g.arc(p.x, p.y, Math.max(0.5, p.r), 0, Math.PI * 2);
+      g.fill();
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function startSplash(): void {
+  splash.classList.remove('hidden', 'flash');
+  black(true, 0);
+  requestAnimationFrame(() => requestAnimationFrame(() => black(false, 900)));
+  runDust();
+}
+
+/** Fade to black, hide the poster, fade the menu in. */
+function leaveSplash(then?: () => void): void {
+  clearTimeout(splashTimer);
+  black(true, 380);
+  splashTimer = window.setTimeout(() => {
+    splash.classList.add('gone');
+    then?.();
+    black(false, 380);
+    splashTimer = window.setTimeout(() => splash.classList.add('hidden'), 400);
+  }, 400);
+}
+
+/** Back from a run: the poster for 1.5 s, no buttons, black in and out. */
+function flashSplash(): void {
+  clearTimeout(splashTimer);
+  splash.classList.remove('hidden', 'gone');
+  splash.classList.add('flash');
+  // restart the zoom so it moves while shown
+  const art = splash.querySelector('.splash-art') as HTMLElement;
+  art.style.animation = 'none';
+  void art.offsetWidth;
+  art.style.animation = '';
+  black(true, 0);
+  runDust();
+  requestAnimationFrame(() => requestAnimationFrame(() => black(false, 300)));
+  splashTimer = window.setTimeout(() => leaveSplash(), 1200);
+}
+
+$('splash-play').addEventListener('click', () => {
+  audio.unlock();
+  void immersive();
+  leaveSplash();
+});
+$('splash-settings').addEventListener('click', () => {
+  audio.unlock();
+  leaveSplash(() => openSettings('title'));
+});
+startSplash();
 
 // ---------------------------------------------------------------- loop
 let last = performance.now();

@@ -249,7 +249,7 @@ export class Bike {
     let drive = 0;
     if (!this.crashed && (input.reverse ?? 0) > 0 && input.throttle <= 0.01) {
       // reverse creep: gentle torque towards -3 km/h
-      drive = clamp((-0.86 * input.reverse! - wheelSpeed) * 260 - 45 * input.reverse!, -170, 80);
+      drive = clamp((-0.86 * input.reverse! - wheelSpeed) * 600 - 95 * input.reverse!, -320, 80);
     } else if (!this.crashed && input.throttle > 0.01) {
       const powerLimited = (this.power * rear.radius) / Math.max(Math.abs(wheelSpeed), 4);
       const limiter = clamp((this.maxSpeed - wheelSpeed) / 3, 0, 1);

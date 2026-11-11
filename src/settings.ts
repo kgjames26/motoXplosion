@@ -16,10 +16,12 @@ export interface Settings {
   region: RegionId;
   vibration: boolean;
   quality: Quality;
+  /** Player name shown in races and on the home screen. */
+  pseudo: string;
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute' };
+const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '' };
 
 export function loadSettings(): Settings {
   try {

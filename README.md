@@ -4,15 +4,17 @@ PWA de **motocross** en 2,5D (scène 3D WebGL vue de côté), jouable sur smartp
 contemplative dans de grands paysages peints, un vrai défi de pilotage grâce à une physique de moto exigeante, quatre modes de jeu,
 sept motos à gagner au garage.
 
-## Accueil
+## Écran de lancement et accueil
 
-L'accueil est épuré : sous le logo, seulement deux mots, **MODE** (Cruising, Trial, Enduro, Course) et **MONDE** (Alpes, Grande Forêt, Canyon, Désert, San Francisco). Un toucher sur l'un ouvre le choix (cartes avec icônes et nombre de circuits terminés, ou vignettes des mondes), puis il se referme. En bas : **GARAGE**, une phrase qui explique le mode, les boutons de difficulté/météo du cruising et le gros bouton **JOUER**. Les options sont sous l'engrenage, le porte-monnaie en haut à gauche. En Cruising, JOUER part directement ; dans les trois autres modes, il ouvre le **choix du circuit**.
+- **Écran de lancement** : l'affiche du jeu (`public/res/splash.webp`, tirée de l'image fournie, bouton et engrenage peints effacés) apparaît en fondu depuis le noir avec un lent zoom ; le pilote et sa moto vibrent avec le moteur, de la poussière jaillit de la roue arrière et un reflet balaie le logo. Sur tous les formats d'écran l'image est montrée en entier, une copie floue remplit les côtés (ou le haut et le bas). Boutons **JOUER** (néon orange et turquoise, comme sur l'affiche) et options.
+- En revenant d'une partie au menu, l'affiche réapparaît **1,5 s** sans boutons, avec un fondu au noir à l'entrée et à la sortie.
+- **Accueil** : à gauche, trois boutons néon empilés — **MODE**, **MONDE** (avec leur icône) et **GARAGE**. Un toucher sur Mode ou Monde ouvre le choix en cartes ; en bas à droite le gros bouton **JOUER** ; au centre la phrase du mode et, en cruising, les boutons de difficulté/météo. Le pseudo s'affiche à côté du porte-monnaie.
 
 ## Modes de jeu
 
 | Mode | Règles | Gains |
 | --- | --- | --- |
-| **Cruising** | balade infinie : garder de l'essence (bidons) et de l'eau (bouteilles). Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
+| **Cruising** | balade infinie et libre : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
 | **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
 | **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (7 à 22 m de haut, de plus en plus raides, bosses et marches rocheuses sur les pentes), racines, troncs, gués ; essence et eau gérées, chrono | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
@@ -35,7 +37,8 @@ Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés
 
 ### Rochers et obstacles de trial
 - Le trial est **plus technique** : chaque zone mélange rochers, **mobilier** crédible (pneus de tracteur, escaliers de traverses, buses béton, tourets, poutres IPN, palettes, cuves IBC, fûts couchés, séparateurs, palettes de briques, big bags, bottes de foin, abreuvoirs et charrettes, bancs, bacs, escaliers de bordures, madriers sur tréteaux) et **éléments naturels** (troncs couchés, souches déracinées, souches, dalles en escalier, paires de rochers, marches rocheuses, tas de rondins, talus à racines, éboulis, arbres morts, gués de pierres, troncs posés sur rochers), enchaînés en lignes : paires serrées, escaliers d'obstacles, obstacle posé sur une montée, obstacle suivi d'une marche descendante. Les objets hauts ont une rampe d'accès (planche, sacs ou terre) dessinée exactement sur la pente que suit la roue.
-- On voit tout de suite que ce n'est pas du décor : ombre de contact sur la piste et **piquets de zone** de part et d'autre de chaque obstacle.
+- On voit tout de suite que ce n'est pas du décor : chaque obstacle a un **halo clair** et une ombre de contact sur la piste, les zones sont sur une **terre tassée plus claire**, bordées d'une **rubalise rouge et blanche** sur piquets, avec des fanions de part et d'autre de chaque obstacle ; les abords de la piste sont dégagés en trial (moins de décor au premier plan).
+- **Temps cibles** du trial resserrés (v2.9) : l'or demande une montée propre et rapide, un pilote prudent obtient l'argent.
 - **Ressenti** : quand une roue tape un obstacle, la moto le transmet — vibration proportionnelle au choc, bruit sourd, petite secousse de caméra.
 - **300 rochers** (granit, moussus, grès rouge, ocre ; bloc, dôme, dalle ; 0,5 à 2,5 m) qui grandissent avec les circuits. La face à monter se raidit avec la taille (40° → 58°) : c'est la physique (couple, poids, adhérence) qui décide si la moto passe. Une moto trop faible glisse ; l'écran des circuits le signale (« il faut une Fury 450 ») et, en jeu, un message le rappelle après trois essais ratés. Hauteur max des motos d'origine (sec / pluie / neige) : Explorer 1,33 / 1,25 / 1,17 m ; Sprint 1,5 / 1,33 / 1,25 ; Trailblazer 2,0 / 1,5 / 1,33 ; Fury 2,17 / 1,5 / 1,42 ; Dakar 2,0 / 1,83 / 1,42 ; Volt 2,5 / 2,0 / 1,42 ; Ridge 2,5 / 2,33 / 2,17. Les améliorations et les pneus font monter ces chiffres (le garage les recalcule avec la physique).
 
@@ -59,6 +62,7 @@ Le **garage** (la boutique) est accessible depuis l'accueil et depuis l'écran d
 - **MOTOS** : vitrine 3D qui tourne (on la fait pivoter du doigt), caractéristiques **en chiffres** (puissance en ch, couple, vitesse max, poids, suspensions, adhérence, freins, agilité, autonomie, hauteur de rocher franchissable) avec les améliorations déjà montées, et un repère blanc qui montre la moto que tu as ; achat et choix.
 - **PIÈCES** : 7 améliorations par moto, 3 niveaux chacune, chacune dit exactement ce qu'elle apporte : préparation moteur (+5 % de puissance, +4 % de couple par niveau), échappement sport (+3 % de puissance, +2,5 % de vitesse), transmission courte (+6 % de couple), suspensions réglables (+7 % de fermeté, +5 % de débattement), freins gros disque (+10 %), allègement carbone (−4 % de poids, +4 % d'agilité), grand réservoir/batterie (−8 % de consommation). Toucher une pièce montre en **vert** ce que le niveau suivant change sur chaque barre (et sur la hauteur de rocher, recalculée avec la physique) ; un repère blanc montre la **moto suivante d'origine** pour comparer. Une moto bien améliorée dépasse la suivante d'origine ; la suivante a besoin de quelques améliorations pour reprendre l'avantage. Prix selon la moto (150 → 3 150 pièces par niveau).
 - **PNEUS** : Pneus Sec (+7 % d'adhérence sur le sec, 900), Pneus Pluie (+12 % sous la pluie, 1 600), Pneus Neige (+20 % dans la neige, 2 400), pour toutes les motos, montés tout seuls quand leur météo arrive.
+- La boutique de pièces est en **cartes colorées** (une couleur par pièce, grosse pastille, badge « +5 % PUISSANCE », étoiles de niveau, prix bien visible, petite animation à l'achat) et les chiffres sont écrits en grand.
 - **TENUES** : 10 tenues de pilote de couleurs différentes (300 à 3 000), plus la tenue offerte aux couleurs de la moto.
 
 | Moto | Style | Prix | Points forts |
@@ -117,9 +121,9 @@ Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record e
 - **Balance ARRIÈRE / AVANT** (en bas à gauche) : déplace le poids du pilote. Au sol, elle change le centre de gravité (balance à moitié en arrière = wheelie, tout en arrière plein gaz = on se retourne). En l'air, elle fait tourner la moto pour préparer l'atterrissage. Elle revient au centre quand on la lâche.
 - **Disque de frein** (juste à gauche de l'accélérateur) : freins avant + arrière.
 - **Poignée d'accélérateur** (à droite) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
-- **Marche arrière** : à l'arrêt, garder le frein appuyé plus de 2 secondes : la moto recule doucement, jusqu'à 3 km/h.
+- **Marche arrière** : à l'arrêt, garder le frein appuyé 1 seconde : la moto recule et atteint 3 km/h en une seconde environ.
 - **Pause** en haut à droite. Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
-- **Options** (accueil et menu pause) : volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
+- **Options** (accueil et menu pause) : **pseudo** (affiché sur l'accueil, au-dessus de ta moto et dans le classement en course), volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
 - Le numéro de version est affiché en tout petit en bas à gauche de l'accueil (`public/version.json`, incrémenté automatiquement, voir CLAUDE.md).
 - Au clavier (pour tester sur ordinateur) : ↑/W gaz, ↓/S/Espace frein, ←/A arrière, →/D avant, P/Échap pause.
 
@@ -154,6 +158,10 @@ Le projet est un build Vite standard, sans configuration particulière :
 ## Retour haptique (Android)
 
 Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des suspensions, aux chutes, aux bidons, pièces et cascades, aux fautes et zones réussies en trial, au compte à rebours et à l'arrivée d'une course. Réglables dans les Options. (Les navigateurs iPhone ne permettent pas la vibration.)
+
+## Revêtements de route
+
+La piste est plus vivante : taches de couleur le long de la route, voie usée plus sombre là où roulent les motos, et un décor de détails par-dessus — ornières et traces de crampons, gravillons, cailloux, touffes d'herbe et feuilles mortes (mondes verts), brindilles sèches (canyon, désert), fissures, rustines de goudron et plaques d'égout (San Francisco), flaques brillantes sous la pluie. En **neige**, la route est blanche sur toute sa largeur, avec deux ornières de neige fondue boueuse et une trace grise piétinée entre elles. À San Francisco, hors trial, les décors de rue sont un peu reculés pour défiler moins vite.
 
 ## Son
 

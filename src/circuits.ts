@@ -71,11 +71,12 @@ export const MEDAL_COLORS = ['', '#d98a4a', '#d6dbe4', '#f6c23a'];
 export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number; silver: number } {
   const g = circuitGrade(n);
   let gold: number;
-  if (mode === 'trial') gold = trialZones(n) * (19 + g * 8) + 10;
+  // trial: a fast, clean ride (a careful rider gets silver)
+  if (mode === 'trial') gold = trialZones(n) * (10 + g * 14) + 6;
   // enduro: set for the bike the player can afford by then (see expectedBike)
   else gold = circuitLength(mode, n) / (mode === 'enduro' ? 21.5 + g * 2.5 : 22);
   gold = Math.round(gold * [1, 1.08, 1.16][diff]);
-  return { gold, silver: Math.round(gold * 1.3) };
+  return { gold, silver: Math.round(gold * (mode === 'trial' ? 1.22 : 1.3)) };
 }
 
 export function medalForTime(mode: CircuitMode, n: number, t: number, diff = 0): Medal {

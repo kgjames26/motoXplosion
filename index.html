@@ -121,6 +121,18 @@
       </div>
 
       <!-- Screens -->
+      <div id="splash" class="splash">
+        <div class="splash-bg"></div>
+        <div class="splash-frame" id="splash-frame">
+          <div class="splash-art"><div class="splash-img"></div><div class="splash-rider"></div></div>
+          <div class="splash-sheen"></div>
+          <canvas class="splash-fx" id="splash-fx"></canvas>
+          <button class="neon-play splash-play" id="splash-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" /></svg>JOUER</button>
+          <button class="neon-round splash-gear" id="splash-settings" aria-label="Options"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg></button>
+        </div>
+        <div class="splash-black" id="splash-black"></div>
+      </div>
+
       <div id="screen-title" class="screen">
         <div class="title-grade"></div>
         <div class="title-frame"></div>
@@ -131,22 +143,20 @@
           <div class="word"><span class="w1">moto</span><span class="wx">X</span><span class="w2">plosion</span></div>
           <div class="tag">CRUISING MOTOCROSS ADVENTURE</div>
         </div>
-        <div class="wallet panel" id="title-wallet"><i class="coin-ico"></i><b id="title-coins">0</b></div>
+        <div class="wallet panel" id="title-wallet"><span class="pseudo" id="title-pseudo"></span><i class="coin-ico"></i><b id="title-coins">0</b></div>
         <button class="icon-btn" id="btn-settings-title" aria-label="Options">
           <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
         </button>
         <div class="title-menu">
-          <button class="selector" id="sel-mode"><small>MODE</small><b id="sel-mode-name">Cruising</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
-          <button class="selector" id="sel-world"><small>MONDE</small><b id="sel-world-name">Alpes</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
+          <button class="neon-sel" id="sel-mode"><i class="ns-ico" id="sel-mode-ico"></i><span><small>MODE</small><b id="sel-mode-name">Cruising</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
+          <button class="neon-sel" id="sel-world"><i class="ns-ico world" id="sel-world-ico"></i><span><small>MONDE</small><b id="sel-world-name">Alpes</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
+          <button class="neon-sel garage" id="btn-garage"><i class="ns-ico"><svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg></i><span><small>BOUTIQUE</small><b>Garage</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
         </div>
         <div class="picker hidden" id="picker-mode"><div class="pick-box"><div class="pick-label">MODE</div><div class="mode-cards" id="modes"></div></div></div>
         <div class="picker hidden" id="picker-world"><div class="pick-box"><div class="pick-label">MONDE</div><div class="world-cards" id="regions"></div></div></div>
         <div class="title-bottom">
-          <button class="btn-slant garage-big" id="btn-garage">
-            <svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg>GARAGE
-          </button>
           <div class="title-info"><div class="diffs cruise-diffs hidden" id="cruise-diffs"></div><div class="mode-desc" id="mode-desc"></div><div class="best">RECORD <b id="best-title">0</b></div></div>
-          <button class="btn-slant btn-jouer" id="btn-play">JOUER <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
+          <button class="neon-play" id="btn-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" /></svg>JOUER</button>
         </div>
         <div class="loading" id="loading">Chargement…</div>
         <div class="version" id="version"></div>
@@ -277,6 +287,10 @@
               <button data-quality="basse" class="layout-opt">Basse</button>
             </div>
           </div>
+          <label class="set-row">
+            <span>Pseudo</span>
+            <input type="text" id="set-pseudo" maxlength="14" placeholder="Ton nom de pilote" autocomplete="off" spellcheck="false" />
+          </label>
           <label class="set-row check">
             <span>Vibrations</span>
             <input type="checkbox" id="set-vibration" />

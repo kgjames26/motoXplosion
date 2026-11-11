@@ -234,6 +234,7 @@ export class Garage {
     }, 30);
   }
   private rockToken: symbol | null = null;
+  private justBought: string | null = null;
 
   refresh(): void {
     const p = this.profile;
@@ -255,14 +256,14 @@ export class Garage {
       this.fillRocks(spec, next ? next.spec : null, prev);
       $('g-parts').innerHTML = PARTS.map((x) => {
         const l = lv[x.id] ?? 0;
-        const pips = [1, 2, 3].map((k) => `<i class="${k <= l ? 'on' : ''}"></i>`).join('');
+        const pips = [1, 2, 3].map((k) => `<i class="${k <= l ? 'on' : ''}">★</i>`).join('');
         const price = l < MAX_LEVEL ? partPrice(m, l + 1) : 0;
         const btn = !owned
           ? '<button class="p-buy" disabled>—</button>'
           : l >= MAX_LEVEL
             ? '<button class="p-buy max" disabled>MAX</button>'
             : `<button class="p-buy${p.coins < price ? ' poor' : ''}" data-buy="${x.id}"><i class="coin-ico"></i>${price.toLocaleString('fr-FR')}</button>`;
-        return `<div class="p-row${this.preview === x.id ? ' sel' : ''}" data-part="${x.id}">${x.icon}<div class="p-txt"><b>${x.name}</b><small>${x.effect}</small></div><span class="p-pips">${pips}</span>${btn}</div>`;
+        return `<div class="p-row${this.preview === x.id ? ' sel' : ''}${this.justBought === x.id ? ' bought' : ''}" data-part="${x.id}" style="--pc:${x.color}"><i class="p-bub">${x.icon}</i><div class="p-txt"><b>${x.name}</b><em>${x.chip}</em></div><span class="p-pips">${pips}</span>${btn}</div>`;
       }).join('');
       $('g-action').classList.add('hidden');
     } else {
@@ -351,6 +352,8 @@ export class Garage {
     if (l >= MAX_LEVEL || !this.pay(partPrice(m, l + 1))) return;
     lv[id] = l + 1;
     this.preview = l + 1 < MAX_LEVEL ? id : null;
+    this.justBought = id;
+    setTimeout(() => (this.justBought = null), 900);
     this.save();
     this.refresh();
     this.onChange();

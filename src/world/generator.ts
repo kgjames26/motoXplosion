@@ -1147,7 +1147,7 @@ export class Generator {
   // ---------------------------------------------------------------- content
 
   private maybePickup(x: number, h: number, seg: Segment, t: number): void {
-    if (this.mode === 'trial' || this.mode === 'course') return;
+    if (this.mode !== 'enduro') return;
     const blocked = seg.noPickup?.some(([a, b]) => t >= a && t <= b) ?? false;
     if (blocked) return;
     const d = this.difficulty(x);
@@ -1187,7 +1187,7 @@ export class Generator {
       });
     }
     // Foreground band (in front of the track, drawn over the bike's lane).
-    for (let x = start; x < x1; x += r.range(2.5, 6)) {
+    for (let x = start; x < x1; x += r.range(2.5, 6) * (this.mode === 'trial' ? 2.5 : 1)) {
       const kind: PropKind =
         this.biome === Biome.Canyon
           ? r.chance(0.7)
@@ -1253,7 +1253,10 @@ export class Generator {
     };
     const k = Math.max(0.2, density);
     for (let x = x0; x < x1; x += r.range(3, 7) / k) put(r.chance(0.55) ? 'tree' : 'bush', x, r.range(0.2, 1));
-    for (let x = x0; x < x1; x += r.range(2, 5) / k) put('ground', x, r.range(0.04, 0.6));
+    // trial: keep the edges of the track clear so the obstacles read at a glance;
+    // San Francisco: small street items a bit further back
+    const gMin = this.mode === 'trial' ? 0.35 : this.region.id === 'sf' ? 0.18 : 0.04;
+    for (let x = x0; x < x1; x += r.range(2, 5) / k) put('ground', x, r.range(gMin, Math.max(gMin + 0.2, 0.6)));
     if (this.region.id === 'sf') {
       // a street: cars, lamps and benches close by, houses and shops behind, towers far away
       for (let x = x0 + r.range(0, 6); x < x1; x += r.range(5, 12)) {
@@ -1261,12 +1264,14 @@ export class Generator {
         if (!list.length) break;
         const a = r.weighted(list, list.map((d) => d.weight ?? 1));
         const id = a.id;
-        const depth = /tower|\.wh\./.test(id) ? r.range(0.85, 1) : /vic|shop|hill|mural|board/.test(id) ? r.range(0.4, 0.8) : r.range(0.08, 0.3);
+        // outside trial the street sits a bit further back so it scrolls by more calmly
+        const far = this.mode === 'trial' ? 0 : 1;
+        const depth = /tower|\.wh\./.test(id) ? r.range(0.88, 1) : /vic|shop|hill|mural|board/.test(id) ? r.range(0.4 + far * 0.25, 0.8 + far * 0.15) : r.range(0.08 + far * 0.24, 0.3 + far * 0.25);
         this.world.props.push({ x, kind: 'asset', asset: id, depth, scale: 1, variant: 0, flip: false });
       }
     } else for (let x = x0 + r.range(0, 40); x < x1; x += r.range(45, 90)) put('structure', x, r.range(0.65, 1), 1);
     for (let x = x0 + r.range(0, 50); x < x1; x += r.range(60, 120)) put('animal', x, r.range(0.3, 0.9), 1);
-    for (let x = x0; x < x1; x += r.range(5, 11)) put('ground', x, -r.range(0.2, 0.9), r.range(0.9, 1.3));
+    for (let x = x0; x < x1; x += r.range(5, 11) * (this.mode === 'trial' ? 2.5 : this.region.id === 'sf' ? 1.6 : 1)) put('ground', x, -r.range(this.mode === 'trial' ? 0.5 : 0.2, 0.9), r.range(0.9, 1.3));
     // mode decor along the track
     if (this.mode === 'course' || this.mode === 'enduro' || this.region.id === 'sf') {
       const dense = (x: number) => this.mode === 'course' && (x < 120 || Math.abs(x - (this.raceLen + 5)) < 80);
