@@ -12,7 +12,9 @@ import { bikeById, BIKES, rockClimb } from './bikes';
 import { Difficulty, DIFFICULTIES, MODES, ModeId } from './modes';
 import { bestKey, loadProfile, saveProfile } from './profile';
 import { outfitById } from './outfits';
-import { DIFF_ORDER, diffIndex, WEATHER_ICONS, WEATHER_NAMES } from './weather';
+import { upgradedSpec } from './upgrades';
+import { rockCapacity } from './climb';
+import { DIFF_ORDER, diffIndex, tyreBonus, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import {
   CIRCUITS,
   CircuitMode,
@@ -42,7 +44,7 @@ const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
-const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), difficulty: profile.difficulty, circuit: circuitOf() });
+const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf() });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
 renderer.setPlayerModel(game.model, outfit());
@@ -220,7 +222,8 @@ function renderCircuits(): void {
   let meta = '';
   if (mode === 'trial') {
     const hi = trialRockRange(sel, di)[1];
-    const cap = rockClimb(profile.bike, di);
+    const spec = upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]);
+    const cap = rockCapacity({ ...spec, grip: spec.grip * tyreBonus(profile.tyres, di as Weather) }, di as Weather);
     const need = BIKES.find((b) => rockClimb(b.id, di) >= hi - 0.05);
     meta = `${trialZones(sel)} zones · rochers jusqu’à ${hi.toFixed(1).replace('.', ',')} m · chute = +15 s`;
     if (cap < hi - 0.05) meta += ` <b class="warn">⚠ ${bikeById(profile.bike).name} trop faible : il faut ${need ? need.name : 'une meilleure moto'}</b>`;
@@ -620,6 +623,11 @@ function frame(now: number): void {
     if (inGame && ev.landing > 2.5) vibrate(Math.round(Math.min(70, 8 + ev.landing * 5)));
   }
   if (ev.bottom && inGame) vibrate(25, 150);
+  if (ev.bump && game.state === 'playing') {
+    audio.landing(Math.min(4, ev.bump * 1.6));
+    vibrate(Math.round(Math.min(45, 12 + ev.bump * 12)), 90);
+  }
+  if (ev.weak) vibrate([40, 60, 40]);
   if (ev.crash) {
     audio.crash();
     vibrate([90, 40, 140]);
@@ -645,7 +653,7 @@ function frame(now: number): void {
     audio.over();
     finishRun(true);
   }
-  audio.rain(game.state === 'playing' && game.weather === 2 ? 1 : game.state === 'playing' && game.weather === 1 ? 0.15 : 0);
+  audio.rain(game.state === 'playing' ? [0, 1, 0.12][game.weather] : 0);
   // engine: heard only while riding (silent on the home screen and every menu)
   const running = game.state === 'playing' && (!game.usesEnergy || game.fuel > 0);
   audio.engine(game.bike.rpm, running ? game.input.throttle : 0, game.state === 'playing' ? game.bike.speed : 0, running);

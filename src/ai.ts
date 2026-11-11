@@ -61,7 +61,7 @@ const JERSEYS: [string, string, string][] = [
 export function meanLevel(difficulty: Difficulty, champLevel: number): number {
   // facile stays beatable on every circuit, difficile ends with near-perfect riders
   if (difficulty === 'facile') return clamp(1 + (champLevel - 1) * 0.33, 1, 9.5);
-  if (difficulty === 'normal') return clamp(2.4 + (champLevel - 1) * 0.5, 1, 9.5);
+  if (difficulty === 'normal') return clamp(3 + (champLevel - 1) * 0.58, 1, 9.5);
   return clamp(4.2 + (champLevel - 1) * 0.6, 1, 9.5);
 }
 

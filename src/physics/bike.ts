@@ -21,6 +21,8 @@ export interface BikeInput {
   throttle: number; // 0..1
   brake: number; // 0..1
   balance: number; // -1 (rear) .. 1 (front)
+  /** 0..1: creep backwards (brake held at a standstill), up to 3 km/h. */
+  reverse?: number;
 }
 
 export interface Wheel {
@@ -245,7 +247,10 @@ export class Bike {
     const rear = this.rear;
     const wheelSpeed = rear.spin * rear.radius;
     let drive = 0;
-    if (!this.crashed && input.throttle > 0.01) {
+    if (!this.crashed && (input.reverse ?? 0) > 0 && input.throttle <= 0.01) {
+      // reverse creep: gentle torque towards -3 km/h
+      drive = clamp((-0.86 * input.reverse! - wheelSpeed) * 260 - 45 * input.reverse!, -170, 80);
+    } else if (!this.crashed && input.throttle > 0.01) {
       const powerLimited = (this.power * rear.radius) / Math.max(Math.abs(wheelSpeed), 4);
       const limiter = clamp((this.maxSpeed - wheelSpeed) / 3, 0, 1);
       drive = input.throttle * Math.min(this.maxWheelTorque, powerLimited) * limiter;
@@ -256,7 +261,10 @@ export class Bike {
     // rpm for audio (shift through virtual gears)
     {
       const v = Math.abs(wheelSpeed);
-      const gearTop = [0, 7, 13, 19, 25, 40];
+      // gears spread over this bike's own top speed: at full speed the engine sings near the
+      // top of 5th instead of bogging at the bottom of a too-long gear
+      const M = this.maxSpeed;
+      const gearTop = [0, 0.24 * M, 0.42 * M, 0.6 * M, 0.79 * M, 1.04 * M];
       let g = 1;
       while (g < gearTop.length - 1 && v > gearTop[g]) g++;
       const lo = gearTop[g - 1];

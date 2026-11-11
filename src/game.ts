@@ -3,9 +3,10 @@ import { BikeModel, BIKES } from './bikes';
 import { clamp, wrapAngle } from './core/math';
 import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
-import { rockClimb } from './bikes';
-import { diffIndex, Weather, weatherFor } from './weather';
+import { rockCapacity } from './climb';
+import { diffIndex, tyreBonus, Weather, weatherFor } from './weather';
 import { Bike, BikeInput } from './physics/bike';
+import type { BikeSpec } from './bikes';
 import { Particles } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
@@ -46,6 +47,8 @@ export interface GameEvents {
   finish?: number;
   stunt?: boolean;
   weak?: boolean;
+  /** Suspension hit speed on an obstacle (m/s). */
+  bump?: number;
 }
 
 /** End-of-run summary (coins earned and why). */
@@ -73,6 +76,10 @@ export interface RunOptions {
   difficulty: Difficulty;
   /** Circuit number (1..25) for trial / enduro / course. */
   circuit: number;
+  /** Player bike specs with the garage upgrades (defaults to the stock model). */
+  spec?: BikeSpec;
+  /** Tyre sets owned (one per weather, mounted automatically). */
+  tyres?: string[];
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -98,6 +105,10 @@ export class Game {
   raceLevel = 1;
   circuit = 0;
   weather: Weather = 0;
+  spec: BikeSpec = BIKES[0].spec;
+  tyres: string[] = [];
+  /** Grip bonus of the tyres mounted for this weather (1 = none). */
+  tyreK = 1;
   /** Circuit chrono (s), started at GO, stopped at the finish. */
   clock = 0;
   /** Trial: seconds of fall penalties. */
@@ -148,6 +159,8 @@ export class Game {
   result: RunResult | null = null;
   private acc = 0;
   private stuckTimer = 0;
+  private brakeHold = 0;
+  private bumpCool = 0;
   private progressX = 0;
   private progressTimer = 0;
   private outTimer = 0;
@@ -178,7 +191,10 @@ export class Game {
     this.zoneRetries = 0;
     this.weakWarned = false;
     this.world.ensure(220);
-    this.bike = new Bike(this.model.spec);
+    if (opts.spec || opts.model) this.spec = opts.spec ?? this.model.spec;
+    if (opts.tyres) this.tyres = opts.tyres;
+    this.tyreK = tyreBonus(this.tyres, this.weather);
+    this.bike = new Bike({ ...this.spec, grip: this.spec.grip * this.tyreK });
     this.bike.reset(this.world, this.startX);
     this.particles.clear();
     this.fuel = 100;
@@ -263,13 +279,20 @@ export class Game {
       inp.balance = 0;
       inp.brake = this.finished ? 0.3 : inp.brake;
     }
+    // brake held for 2 s at a standstill: the bike starts rolling backwards (up to 3 km/h)
+    if (inp.brake > 0.5 && inp.throttle < 0.05 && bike.forwardSpeed < 0.35 && bike.grounded && this.crashTimer <= 0) this.brakeHold += dt;
+    else if (inp.brake < 0.3 || inp.throttle >= 0.05) this.brakeHold = 0;
+    if (this.brakeHold > 2) {
+      inp.reverse = Math.min(1, (this.brakeHold - 2) / 1.5);
+      inp.brake = 0;
+    }
     this.stepPhysics(dt, inp, true);
     this.world.ensure(bike.x + 140);
     this.world.trim(Math.min(bike.x, this.trailingX()) - 120);
 
     // ---- energies (cruising, enduro); the desert makes the rider thirsty
     if (this.usesEnergy) {
-      const cons = this.model.spec.consumption;
+      const cons = this.spec.consumption;
       this.fuel -= (0.4 + inp.throttle * 1.25) * (1 + d * 0.5) * cons * dt;
       const roughness = Math.abs(bike.rear.sv) + Math.abs(bike.front.sv);
       const heat = this.world.biomeAt(bike.x) === Biome.Desert ? 1.45 : 1;
@@ -323,6 +346,18 @@ export class Game {
       this.landingDust(Math.min(1, hard / 7));
     }
     if (bike.rear.bottomed > 1.2 || bike.front.bottomed > 1.2) this.events.bottom = true;
+    // hitting an obstacle (rock, wood, furniture): a thump felt in the hands and the camera
+    this.bumpCool -= dt;
+    if (bike.grounded && this.bumpCool <= 0 && this.crashTimer <= 0) {
+      let hit = 0;
+      for (const wh of [bike.front, bike.rear]) if (wh.contact && (wh.surface === Surface.Rock || wh.surface === Surface.Wood)) hit = Math.max(hit, -wh.sv);
+      const threshold = this.mode === 'trial' ? 0.7 : 1.4;
+      if (hit > threshold) {
+        this.events.bump = hit;
+        this.shake = Math.min(1, this.shake + Math.min(0.35, hit * 0.12));
+        this.bumpCool = 0.18;
+      }
+    }
     if (!bike.grounded) this.lastAir = bike.airTime;
     if (ev.crashed && this.crashTimer <= 0) this.crash();
 
@@ -377,7 +412,7 @@ export class Game {
     if (this.mode !== 'trial' || !this.inSection) return;
     this.zoneRetries++;
     if (this.zoneRetries < 3 || this.weakWarned) return;
-    const cap = rockClimb(this.model.id, this.weather);
+    const cap = rockCapacity({ ...this.spec, grip: this.spec.grip * this.tyreK }, this.weather);
     let tallest = 0;
     for (const p of this.world.props) {
       if (p.depth !== 0 || !p.asset?.startsWith('tr.rock.') || Math.abs(p.x - this.bike.x) > 8) continue;
@@ -773,7 +808,7 @@ export class Game {
     const slip = Math.abs(rw.slip);
     const sp = Math.abs(b.forwardSpeed);
     // wet weather: little dust, more mud clods
-    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.65, 0.35][this.weather];
+    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.35, 0.3][this.weather];
     while (this.dustAcc > 1) {
       this.dustAcc -= 1;
       const water = rw.surface === Surface.Water;
@@ -791,7 +826,7 @@ export class Game {
         g: s.dust[1] + (Math.random() - 0.5) * 20,
         b: s.dust[2] + (Math.random() - 0.5) * 20,
       });
-      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather === 2 ? 0.8 : 0.35)) {
+      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather >= 1 ? 0.8 : 0.35)) {
         this.particles.spawn({
           kind: 'clod',
           x: rw.x - rw.radius,

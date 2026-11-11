@@ -39,6 +39,9 @@ const FOV = 32;
  */
 const RAIN_DROPS = 700;
 const GREY_SKY = new THREE.Color(0x8e97a3);
+const SNOW_SKY = new THREE.Color(0xd6dce6);
+const SNOW_FLAKES = 900;
+const skyTint = new THREE.Color();
 
 /** Soft grey cloud deck (tileable horizontally), opaque at the top, fading downwards. */
 function cloudTexture(): THREE.Texture {
@@ -115,7 +118,10 @@ export class GLRenderer {
   private dip = 0;
   private sunset = 0;
   // ---- weather (0 sec → 1 nuageux → 2 pluie, smoothed)
-  private wet = 0;
+  private rainL = 0;
+  private snowL = 0;
+  private snow!: THREE.Points;
+  private snowPos = new Float32Array(SNOW_FLAKES * 3);
   private clouds: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private rain: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private rainPos = new Float32Array(RAIN_DROPS * 6);
@@ -173,6 +179,14 @@ export class GLRenderer {
     this.rain.frustumCulled = false;
     this.rain.visible = false;
     this.scene.add(this.rain);
+    // snowflakes
+    for (let i = 0; i < SNOW_FLAKES; i++) this.snowPos.set([(Math.random() - 0.5) * 60, (Math.random() - 0.5) * 30, -9 + Math.random() * 14], i * 3);
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(this.snowPos, 3));
+    this.snow = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.11, map: radialTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), transparent: true, depthWrite: false, fog: false, opacity: 0 }));
+    this.snow.frustumCulled = false;
+    this.snow.visible = false;
+    this.scene.add(this.snow);
 
     this.scene.add(this.bike3d.group);
     // soft blob shadow (always, under the real shadow)
@@ -457,13 +471,15 @@ export class GLRenderer {
     this.sun.intensity = 2.2 + 0.4 * k;
     this.hemi.color.setRGB(0.84 + 0.14 * k, 0.92 - 0.2 * k, 1 - 0.3 * k);
     this.hemi.intensity = 1.35 - 0.35 * k;
-    // weather: dimmer, greyer light under clouds and rain
+    // weather: dimmer, greyer light under rain clouds; soft white light with snow
     const wt = game.state === 'title' ? 0 : w.weather;
-    this.wet = snap ? wt : approach(this.wet, wt, 1.5, dt);
-    const ov = clamp(this.wet, 0, 1) * 0.6 + clamp(this.wet - 1, 0, 1) * 0.4;
+    this.rainL = snap ? +(wt === 1) : approach(this.rainL, +(wt === 1), 1.5, dt);
+    this.snowL = snap ? +(wt === 2) : approach(this.snowL, +(wt === 2), 1.5, dt);
+    const ov = Math.max(this.rainL, this.snowL * 0.7);
+    skyTint.copy(GREY_SKY).lerp(SNOW_SKY, this.snowL / Math.max(0.01, this.rainL + this.snowL));
     this.sun.intensity *= 1 - ov * 0.62;
-    this.hemi.intensity *= 1 - ov * 0.15;
-    this.hemi.color.lerp(GREY_SKY, ov * 0.7);
+    this.hemi.intensity *= 1 - this.rainL * 0.15 + this.snowL * 0.12;
+    this.hemi.color.lerp(skyTint, ov * 0.7);
     if (snap) {
       this.camX = tx;
       this.camY = ty;
@@ -595,46 +611,59 @@ export class GLRenderer {
     this.clouds.material.map!.offset.x = this.camX * 0.004 + this.time * 0.004;
   }
 
-  /** Overcast colours, cloud deck and rain streaks for the current weather level. */
+  /** Overcast colours, cloud deck, rain streaks and snowflakes for the current weather. */
   private updateWeather(dt: number, D: number, visH: number): void {
-    const ov = clamp(this.wet, 0, 1) * 0.6 + clamp(this.wet - 1, 0, 1) * 0.4;
-    const rain = clamp(this.wet - 1, 0, 1);
-    const tint = (c: THREE.Color, base: THREE.Color, k: number) => c.copy(base).lerp(GREY_SKY, k).multiplyScalar(1 - ov * 0.25);
-    this.backdrop.material.color.setRGB(1 - ov * 0.42, 1 - ov * 0.38, 1 - ov * 0.3);
-    tint(this.lower.material.color, this.lowerBase, ov * 0.35);
-    tint((this.scene.fog as THREE.Fog).color, this.fogBase, ov * 0.6);
-    (this.scene.fog as THREE.Fog).far = 150 - ov * 55;
-    tint(this.scene.background as THREE.Color, this.skyBase, ov * 0.7);
+    const ov = Math.max(this.rainL, this.snowL * 0.7);
+    const rain = this.rainL;
+    const snow = this.snowL;
+    const tint = (c: THREE.Color, base: THREE.Color, k: number) => c.copy(base).lerp(skyTint, k).multiplyScalar(1 - this.rainL * 0.25);
+    this.backdrop.material.color.setRGB(1 - rain * 0.42 - snow * 0.12, 1 - rain * 0.38 - snow * 0.1, 1 - rain * 0.3 - snow * 0.04);
+    tint(this.lower.material.color, this.lowerBase, rain * 0.35 + snow * 0.6);
+    tint((this.scene.fog as THREE.Fog).color, this.fogBase, ov * 0.7);
+    (this.scene.fog as THREE.Fog).far = 150 - rain * 55 - snow * 45;
+    tint(this.scene.background as THREE.Color, this.skyBase, ov * 0.75);
     this.clouds.visible = ov > 0.01;
     this.clouds.material.opacity = Math.min(1, ov * 1.45);
-    this.clouds.material.color.setScalar(1 - rain * 0.3);
-    this.rain.visible = rain > 0.01;
-    if (!this.rain.visible) return;
-    this.rain.material.opacity = 0.55 * rain;
+    this.clouds.material.color.setScalar(1 - rain * 0.3 + snow * 0.15);
     const aspect = this.W / this.H;
     const bw = visH * aspect * 1.9 + 10;
     const bh = visH * 1.9 + 6;
+    const wrap = (P: Float32Array, o: number) => {
+      const rx = P[o] - this.camX;
+      const ry = P[o + 1] - this.camY;
+      if (rx < -bw / 2) P[o] += bw;
+      else if (rx > bw / 2) P[o] -= bw;
+      if (ry < -bh / 2) P[o + 1] += bh;
+      else if (ry > bh / 2) P[o + 1] -= bh;
+    };
+    // snowflakes: slow, swaying
+    this.snow.visible = snow > 0.01;
+    if (this.snow.visible) {
+      (this.snow.material as THREE.PointsMaterial).opacity = 0.95 * snow;
+      const S = this.snowPos;
+      for (let i = 0; i < SNOW_FLAKES; i++) {
+        const o = i * 3;
+        S[o] += (-0.8 + Math.sin(this.time * 0.9 + i * 1.7) * 0.7) * dt;
+        S[o + 1] -= (1.2 + (i % 7) * 0.12) * dt;
+        wrap(S, o);
+      }
+      this.snow.geometry.attributes.position.needsUpdate = true;
+    }
+    this.rain.visible = rain > 0.01;
+    if (!this.rain.visible) return;
+    this.rain.material.opacity = 0.55 * rain;
     const vy = -17;
     const vx = -3.5;
     const len = 0.55;
     const P = this.rainPos;
     for (let i = 0; i < RAIN_DROPS; i++) {
       const o = i * 6;
-      let x = P[o] + vx * dt;
-      let y = P[o + 1] + vy * dt;
-      const z = P[o + 2];
-      // keep drops in a box around the camera target
-      const rx = x - this.camX;
-      const ry = y - this.camY;
-      if (rx < -bw / 2) x += bw;
-      else if (rx > bw / 2) x -= bw;
-      if (ry < -bh / 2) y += bh;
-      else if (ry > bh / 2) y -= bh;
-      P[o] = x;
-      P[o + 1] = y;
-      P[o + 3] = x - vx * (len / 17);
-      P[o + 4] = y - vy * (len / 17);
-      P[o + 5] = z;
+      P[o] += vx * dt;
+      P[o + 1] += vy * dt;
+      wrap(P, o);
+      P[o + 3] = P[o] - vx * (len / 17);
+      P[o + 4] = P[o + 1] - vy * (len / 17);
+      P[o + 5] = P[o + 2];
     }
     this.rain.geometry.attributes.position.needsUpdate = true;
     void D;
@@ -769,7 +798,7 @@ function disposeGroup(g: THREE.Object3D, scene: THREE.Scene): void {
   scene.remove(g);
   g.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.geometry && !(o as THREE.InstancedMesh).isInstancedMesh) m.geometry.dispose();
+    if (m.geometry && !o.userData.shared && !(o as THREE.InstancedMesh).isInstancedMesh) m.geometry.dispose();
     else if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
   });
 }

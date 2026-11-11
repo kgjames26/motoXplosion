@@ -21,6 +21,8 @@ export interface Obstacle {
   big?: boolean;
   /** Trial rock (v2.7): climbed on its own steep face, no earth ramp. */
   rock?: boolean;
+  /** v2.8 technical trial obstacle: furniture or nature. */
+  tech?: 'mobilier' | 'nature';
 }
 
 export interface AssetDef {

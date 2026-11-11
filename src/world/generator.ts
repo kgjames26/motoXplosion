@@ -6,6 +6,7 @@ import { AssetDef, AssetGroup, assetsFor, Slot } from '../catalog';
 import { ENDURO_CP, ModeId, raceLength } from '../modes';
 import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
 import { rockKindFor } from '../catalog/rocks';
+import { HILL_SCALE } from '../weather';
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -45,6 +46,7 @@ type FeatureName =
   | 'rocks'
   | 'enduroObs'
   | 'bigHill'
+  | 'cruiseHill'
   // desert
   | 'dunes'
   | 'wadi'
@@ -220,7 +222,7 @@ export class Generator {
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
     this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
-    this.hard = mode === 'cruising' ? 1.05 * [1, 1.06, 1.12][diff] : mode === 'course' ? 1.05 * 1.35 : 1;
+    this.hard = (mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.35 : 1) * [1, 0.97, 0.92][diff];
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     // A calm start straight.
@@ -298,6 +300,9 @@ export class Generator {
     if (this.mode === 'course') {
       // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
       feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
+    } else if (this.mode === 'cruising') {
+      // a journey through the world: big hills and long descents between the jumps
+      feats = { ...def.features, cruiseHill: 3.5 };
     } else if (this.mode === 'enduro') {
       feats = { ...def.features, enduroObs: 5, ford: 2, climb: 2, descent: 2, rocks: 2, logs: 1.5, bigHill: this.circuit ? 3.5 + this.grade * 3 : 1.5 };
       delete feats.tabletop;
@@ -356,15 +361,12 @@ export class Generator {
       for (const a of rocks) if (a.obstacle!.h <= h + 1e-6 && (a.obstacle!.h > best.obstacle!.h || (a.obstacle!.h === best.obstacle!.h && r.chance(0.5)))) best = a;
       return best;
     };
-    for (let k = 0; k < count; k++) {
-      let a: AssetDef;
-      if (circ && (r.chance(0.7) || (n === this.trialZones && k === 0))) {
-        const h = n === this.trialZones && k === 0 ? hi : lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
-        a = pickRock(h);
-      } else a = r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)));
-      this.queue.push(this.obstacleSeg(a));
-      this.queue.push(this.flat(r.range(3.5, 6), Surface.Dirt));
-    }
+    if (!circ) {
+      for (let k = 0; k < count; k++) {
+        this.queue.push(this.obstacleSeg(r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)))));
+        this.queue.push(this.flat(r.range(3.5, 6), Surface.Dirt));
+      }
+    } else this.technicalZone(n, count, pos, rocks, lo, hi, pickRock);
     this.queue.push({
       len: 8,
       shape: () => 0,
@@ -394,6 +396,70 @@ export class Generator {
     this.queue.push(this.base(r.range(14, 22), 0.25));
   }
 
+  /**
+   * A technical trial zone: rocks of the world's stone mixed with furniture and nature
+   * obstacles, chained in lines that ask for control — tight pairs, staircases, an obstacle
+   * on a slope, an obstacle followed by a step down. Tighter and busier with the circuit.
+   */
+  private technicalZone(n: number, count: number, pos: number, rocks: AssetDef[], lo: number, hi: number, pickRock: (h: number) => AssetDef): void {
+    const r = this.rng;
+    const g = this.grade;
+    const forest = this.region.id === 'foret' || this.region.id === 'alpes';
+    const tech = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tech && a.obstacle!.h <= hi + 0.05);
+    const pickTech = (maxH: number) => {
+      const list = tech.filter((a) => a.obstacle!.h <= maxH + 0.05 && a.obstacle!.h >= Math.min(maxH - 0.6, lo - 0.2));
+      const pool = list.length ? list : tech;
+      return r.weighted(pool, pool.map((a) => (a.obstacle!.tech === 'nature' ? (forest ? 1.6 : 0.8) : forest ? 0.8 : 1.4)));
+    };
+    const pick = (h: number) => (r.chance(0.45) || !tech.length ? pickRock(h) : pickTech(h));
+    const height = () => lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
+    const gap = () => r.range(1.1, 2.2) + (1 - g) * 1.5;
+    let left = count;
+    let first = true;
+    while (left > 0) {
+      const p = first && n === this.trialZones ? 'single' : r.weighted(['single', 'pair', 'stair', 'slope', 'drop'], [2, 1 + g * 2, 0.6 + g * 2, 0.6 + g, 0.5 + g * 1.5]);
+      const h = first && n === this.trialZones ? hi : height();
+      first = false;
+      if (p === 'pair' && left >= 2) {
+        const h2 = height();
+        // enough run-up between the two for the second one (and for a restart after a fall)
+        this.queue.push(this.obstacleSeg(pick(h)), this.flat(Math.max(gap() * 0.8, 1.2 + h2 * 1.4), Surface.Dirt), this.obstacleSeg(pick(h2)));
+        left -= 2;
+      } else if (p === 'stair' && left >= 2) {
+        const k = Math.min(left, 3);
+        for (let j = 0; j < k; j++) {
+          const hj = lo + ((h - lo) * (j + 1)) / k;
+          this.queue.push(this.obstacleSeg(pick(hj)), this.flat(Math.max(gap() * 0.7, 1 + hj * 1.3), Surface.Dirt));
+        }
+        left -= k;
+        continue;
+      } else if (p === 'slope') {
+        // the obstacle sits on a short climb: no run-up speed to help
+        const s = r.range(0.12, 0.2);
+        const L = r.range(5, 8);
+        this.queue.push(this.dirt(this.slopeProfile([[L, s]], 0, 0, 2)), this.obstacleSeg(pick(Math.min(h, hi * 0.85))), this.dirt(this.slopeProfile([[L * 0.8, 0.02], [L, -s]], 0, 0, 2)));
+        left--;
+      } else if (p === 'drop') {
+        // up an obstacle, then a step down: control the front on the way down
+        const D = r.range(0.4, 0.6 + g * 0.5) * (this.diff ? 0.8 : 1);
+        this.queue.push(this.obstacleSeg(pick(h)), this.flat(1.2, Surface.Dirt), this.dirt(this.slopeProfile([[D / 0.9, -0.9], [3, 0]], 0, 0, 0.6)), this.flat(3, Surface.Dirt), this.dirt(this.slopeProfile([[D / 0.25, 0.25]], 0, 0, 2)), this.flat(2, Surface.Dirt));
+        left--;
+      } else {
+        this.queue.push(this.obstacleSeg(pick(h)));
+        left--;
+      }
+      // a real run-up before whatever comes next (also where you restart after a fall)
+      this.queue.push(this.flat(Math.max(gap() + 1, 3.2 + hi * 0.8), Surface.Dirt));
+    }
+    void rocks;
+  }
+
+  /** Packed earth surface on a segment (trial zones keep their grip whatever the weather). */
+  private dirt(seg: Segment): Segment {
+    seg.surface = () => Surface.Dirt;
+    return seg;
+  }
+
   /** A physical catalog obstacle with a short flat margin on each side. */
   private obstacleSeg(a: AssetDef): Segment {
     const o = a.obstacle!;
@@ -418,14 +484,19 @@ export class Generator {
         props: 0.3,
       };
     }
+    const trialMark = this.mode === 'trial' && (o.rock || o.tech);
     return {
       len: o.w + pad * 2,
+      onStart: (x0, h0) => {
+        this.world.props.push({ x: x0 + pad + o.w / 2, kind: 'asset', asset: a.id, depth: 0, scale: 1, variant: 0, flip: false, baseY: h0 });
+        // zone stakes with tape on both sides: this is the course, not scenery
+        if (trialMark) for (const [dx, f] of [[0.1, 'tb.flag.0'], [o.w + pad * 2 - 0.1, 'tb.flag.1']] as [number, string][]) this.world.props.push({ x: x0 + dx, kind: 'asset', asset: f, depth: 0.03, scale: 0.75, variant: 0, flip: false });
+      },
       shape: top,
       // the drawn obstacle stands on the flat ground: the track band does not bulge under it
       visual: () => 0,
-      surface: () => (a.id.includes('rock') || a.id.includes('stone') ? Surface.Rock : Surface.Wood),
+      surface: () => (o.rock || o.tech || a.id.includes('rock') || a.id.includes('stone') ? Surface.Rock : Surface.Wood),
       noPickup: [[0, o.w + pad * 2]],
-      onStart: (x0, h0) => this.world.props.push({ x: x0 + pad + o.w / 2, kind: 'asset', asset: a.id, depth: 0, scale: 1, variant: 0, flip: false, baseY: h0 }),
       props: 0.3,
     };
   }
@@ -472,7 +543,8 @@ export class Generator {
   private baseSurface(x: number): Surface {
     const s = this.dryBaseSurface(x);
     // rain: puddles of mud on the earth and the grass
-    if (this.diff === 2 && (s === Surface.Dirt || s === Surface.Grass) && noise1(x / 17, 33) > 0.3) return Surface.Mud;
+    // rain and snow: patches of mud on the earth and the grass
+    if (this.diff >= 1 && (s === Surface.Dirt || s === Surface.Grass) && noise1(x / 17, 33) > (this.diff === 1 ? 0.3 : 0.45)) return Surface.Mud;
     return s;
   }
 
@@ -847,54 +919,10 @@ export class Generator {
           },
         ];
       }
-      case 'bigHill': {
-        // enduro: a big hill to climb then ride down without falling, bumps and steps on the
-        // faces; higher and steeper with the circuit number
-        const g = this.circuit ? this.grade : d * 0.5;
-        const H = (r.range(7, 10) + g * 12) * [1, 1.08, 1.15][this.diff];
-        const sUp = r.range(0.2, 0.25) + g * 0.12; // mean slope (peak ≈ 1.5×)
-        const sDn = r.range(0.22, 0.27) + g * 0.12;
-        const up = H / sUp;
-        const dn = H / sDn;
-        const crest = r.range(4, 9);
-        const bump = 0.12 + g * 0.22;
-        const seed = r.int(0, 1e5);
-        const L = up + crest + dn;
-        const steps: number[] = [];
-        if (g > 0.3) for (let j = 0; j < 1 + Math.floor(g * 3); j++) steps.push(r.range(0.2, 0.85));
-        return [
-          this.flat(6),
-          {
-            len: L,
-            shape: (t) => {
-              let y: number;
-              if (t < up) y = H * ease(t / up);
-              else if (t < up + crest) y = H;
-              else y = H * (1 - ease((t - up - crest) / dn));
-              // bumps fade out near the foot and the crest
-              const face = t < up ? sin2(t / up) : t > up + crest ? sin2((t - up - crest) / dn) : 0;
-              y += bump * face * (0.5 + 0.5 * noise1(t / 2.2, seed));
-              // small rock steps on the climb
-              for (const u of steps) {
-                const sx = u * up;
-                if (t > sx && t < sx + 3) y += 0.22 * smoothstep((t - sx) / 0.35);
-                else if (t >= sx + 3 && t < sx + 4) y += 0.22 * (1 - smoothstep(t - sx - 3));
-              }
-              return y;
-            },
-            surface: (t) => (noise1(t / 9, seed + 3) > 0.35 ? Surface.Rock : Surface.Dirt),
-            noPickup: [[0, L]],
-            onStart: (x0, h0) => {
-              this.decor(x0 - 3, 'enduro', 'eb.steep.0', 0.1);
-              this.decor(x0 + up + crest + 1, 'enduro', 'eb.steep.1', 0.1);
-              this.decor(x0 + up + crest / 2, 'enduro', 'eb.hillflag.' + r.int(0, 3), 0.06);
-              void h0;
-            },
-            props: 0.8,
-          },
-          this.flat(5),
-        ];
-      }
+      case 'bigHill':
+        return this.bigHill(d);
+      case 'cruiseHill':
+        return this.cruiseHill(d);
       case 'enduroObs': {
         // one to three enduro obstacles (roots, fallen trees, stones, mossy logs) in a row
         const list = assetsFor(['enduro'], 'obstacle');
@@ -948,6 +976,145 @@ export class Generator {
         ];
       }
     }
+  }
+
+  /**
+   * Terrain from a slope programme: pieces of (length, slope); slope changes are blended over a
+   * few metres so there is never a kink, then optional bumps are added on the sloped parts.
+   */
+  private slopeProfile(pieces: [number, number][], bump: number, seed: number, blend = 4): Segment {
+    const step = 0.25;
+    const L = pieces.reduce((a, p) => a + p[0], 0);
+    const n = Math.ceil(L / step) + 1;
+    const ys = new Float32Array(n);
+    const ends: number[] = [];
+    let acc = 0;
+    for (const p of pieces) ends.push((acc += p[0]));
+    const slopeAt = (t: number) => {
+      // smooth blend between neighbouring pieces
+      let i = 0;
+      while (i < pieces.length - 1 && t > ends[i]) i++;
+      const s0 = pieces[i][1];
+      const start = i ? ends[i - 1] : 0;
+      if (i > 0 && t - start < blend / 2) return pieces[i - 1][1] + (s0 - pieces[i - 1][1]) * smoothstep((t - start + blend / 2) / blend);
+      if (i < pieces.length - 1 && ends[i] - t < blend / 2) return s0 + (pieces[i + 1][1] - s0) * smoothstep((t - ends[i] + blend / 2) / blend);
+      return s0;
+    };
+    let y = 0;
+    for (let k = 1; k < n; k++) {
+      const t = k * step;
+      y += slopeAt(t - step / 2) * step;
+      ys[k] = y;
+    }
+    const end = ys[n - 1];
+    return {
+      len: L,
+      shape: (t) => {
+        const f = Math.min(n - 1.001, Math.max(0, t / step));
+        const i = Math.floor(f);
+        let h = ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+        if (bump > 0) {
+          const s = Math.abs(slopeAt(t));
+          // bumps on the slopes (not on the flats), faded at both ends of the hill
+          h += bump * Math.min(1, s * 6) * smoothstep(t / 6) * smoothstep((L - t) / 6) * (0.5 + 0.5 * noise1(t / 2.2, seed));
+        }
+        return t >= L ? end : h;
+      },
+    };
+  }
+
+  /**
+   * Enduro hills, mixed along each circuit: classic, camel (two humps), terraces, short and
+   * steep, long and gentle, valley, ridge with rollers. Hard to ride without falling, but
+   * never trial: everything is a slope, no wall.
+   */
+  private bigHill(d: number): Segment[] {
+    const r = this.rng;
+    const g = this.circuit ? this.grade : d * 0.5;
+    const H = (r.range(6, 9) + g * 11) * HILL_SCALE[this.diff];
+    const su = (r.range(0.18, 0.23) + g * 0.1) * (this.diff ? 0.93 : 1);
+    const sd = (r.range(0.2, 0.25) + g * 0.1) * (this.diff ? 0.93 : 1);
+    const bump = 0.1 + g * 0.2;
+    const variant = r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
+    let pieces: [number, number][];
+    switch (variant) {
+      case 'camel':
+        pieces = [[(H * 0.6) / su, su], [4, 0], [(H * 0.3) / sd, -sd], [5, 0], [(H * 0.7) / su, su], [5, 0], [H / sd, -sd]];
+        break;
+      case 'terraces': {
+        const k = r.int(3, 4);
+        pieces = [];
+        for (let j = 0; j < k; j++) pieces.push([H / k / (su * 1.25), su * 1.25], [r.range(5, 9), 0.02]);
+        pieces.push([H / sd, -sd]);
+        break;
+      }
+      case 'steepShort':
+        pieces = [[H * 0.7 / (su * 1.45), su * 1.45], [5, 0], [(H * 0.7) / (sd * 0.6), -sd * 0.6]];
+        break;
+      case 'longGentle':
+        pieces = [[H / (su * 0.6), su * 0.6], [4, 0], [H / (sd * 1.3), -sd * 1.3]];
+        break;
+      case 'valley': {
+        const D = H * 0.7;
+        pieces = [[D / sd, -sd], [r.range(6, 12), 0], [D / su, su]];
+        break;
+      }
+      case 'ridge':
+        pieces = [[H / su, su], [r.range(18, 30), 0], [H / sd, -sd]];
+        break;
+      default:
+        pieces = [[H / su, su], [r.range(4, 9), 0], [H / sd, -sd]];
+    }
+    const seed = r.int(0, 1e5);
+    const seg = this.slopeProfile(pieces, bump, seed);
+    const top = pieces[0][0];
+    if (variant === 'ridge') {
+      // rollers on the ridge
+      const base = seg.shape;
+      const a = pieces[0][0];
+      const b = a + pieces[1][0];
+      seg.shape = (t) => base(t) + (t > a + 2 && t < b - 2 ? (0.35 + g * 0.3) * sin2((t - a - 2) / 6) : 0);
+    }
+    seg.surface = (t) => (noise1(t / 9, seed + 3) > 0.35 ? Surface.Rock : Surface.Dirt);
+    seg.noPickup = [[0, seg.len]];
+    seg.props = 0.8;
+    seg.onStart = (x0) => {
+      if (variant !== 'valley') this.decor(x0 - 3, 'enduro', 'eb.steep.0', 0.1);
+      this.decor(x0 + top, 'enduro', 'eb.hillflag.' + r.int(0, 3), 0.06);
+    };
+    return [this.flat(6), seg, this.flat(5)];
+  }
+
+  /**
+   * Cruising: a journey, not a trap. Big hills with changing inclines and long varied
+   * descents (no bumps, gentle crests); goes down when the road is already high.
+   */
+  private cruiseHill(d: number): Segment[] {
+    const r = this.rng;
+    const H = r.range(6, 14) + d * 8;
+    const high = this.segH0 > 25;
+    const low = this.segH0 < -25;
+    const variant = high ? 'descent' : low ? 'climb' : r.weighted(['hill', 'climb', 'descent', 'hill2'], [3, 2, 2, 1.5]);
+    const vary = (sign: number, total: number): [number, number][] => {
+      // a climb (or descent) in 2-4 pitches of different steepness
+      const out: [number, number][] = [];
+      const k = r.int(2, 4);
+      for (let j = 0; j < k; j++) {
+        const s = r.range(0.07, 0.24) * (j === 0 ? 0.7 : 1);
+        out.push([total / k / s, sign * s]);
+        if (r.chance(0.35)) out.push([r.range(8, 20), sign * 0.02]);
+      }
+      return out;
+    };
+    let pieces: [number, number][];
+    if (variant === 'climb') pieces = [...vary(1, H), [r.range(15, 30), 0]];
+    else if (variant === 'descent') pieces = [...vary(-1, H * 1.3)];
+    else if (variant === 'hill2') pieces = [...vary(1, H), [r.range(10, 20), 0], ...vary(-1, H * 0.5), [10, 0], ...vary(1, H * 0.5), [12, 0], ...vary(-1, H)];
+    else pieces = [...vary(1, H), [r.range(10, 25), 0], ...vary(-1, H)];
+    const seg = this.slopeProfile(pieces, 0.04, r.int(0, 1e5), 8);
+    seg.props = 1.1;
+    seg.coins = r.chance(0.4) ? 'line' : undefined;
+    return [seg];
   }
 
   // ---------------------------------------------------------------- content

@@ -136,20 +136,30 @@ export function bikeById(id: string): BikeModel {
 
 /** Ratings 1..10 shown in the garage. */
 /**
- * Highest trial rock (m) each bike climbs, measured with the physics on the v2.7 rocks
- * (sec, nuageux, pluie). Torque, weight and tyre grip decide: the trial bike goes highest.
+ * Highest trial rock (m) each STOCK bike climbs (sec, pluie, neige), measured with the physics
+ * (see climb.ts, which also computes it for upgraded bikes). Torque, weight and tyre grip
+ * decide: the trial bike goes highest.
  */
 export const ROCK_CLIMB: Record<string, [number, number, number]> = {
-  explorer: [1.3, 1.3, 1.15],
-  sprint: [1.5, 1.35, 1.3],
-  ridge: [2.5, 2.35, 2.35],
-  trail: [2.0, 1.9, 1.5],
-  fury: [2.15, 2.15, 2.0],
-  volt: [2.5, 2.35, 2.15],
-  dakar: [2.15, 2.0, 2.0],
+  explorer: [1.33, 1.25, 1.17],
+  sprint: [1.5, 1.33, 1.25],
+  ridge: [2.5, 2.33, 2.17],
+  trail: [2.0, 1.5, 1.33],
+  fury: [2.17, 1.5, 1.42],
+  volt: [2.5, 2.0, 1.42],
+  dakar: [2.0, 1.83, 1.42],
 };
 export function rockClimb(id: string, weather = 0): number {
   return (ROCK_CLIMB[id] ?? ROCK_CLIMB.explorer)[weather];
+}
+
+/**
+ * The bike a player is expected to afford by a given circuit (cruising pays for it): goals,
+ * par times and obstacles are set for it, not for the starting bike (except circuit 1-2).
+ */
+export function expectedBike(n: number, trial = false): BikeModel {
+  const id = n <= 2 ? 'explorer' : n <= 6 ? 'sprint' : trial ? 'ridge' : n <= 11 ? 'trail' : n <= 16 ? 'fury' : n <= 21 ? 'volt' : 'dakar';
+  return bikeById(id);
 }
 
 export function ratings(m: BikeModel): { label: string; value: number }[] {

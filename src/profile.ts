@@ -28,10 +28,14 @@ export interface Profile {
   circuitSel: Record<string, number>;
   /** Cruising: highest difficulty unlocked per world (0 facile, 1 moyen, 2 difficile). */
   cruiseUnlock: Record<string, number>;
+  /** Garage upgrades: bike id → part id → level (0..3). */
+  upgrades: Record<string, Record<string, number>>;
+  /** Tyre sets owned (sec, pluie, neige). */
+  tyres: string[];
 }
 
 const KEY = 'mx.profile.v1';
-const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {} };
+const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [] };
 
 export function loadProfile(): Profile {
   try {
@@ -50,6 +54,8 @@ export function loadProfile(): Profile {
       for (const [k, v] of Object.entries(p.circuits ?? {})) circ[k.split(':').length === 3 ? k + ':facile' : k] = v;
       p.circuits = circ;
       p.cruiseUnlock = { ...p.cruiseUnlock };
+      p.upgrades = JSON.parse(JSON.stringify(p.upgrades ?? {}));
+      p.tyres = [...(p.tyres ?? [])];
       p.outfits = [...p.outfits];
       p.owned = [...p.owned];
       p.circuitSel = { ...p.circuitSel };
@@ -59,7 +65,7 @@ export function loadProfile(): Profile {
   } catch {
     /* storage unavailable */
   }
-  return { ...DEFAULT, best: {}, owned: ['explorer'], outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {} };
+  return { ...DEFAULT, best: {}, owned: ['explorer'], outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [] };
 }
 
 export function saveProfile(p: Profile): void {

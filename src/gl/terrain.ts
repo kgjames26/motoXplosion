@@ -131,6 +131,24 @@ export class TerrainBuilder {
     lip: THREE.Material;
   };
   private spriteGeo = new Map<Sprite, THREE.PlaneGeometry>();
+  private snow = false;
+  private shadowGeo = new THREE.PlaneGeometry(1, 1);
+  private shadowMaterial: THREE.Material | null = null;
+  private shadowMat(): THREE.Material {
+    if (!this.shadowMaterial) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d')!;
+      const grad = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(20,12,6,0.6)');
+      grad.addColorStop(1, 'rgba(20,12,6,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 64, 64);
+      this.shadowMaterial = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false });
+    }
+    return this.shadowMaterial;
+  }
+  private snowMat: THREE.Material | null = null;
   private spriteMat = new Map<Sprite, THREE.Material>();
 
   constructor(
@@ -150,14 +168,25 @@ export class TerrainBuilder {
       water: new THREE.MeshLambertMaterial({ color: 0x3aa6e0, transparent: true, opacity: 0.88 }),
       lip: lambert(bank.groundTex('dirt', 3.2), style.kind === 'canyon' ? 0x4e3a30 : 0x8a6a52),
     };
-    // damp / wet ground looks darker
-    const wk = [1, 0.9, 0.74][style.wet ?? 0];
+    // snow: a thin white cover on the ground and hills (the track keeps a cleared line)
+    this.snow = style.wet === 2;
+    if (this.snow) {
+      const sn = lambert(bank.groundTex('snow', 5));
+      this.mats.ground = sn;
+      this.mats.hills = lambert(bank.groundTex('snow', 11));
+      (this.mats.rock as THREE.MeshLambertMaterial).color.setRGB(1.1, 1.12, 1.18);
+      this.snowMat = lambert(bank.groundTex('snow', 3.2));
+    }
+    // wet ground looks darker
+    const wk = [1, 0.76, 1][style.wet ?? 0];
     if (wk < 1)
       for (const m of [this.mats.track, this.mats.ground, this.mats.hills, this.mats.lip, this.mats.rock]) (m as THREE.MeshLambertMaterial).color.multiplyScalar(wk);
   }
 
   dispose(): void {
     for (const m of Object.values(this.mats)) m.dispose();
+    this.shadowMaterial?.dispose();
+    this.shadowGeo.dispose();
     for (const m of this.spriteMat.values()) m.dispose();
     for (const g of this.spriteGeo.values()) g.dispose();
   }
@@ -169,7 +198,7 @@ export class TerrainBuilder {
   private billboardMat(s: Sprite): THREE.Material {
     let m = this.spriteMat.get(s);
     if (!m) {
-      m = new THREE.MeshBasicMaterial({ map: this.bank.spriteTex(s), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, color: new THREE.Color().setScalar([1, 0.86, 0.72][this.style.wet ?? 0]) });
+      m = new THREE.MeshBasicMaterial({ map: this.bank.spriteTex(s), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, color: new THREE.Color().setScalar([1, 0.78, 0.96][this.style.wet ?? 0]) });
       this.spriteMat.set(s, m);
     }
     return m;
@@ -207,9 +236,36 @@ export class TerrainBuilder {
         (x, _y, z) => [x, z],
         (c) => SURF_COLOR[w.sampleSurface(i0 + a + c)],
       );
-      const m = new THREE.Mesh(geo, this.mats.track);
-      m.receiveShadow = true;
-      group.add(m);
+      if (this.snow) {
+        // snowy edges, a muddy half-cleared line where the bikes ride (with two tyre ruts)
+        const zs = [Z_BACK, -0.95, -0.62, -0.42, -0.08, 0.12, 0.42, Z_FRONT];
+        const lane = (r: number) => r >= 1 && r <= 6;
+        const strip = (r0: number, r1: number, mat: THREE.Material, shade: (r: number) => number) => {
+          const g2 = grid(
+            cols,
+            r1 - r0 + 1,
+            (c, r) => {
+              const i = i0 + a + c;
+              return [i * DX, w.sampleVisual(i) + (lane(r + r0) ? 0 : 0.03), zs[r + r0]];
+            },
+            (x, _y, z) => [x, z],
+            (c, r) => {
+              const k = shade(r + r0) * (0.94 + 0.06 * noise1((i0 + a + c) * 0.37, r + r0));
+              return [k, k, k];
+            },
+          );
+          const mm = new THREE.Mesh(g2, mat);
+          mm.receiveShadow = true;
+          group.add(mm);
+        };
+        strip(0, 1, this.snowMat!, (r) => (r === 0 ? 1 : 0.92));
+        strip(1, 6, this.mats.track, (r) => [0, 0.86, 0.62, 0.8, 0.6, 0.86, 0][r]);
+        strip(6, 7, this.snowMat!, (r) => (r === 7 ? 1 : 0.92));
+      } else {
+        const m = new THREE.Mesh(geo, this.mats.track);
+        m.receiveShadow = true;
+        group.add(m);
+      }
       // front lip: from the track edge down to the ground in front
       const lip = grid(
         cols,
@@ -329,6 +385,14 @@ export class TerrainBuilder {
       } else if (isAsset) {
         // physical obstacle: exact size, base on the ground it was built on, just behind the bike
         add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5, 1, false);
+        // dark contact shadow on the track: obstacles read as solid objects, not scenery
+        const sh = new THREE.Mesh(this.shadowGeo, this.shadowMat());
+        sh.rotation.x = -Math.PI / 2;
+        sh.scale.set(s.w * 0.95, 1.5, 1);
+        sh.position.set(p.x + (s.w / 2 - s.ax) * 0, (p.baseY ?? w.heightAt(p.x)) + 0.025, -0.35);
+        sh.renderOrder = 1;
+        sh.userData.shared = true;
+        group.add(sh);
       } else {
         add(s, p.x, w.heightAt(p.x) - 0.12, -0.3, 0.62, false);
       }

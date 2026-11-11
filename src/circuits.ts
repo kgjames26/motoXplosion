@@ -1,4 +1,6 @@
 import type { Difficulty, ModeId } from './modes';
+import { OBSTACLE_SCALE } from './weather';
+import { expectedBike, rockClimb } from './bikes';
 import type { RegionId } from './world/regions';
 
 /**
@@ -52,7 +54,9 @@ export function circuitRaceLevel(n: number): number {
  * Wetter weathers (moyen, difficile) keep them a bit smaller since the grip drops.
  */
 export function trialRockRange(n: number, diff = 0): [number, number] {
-  const hi = Math.min(2.5, (0.6 + circuitGrade(n) * 1.9) * [1, 0.94, 0.92][diff]);
+  // never higher than what the bike expected at this circuit climbs in this weather
+  const cap = rockClimb(expectedBike(n, true).id, diff) - 0.2;
+  const hi = Math.min(2.5, cap, (0.6 + circuitGrade(n) * 1.9) * OBSTACLE_SCALE[diff]);
   return [Math.max(0.5, hi - 0.7), Math.max(0.5, hi)];
 }
 
@@ -68,8 +72,9 @@ export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number
   const g = circuitGrade(n);
   let gold: number;
   if (mode === 'trial') gold = trialZones(n) * (19 + g * 8) + 10;
-  else gold = circuitLength(mode, n) / (mode === 'enduro' ? 21 - g * 1.5 : 22);
-  gold = Math.round(gold * [1, 1.06, 1.14][diff]);
+  // enduro: set for the bike the player can afford by then (see expectedBike)
+  else gold = circuitLength(mode, n) / (mode === 'enduro' ? 21.5 + g * 2.5 : 22);
+  gold = Math.round(gold * [1, 1.08, 1.16][diff]);
   return { gold, silver: Math.round(gold * 1.3) };
 }
 
