@@ -32,6 +32,7 @@
             <div class="speed"><span id="speed">0</span><small>km/h</small></div>
             <div class="speed-underline"></div>
           </div>
+          <div class="jump-hint panel hidden" id="jump-hint"><svg viewBox="0 0 32 20" aria-hidden="true"><path d="M2 18 Q12 18 16 8 M22 6 l8 12" /><path d="M14 6 q5 -6 10 -2" class="arc" /></svg><b id="jump-range">45–65</b><small>km/h</small></div>
           <div class="hud-timer panel" id="hud-timer"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="13" r="8" /><path d="M12 13V8M9 2h6" /></svg><b id="timer">1:10</b></div>
           <div class="hud-trial" id="hud-trial">
             <div class="trial-info panel"><span>ZONE</span><b id="trial-zone">0/4</b><span>CHUTES</span><b id="trial-falls">0</b></div>
@@ -51,6 +52,7 @@
 
         <div class="hud-tc">
           <div class="progress">
+            <svg class="relief" id="relief" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path id="relief-fill" /><path id="relief-line" /></svg>
             <span class="dot start"></span>
             <div class="track"><i id="progress-fill"></i></div>
             <span class="dot end"></span>

@@ -1977,7 +1977,7 @@ button {
 .circ-grid {
   flex: 1.25;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   grid-template-rows: repeat(5, 1fr);
   gap: calc(var(--u) * 1);
 }
@@ -3770,4 +3770,69 @@ html.no-fs-api #btn-fs-pause { display: none; }
   width: 100%;
   height: auto;
   stroke: #3fe07a;
+}
+
+/* ------------------------------------------------------------------ v2.21 relief map, jump speed window */
+.progress .relief {
+  position: absolute;
+  left: 4%;
+  width: 88%;
+  bottom: calc(var(--u) * 2.3);
+  height: calc(var(--u) * 6);
+  overflow: visible;
+  pointer-events: none;
+}
+.progress .relief #relief-fill {
+  fill: rgba(255, 255, 255, 0.16);
+}
+.progress .relief #relief-line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.progress .moto-ico,
+.progress .flag-ico {
+  z-index: 1;
+}
+.jump-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.8);
+  margin-top: calc(var(--u) * 1);
+  padding: calc(var(--u) * 0.6) calc(var(--u) * 1.4);
+  font-weight: 900;
+  font-style: italic;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  transition: background 0.15s, border-color 0.15s;
+}
+.jump-hint.hidden {
+  display: none;
+}
+.jump-hint svg {
+  width: calc(var(--u) * 4.4);
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.jump-hint svg .arc {
+  stroke-dasharray: 2 2.5;
+}
+.jump-hint b {
+  font-size: calc(var(--u) * 3.4);
+}
+.jump-hint small {
+  font-size: calc(var(--u) * 1.8);
+  opacity: 0.8;
+}
+.jump-hint.ok {
+  background: rgba(40, 170, 80, 0.85);
+  border-color: #b8ffcc;
+}
+.jump-hint.fast {
+  background: rgba(210, 50, 40, 0.85);
+  border-color: #ffc8c0;
 }

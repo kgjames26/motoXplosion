@@ -33,9 +33,19 @@ sept motos à gagner au garage.
 | Mode | Règles | Gains |
 | --- | --- | --- |
 | **Cruising** | balade infinie et libre, **le mode qui rapporte le plus** (c'est ici qu'on débloque tout) : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Dans la pause, **J'ARRÊTE** termine la balade et affiche le résumé (distance, bonus, gains) ; **Accueil** enregistre aussi les gains, sans résumé. Tous les **1 000 m**, le fond passe en **fondu lent (5 s)** à un autre panorama tiré au hasard parmi les 12 du monde. Tracé **+5 %** plus relevé qu'avant. **Météo automatique** : on ne la choisit pas, elle démarre au hasard et change tous les **2 000 m** dans un ordre libre, mais avec des transitions logiques (il pleut d'abord, puis le sol devient humide ; la neige tombe, puis couvre le sol peu à peu ; elle fond en laissant le sol mouillé avant le soleil ou la pluie). L'adhérence suit l'état du sol et les pneus achetés se montent tout seuls. **Jamais de neige dans le Désert** (surtout du soleil, une averse de temps en temps). **Régulateur de vitesse** (si acheté) : bouton « CRUISE » au-dessus du frein (ou touche C) | distance × **bonus de longue balade** + pièces ramassées + sauts |
-| **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
-| **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
-| **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
+| **Trial** | **30 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
+| **Enduro** | **30 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
+| **Course** | **30 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
+
+### v2.21 — cruising à piloter, relief du parcours
+- **Cruising** : plus question de rester à fond. Des **sauts à fenêtre de vitesse** (tremplin, trou, réception en pente de longueur limitée, puis un replat bien plus bas) ne se passent qu'à la bonne vitesse : trop lent, on retombe dans le trou ; trop vite, on survole la réception et on s'écrase sur le replat. Chaque saut a sa propre fenêtre (de 38–60 à 62–84 km/h environ, plus étroite au fil des kilomètres), annoncée **130 m avant** par un panneau sous le compteur (« ⤴ 45–67 km/h », **vert** dans la fenêtre, **rouge** trop vite). En cruising, une réception trop violente (à plat de haut, ou très de travers) fait **chuter**. Un **régulateur** réglé une fois pour toutes ne suffit donc plus : il faut l'ajuster saut par saut. Bot : rester à fond = 0,7 à 2 chutes/km, régulateur figé à 70 km/h = 0,6 à 0,9 chute/km, pilote qui respecte les fenêtres = 0 à 0,3 chute/km.
+- **Gains du cruising doublés** (pièces et sauts ×3, distance ×3,6).
+- **Météo de départ** du cruising : sèche 70 % du temps.
+- Le jeu s'ouvre **toujours sur Cruising, monde Alpes**.
+- **Trial** : une chute coûte **25 s** de pénalité.
+- **Enduro** : circuits **20 % plus durs** (collines plus hautes et plus raides, portions raides et sections techniques accentuées, sauts plus gros).
+- **30 circuits** par monde et par mode (progression des motos attendues étalée sur les 30).
+- **Mini-relief** au-dessus de la barre de progression : un trait sobre qui dessine tout le circuit (trial, enduro, course) ou le kilomètre en cours (cruising), pour voir ce qui arrive.
 
 ### Plus difficile (v2.18) — réglé pour un adulte
 - **Trial** : obstacles nettement plus gros dès le début (rochers jusqu'à ~0,1 m sous ce que la moto attendue peut franchir), **45 gros modules** (caisses géantes, gros blocs béton, piles de pneus de tracteur, 1,05 à 1,8 m) ; les marches des structures montent jusqu'à ce que la moto franchit sur un module (table mesurée moto par moto et météo par météo, `MODULE_CLIMB`), sommets jusqu'à ~3 m ; parfois un **module géant** seul, à la limite de la moto. Temps cibles resserrés de 8 %.
@@ -79,7 +89,7 @@ Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés
 
 ### Circuits et médailles
 - Chaque circuit est toujours le même (graine fixe par mode, monde et numéro) et devient plus dur avec son numéro : obstacles plus gros en trial, collines plus hautes en enduro, rivaux plus forts et piste plus longue en course.
-- Écran de choix : grille de **5 × 5** circuits (numéro, médaille, meilleur temps ou meilleure place, cadenas). Terminer un circuit débloque le suivant ; le panneau de droite donne les objectifs.
+- Écran de choix : grille de **6 × 5** circuits (30 par monde et par mode depuis la v2.21) (numéro, médaille, meilleur temps ou meilleure place, cadenas). Terminer un circuit débloque le suivant ; le panneau de droite donne les objectifs.
 - **Médailles** : en trial et enduro, Or et Argent sous des temps cibles, Bronze en arrivant au bout ; en course, Or/Argent/Bronze pour la 1re/2e/3e place. Une médaille obtenue pour la première fois rapporte un bonus unique (Bronze 20, Argent 45, Or 90).
 - En fin de circuit : **REJOUER**, **SUIVANT** (circuit d'après), GARAGE ou ACCUEIL.
 
@@ -256,7 +266,7 @@ Moteur : **Three.js (WebGL)**. La version précédente dessinait tout en Canvas 
 src/
   main.ts                 boucle de jeu, écrans, modes, garage, gains, haptique, PWA
   modes.ts                modes de jeu et leurs constantes
-  circuits.ts             25 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
+  circuits.ts             30 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
   outfits.ts              tenues du pilote vendues au garage
   weather.ts              météo par difficulté (sec, pluie, neige) : adhérence, pneus, adoucissement des tracés
   net/multi.ts            multijoueur pair à pair (PeerJS) : salon, états, championnat

@@ -189,6 +189,7 @@ export function rockClimb(id: string, weather = 0): number {
  * par times and obstacles are set for it, not for the starting bike (except circuit 1-2).
  */
 export function expectedBike(n: number, trial = false): BikeModel {
+  n = Math.round((n * 25) / 30); // v2.21: 30 circuits per world, same progression
   const id = n <= 2 ? 'explorer' : n <= 6 ? 'sprint' : trial ? 'ridge' : n <= 11 ? 'trail' : n <= 16 ? 'fury' : n <= 21 ? 'volt' : 'dakar';
   return bikeById(id);
 }

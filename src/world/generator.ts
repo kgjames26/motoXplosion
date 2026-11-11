@@ -48,6 +48,7 @@ type FeatureName =
   | 'enduroObs'
   | 'bigHill'
   | 'cruiseHill'
+  | 'speedJump'
   | 'techHill'
   // desert
   | 'dunes'
@@ -240,7 +241,7 @@ export class Generator {
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
     this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
-    this.hard = (mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 : 1) * [1, 0.97, 0.92][diff];
+    this.hard = (mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     // A calm start straight.
@@ -314,13 +315,15 @@ export class Generator {
     if (this.mode !== 'course' && this.rng.chance(0.3)) baseSeg.coins = 'line';
     this.queue.push(baseSeg);
     const def = BIOMES[this.biome];
+    const d0 = this.difficulty(x);
     let feats: Partial<Record<FeatureName, number>> = def.features;
     if (this.mode === 'course') {
       // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
       feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
     } else if (this.mode === 'cruising') {
       // a journey through the world: big hills and long descents between the jumps
-      feats = { ...def.features, cruiseHill: 3.5 };
+      // v2.21: jumps that only land at the right speed (full throttle overshoots)
+      feats = { ...def.features, cruiseHill: 3.5, speedJump: 3.5 + d0 * 2.5 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -711,18 +714,18 @@ export class Generator {
       const t = r.pick(tops);
       const flat = sw - 2 * sr;
       // at least ~1.8 m of shelf around what stands on the support (run-up for the next step)
-      const choice = r.weighted(['bloc', 'deux', 'socle', 'rien'], [flat >= 4.4 ? 2 : 0, flat >= 7 ? 1.2 : 0, flat >= 6.6 ? 1.3 : 0, 0.3]);
+      const choice = r.weighted(['bloc', 'deux', 'socle', 'rien'], [flat >= 5.2 ? 2 : 0, flat >= 7.8 ? 1.2 : 0, flat >= 6.6 ? 1.3 : 0, 0.3]);
       if (choice === 'socle') {
         const s2 = support(t, 3, Math.min(4, flat - 3.6));
         if (s2) place.push({ a: s2, x: sx + (sw - s2.obstacle!.w) / 2, y: S });
       } else if (choice === 'deux') {
-        const b1 = box(t, 0.8, 1.2);
-        const b2 = box(t, 0.8, 1.2);
+        const b1 = box(t, t >= 0.45 ? 1.6 : 0.8, t >= 0.45 ? 2 : 1.2);
+        const b2 = box(t, t >= 0.45 ? 1.6 : 0.8, t >= 0.45 ? 2 : 1.2);
         const gapX = flat - b1.obstacle!.w - b2.obstacle!.w;
         place.push({ a: b1, x: sx + sr + gapX / 3, y: S });
         place.push({ a: b2, x: sx + sw - sr - gapX / 3 - b2.obstacle!.w, y: S });
       } else if (choice === 'bloc') {
-        const b = box(t, 0.8, Math.max(0.8, Math.min(2.4, flat - 3.6)));
+        const b = box(t, t >= 0.45 ? 1.6 : 0.8, Math.max(t >= 0.45 ? 1.6 : 0.8, Math.min(2.4, flat - 3.6)));
         place.push({ a: b, x: sx + (sw - b.obstacle!.w) / 2, y: S });
       }
     }
@@ -869,6 +872,63 @@ export class Generator {
     return { len, shape: () => 0, surface: surf !== undefined ? () => surf : undefined };
   }
 
+  /**
+   * v2.21 cruising: a gap jump onto a downhill landing ramp of limited length, then a flat far
+   * below. It only works in a speed window: too slow drops into the gap, too fast flies past
+   * the ramp and lands flat from high up (a fall). Each jump has its own window.
+   */
+  private speedJump(d: number): Segment[] {
+    const r = this.rng;
+    const g = 9.81;
+    const width = (22 - d * 8) / 3.6; // window width (m/s), narrower further on
+    const lo = r.range(38, 62) / 3.6; // approach speed (m/s) at the low end
+    const hi = lo + width;
+    const Hk = r.range(1.3, 2.0);
+    const th = r.range(0.3, 0.38);
+    const Lk = (1.6 * Hk) / Math.tan(th);
+    const lip = (v: number) => Math.sqrt(Math.max(4, v * v - 2 * g * Hk * 1.15)); // speed left at the lip
+    const Ht = Hk - 0.2;
+    const phi = r.range(0.38, 0.48);
+    const tp = Math.tan(phi);
+    const flight = (v: number) => g / (2 * v * v * Math.cos(th) ** 2);
+    // ramp top: reached at the low end of the window
+    const k1 = flight(lip(lo));
+    const dxt = (Math.tan(th) + Math.sqrt(Math.tan(th) ** 2 + 4 * k1 * (Hk - Ht))) / (2 * k1);
+    // ramp end: reached at the high end
+    const k2 = flight(lip(hi));
+    const a = Math.tan(th) + tp;
+    const c = Hk - Ht + dxt * tp;
+    const dxe = (a + Math.sqrt(a * a + 4 * k2 * c)) / (2 * k2);
+    const Lr = Math.max(6, dxe - dxt);
+    const pit = 0.6;
+    const faceUp = (Ht + pit) / 1.3;
+    const fall = (Hk + pit) / 1.1;
+    const floor = Math.max(1.5, dxt - fall - faceUp);
+    const drop = Lr * tp;
+    const bottom = Ht - drop;
+    const xa = Lk, xb = xa + fall, xc = xb + floor, xd = xc + faceUp, xe = xd + Lr, xf = xe + 4;
+    const len = xf + 30;
+    return [
+      this.flat(r.range(30, 45)),
+      {
+        len,
+        shape: (t) => {
+          if (t < xa) return Hk * Math.pow(t / xa, 1.6);
+          if (t < xb) return Hk - (Hk + pit) * ease((t - xa) / fall);
+          if (t < xc) return -pit;
+          if (t < xd) return -pit + (Ht + pit) * ease((t - xc) / faceUp);
+          if (t < xe) return Ht - drop * ((t - xd) / Lr) + 0.4 * Math.sin(Math.PI * Math.min(1, (t - xd) / 2)) * 0;
+          if (t < xf) return bottom - 0.3 * Math.sin(((t - xe) / 4) * Math.PI);
+          return bottom;
+        },
+        surface: () => Surface.Dirt,
+        noPickup: [[0, len]],
+        onStart: (x0) => this.world.marks.push({ x0, x1: x0 + xa, kind: 'kicker', vmin: Math.round(lo * 3.6), vmax: Math.round(hi * 3.6) }),
+        props: 0.3,
+      },
+    ];
+  }
+
   /** Natural ground: biome undulation plus a gentle trend that keeps altitude bounded. */
   private base(len: number, ampScale: number): Segment {
     const def = BIOMES[this.biome];
@@ -949,6 +1009,8 @@ export class Generator {
           },
         ];
       }
+      case 'speedJump':
+        return this.speedJump(d);
       case 'stepUp': {
         const H = (r.range(0.7, 1.2) + d * 0.3) * k;
         const L = H * 5;
@@ -1336,10 +1398,11 @@ export class Generator {
     const r = this.rng;
     const g = this.circuit ? this.grade : d * 0.5;
     // v2.18: higher and steeper from the first circuits
-    const H = (r.range(9, 13) + g * 12) * HILL_SCALE[this.diff];
-    const su = (r.range(0.24, 0.3) + g * 0.1) * (this.diff ? 0.93 : 1);
-    const sd = (r.range(0.26, 0.32) + g * 0.1) * (this.diff ? 0.93 : 1);
-    const bump = 0.2 + g * 0.25;
+    // v2.21: +20 % (height, steepness, bumps)
+    const H = (r.range(9, 13) + g * 12) * HILL_SCALE[this.diff] * 1.2;
+    const su = (r.range(0.24, 0.3) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12;
+    const sd = (r.range(0.26, 0.32) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12;
+    const bump = (0.2 + g * 0.25) * 1.2;
     const variant = r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
     let pieces: [number, number][];
     switch (variant) {
@@ -1375,8 +1438,8 @@ export class Generator {
       const i = pieces.findIndex((p) => p[1] > 0.05);
       if (i >= 0) {
         const [L0, s0] = pieces[i];
-        const sSteep = (r.range(0.5, 0.58) + g * 0.12) * (this.diff ? 0.92 : 1);
-        const hs = Math.min(L0 * s0 * 0.45, 2.4 + g * 2.2);
+        const sSteep = (r.range(0.5, 0.58) + g * 0.12) * (this.diff ? 0.92 : 1) * 1.1;
+        const hs = Math.min(L0 * s0 * 0.45, (2.4 + g * 2.2) * 1.2);
         const rest = (L0 * s0 - hs) / s0;
         pieces.splice(i, 1, [rest * 0.5, s0], [hs / sSteep, sSteep], [rest * 0.5, s0]);
       }
@@ -1415,8 +1478,8 @@ export class Generator {
     let h = 0;
     for (let j = 0; j < n; j++) {
       const up = h < 1 || (h < 6 + g * 4 && r.chance(0.6));
-      const s = (up ? r.range(0.42, 0.56) + g * 0.12 : -(r.range(0.4, 0.55) + g * 0.12)) * wet;
-      const dh = r.range(1.2, 2.6 + g * 1.6);
+      const s = (up ? r.range(0.42, 0.56) + g * 0.12 : -(r.range(0.4, 0.55) + g * 0.12)) * wet * 1.1;
+      const dh = r.range(1.2, 2.6 + g * 1.6) * 1.2;
       pieces.push([dh / Math.abs(s), s], [r.range(2.5, 5), up ? 0.03 : -0.03]);
       h += up ? dh : -dh;
     }

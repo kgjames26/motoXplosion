@@ -89,6 +89,14 @@ export class World {
       return ((v ^ (v >>> 13)) >>> 0) % 3;
     };
     let kind = h(k);
+    // v2.21: the ride starts dry 70 % of the time
+    if (k === 0) {
+      let v = (this.seed ^ 0x51ed27) >>> 0;
+      v = Math.imul(v ^ (v >>> 15), 0x2c1b3c6d) >>> 0;
+      if ((v % 100) < 70) return 0 as Weather;
+      if (this.region.id === 'desert') return 1 as Weather;
+      return (1 + (v % 2)) as Weather;
+    }
     if (this.region.id === 'desert') {
       // no snow in the desert: mostly sun, a rain shower now and then (never two in a row)
       kind = kind === 1 ? 1 : 0;

@@ -40,6 +40,9 @@ const $ = (id: string) => document.getElementById(id)!;
 
 const settings = loadSettings();
 const profile = loadProfile();
+// v2.21: the game always opens on cruising, first world
+profile.mode = 'cruising';
+settings.region = 'alpes';
 const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */

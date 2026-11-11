@@ -8,7 +8,7 @@ import type { RegionId } from './world/regions';
  * deterministic generation (fixed seed) with a finish line; its grade (0 → 1) grows with its
  * number and drives obstacle size, hill height, opponents and par times.
  */
-export const CIRCUITS = 25;
+export const CIRCUITS = 30;
 export type CircuitMode = 'trial' | 'enduro' | 'course';
 
 export function isCircuitMode(m: ModeId): m is CircuitMode {

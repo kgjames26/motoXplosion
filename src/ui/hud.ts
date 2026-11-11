@@ -34,9 +34,60 @@ export class Hud {
   private coinsBox = $('hud-coins');
   private last = { speed: -1, dist: -1, coins: -1, clock: -1, mult: -1, mode: '', circuit: -1 };
   private dots: HTMLElement[] = [];
+  private reliefKey = '';
+
+  /**
+   * v2.21: a sober relief of the stretch shown by the progress bar (the whole circuit, or the
+   * current kilometre in cruising), drawn just above it.
+   */
+  private relief(game: Game): void {
+    const w = game.world;
+    let x0: number, x1: number, key: string;
+    if (game.mode === 'cruising') {
+      const k = Math.floor(game.distance / CHECKPOINT_EVERY);
+      x0 = game.startX + k * CHECKPOINT_EVERY;
+      x1 = x0 + CHECKPOINT_EVERY;
+      key = `c${k}:${w.seed}`;
+    } else {
+      key = `${game.mode}:${game.circuit}:${w.seed}`;
+      if (key === this.reliefKey) return;
+      x0 = game.startX;
+      if (game.mode === 'trial') {
+        for (let i = 0; i < 40 && !isFinite(w.finishX); i++) w.ensure(game.bike.x + 300 + i * 200);
+        x1 = isFinite(w.finishX) ? w.finishX : x0 + 1000;
+      } else x1 = x0 + game.raceLen;
+    }
+    if (key === this.reliefKey) return;
+    this.reliefKey = key;
+    w.ensure(x1 + 10);
+    const n = 200;
+    const hs: number[] = [];
+    for (let i = 0; i <= n; i++) hs.push(w.heightAt(x0 + ((x1 - x0) * i) / n));
+    let lo = Math.min(...hs);
+    let hi = Math.max(...hs);
+    if (hi - lo < 8) { const m = (hi + lo) / 2; lo = m - 4; hi = m + 4; }
+    const y = (h: number) => (92 - ((h - lo) / (hi - lo)) * 84).toFixed(1);
+    const line = hs.map((h, i) => `${i ? 'L' : 'M'}${(i * 1000) / n} ${y(h)}`).join('');
+    $('relief-line').setAttribute('d', line);
+    $('relief-fill').setAttribute('d', `${line}L1000 100L0 100Z`);
+  }
+
+  /** v2.21 cruising: the speed window of the next jump, green when the speed is right. */
+  private jumpHint(game: Game): void {
+    const el = $('jump-hint');
+    const j = game.mode === 'cruising' ? game.nextSpeedJump(130) : null;
+    el.classList.toggle('hidden', !j);
+    if (!j) return;
+    $('jump-range').textContent = `${j.vmin}–${j.vmax}`;
+    const v = game.bike.forwardSpeed * 3.6;
+    el.classList.toggle('ok', v >= j.vmin! && v <= j.vmax!);
+    el.classList.toggle('fast', v > j.vmax!);
+  }
 
   update(game: Game): void {
     const mode = game.mode;
+    this.relief(game);
+    this.jumpHint(game);
     if (mode !== this.last.mode) {
       this.last.mode = mode;
       this.root.dataset.mode = mode;

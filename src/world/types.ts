@@ -119,4 +119,7 @@ export interface TrackMark {
   kind: 'berm' | 'kicker' | 'whoops' | 'ford' | 'start' | 'checkpoint' | 'wadi' | 'oasis' | 'ledges' | 'sectionStart' | 'sectionEnd' | 'finish';
   /** Section number (trial) or checkpoint index. */
   n?: number;
+  /** v2.21 cruising speed-window jump: approach speed range (km/h) that lands on the ramp. */
+  vmin?: number;
+  vmax?: number;
 }

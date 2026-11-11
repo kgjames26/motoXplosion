@@ -95,13 +95,14 @@ const PHYSICS_DT = 1 / 300;
 export const CHECKPOINT_EVERY = 1000;
 const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
-export const TRIAL_PENALTY = 15;
+export const TRIAL_PENALTY = 25;
 /** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
 export const CRUISE_STEP = 0.25;
 export const CRUISE_MAX = 4;
 /** Cruising pays more (v2.14): coins and stunts, and distance. */
-const CRUISE_PAY = 1.5;
-const CRUISE_DIST_PAY = 1.8;
+// v2.21: doubled again — cruising is where the money is made
+const CRUISE_PAY = 3;
+const CRUISE_DIST_PAY = 3.6;
 
 /**
  * Game rules for every mode: energies, pickups and coins, crashes and respawns, trial sections,
@@ -395,6 +396,10 @@ export class Game {
       const hard = ev.landing;
       const misalign = ev.landingAngle;
       const loss = clamp((hard - 8.5) * 1.5 + Math.max(0, misalign - 0.6) * 8, 0, 14);
+      // v2.21 cruising: a landing far too hard (flat from high up) or badly crooked is a fall
+      if (this.mode === 'cruising' && (hard > 12 || (misalign > 0.95 && hard > 5)) && !ev.crashed) {
+        this.crash();
+      }
       if (loss > 1) {
         if (this.usesEnergy) this.stamina -= loss;
         this.shake = Math.min(1, this.shake + loss / 15);
@@ -873,14 +878,25 @@ export class Game {
 
   // ---------------------------------------------------------------- simulation
 
+  /** v2.21: the next speed-window jump within `range` metres ahead (cruising). */
+  nextSpeedJump(range = 140): { x0: number; vmin?: number; vmax?: number } | null {
+    const bx = this.bike.x;
+    let best: { x0: number; vmin?: number; vmax?: number } | null = null;
+    for (const m of this.world.marks) if (m.vmin && m.x0 > bx - 2 && m.x0 < bx + range && (!best || m.x0 < best.x0)) best = m;
+    return best;
+  }
+
   private attract(dt: number): void {
     // Attract mode behind the home screen: the rider cruises and jumps on his own.
     const b = this.bike;
     const w = this.world;
     const err = wrapAngle(b.angle - (b.grounded ? w.slopeAt(b.x) : w.slopeAt(b.x + Math.max(1, b.vx * 0.4))));
-    this.input.throttle = b.grounded ? (b.speed < 17 ? 0.8 : 0.35) : 0.1;
+    // speed-window jumps: aim at the middle of the window
+    const j = this.nextSpeedJump(150);
+    const target = j ? (j.vmin! + j.vmax!) / 2 / 3.6 : 17;
+    this.input.throttle = b.grounded ? clamp((target - b.speed) * 0.5 + 0.35, 0, 1) : 0.1;
+    this.input.brake = b.grounded && b.speed > target + 2 ? 0.5 : 0;
     this.input.balance = clamp(err * 2.5 + b.omega * 0.35, -1, 1);
-    this.input.brake = 0;
     this.stepPhysics(dt, this.input, false);
     w.ensure(b.x + 140);
     w.trim(b.x - 120);
