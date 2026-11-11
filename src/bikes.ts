@@ -158,15 +158,28 @@ export function bikeById(id: string): BikeModel {
  * decide: the trial bike goes highest.
  */
 export const ROCK_CLIMB: Record<string, [number, number, number]> = {
-  // snow re-measured in v2.13 (slipperier earth since v2.10: the run-up counts)
-  explorer: [1.33, 1.25, 1.17],
-  sprint: [1.5, 1.33, 1.25],
-  ridge: [2.5, 2.33, 1.42],
-  trail: [2.0, 1.5, 1.33],
-  fury: [2.17, 1.5, 1.42],
-  volt: [2.5, 2.0, 1.42],
-  dakar: [2.0, 1.83, 1.42],
+  // re-measured in v2.18 (rider balance changed in v2.17 / v2.18)
+  explorer: [1.42, 1.25, 1.25],
+  sprint: [1.5, 1.33, 1.33],
+  ridge: [2.33, 2.25, 1.42],
+  trail: [2.08, 1.5, 1.33],
+  fury: [2.17, 1.5, 1.5],
+  volt: [2.33, 2.08, 1.5],
+  dakar: [2.17, 2.08, 1.5],
 };
+/** v2.18: highest single trial module (chamfered ~62° face, 2.8 m wide) per bike and weather. */
+export const MODULE_CLIMB: Record<string, [number, number, number]> = {
+  explorer: [0.9, 0.75, 0.75],
+  sprint: [0.9, 0.75, 0.75],
+  ridge: [0.9, 0.75, 0.75],
+  trail: [1.5, 1.35, 0.75],
+  fury: [1.65, 1.5, 0.75],
+  volt: [1.65, 0.9, 0.75],
+  dakar: [1.5, 1.5, 0.75],
+};
+export function moduleClimb(id: string, weather = 0): number {
+  return (MODULE_CLIMB[id] ?? MODULE_CLIMB.explorer)[weather];
+}
 export function rockClimb(id: string, weather = 0): number {
   return (ROCK_CLIMB[id] ?? ROCK_CLIMB.explorer)[weather];
 }

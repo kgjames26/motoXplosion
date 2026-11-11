@@ -402,6 +402,8 @@ export class Game {
       } else if (hard > 3) {
         this.shake = Math.min(1, this.shake + 0.12);
       }
+      // v2.18: a perfect landing after a long jump (1.5 s or more in the air) pays a little bonus
+      if (loss <= 1 && this.lastAir >= 1.5 && misalign < 0.12 && this.tricksOn && !ev.crashed) this.trick(8, 'RÉCEPTION PARFAITE');
       // stunt coins: big air and clean landings (not in trial)
       if (this.mode !== 'trial' && loss <= 1) {
         if (this.lastAir > 1.1) this.stunt(3, 'BIG AIR');

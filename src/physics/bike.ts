@@ -404,7 +404,7 @@ export class Bike {
     if (!this.crashed) {
       if (anyContact) {
         // v2.17: the rider's weight counts more (wheelies on purpose)
-        torque += -this.lean * 450;
+        torque += -this.lean * 360; // v2.18: 20 % softer than v2.17
         // Rider instinct: on the ground a real rider stops a wheelie (or a stoppie) from
         // looping by moving his body and feathering the controls. Pulling hard on the balance
         // (ARRIÈRE / AVANT) overrides it, so wheelies and stoppies stay possible on purpose.
@@ -421,7 +421,7 @@ export class Bike {
       } else {
         // v2.17: pulling the balance all the way spins the bike (flips); a light touch stays precise
         const pull = Math.abs(this.lean);
-        torque += -this.lean * (300 + 520 * pull * pull) * this.airControl;
+        torque += -this.lean * (240 + 416 * pull * pull) * this.airControl;
         torque -= this.omega * (150 - 100 * pull);
       }
     }

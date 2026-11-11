@@ -64,9 +64,10 @@ const JERSEYS: [string, string, string][] = [
 /** Mean opponent level for the player's difficulty and championship level. */
 export function meanLevel(difficulty: Difficulty, champLevel: number): number {
   // facile stays beatable on every circuit, difficile ends with near-perfect riders
-  if (difficulty === 'facile') return clamp(1 + (champLevel - 1) * 0.33, 1, 9.5);
-  if (difficulty === 'normal') return clamp(3 + (champLevel - 1) * 0.58, 1, 9.5);
-  return clamp(4.2 + (champLevel - 1) * 0.6, 1, 9.5);
+  // v2.18: an adult plays — stronger fields from the first circuits
+  if (difficulty === 'facile') return clamp(3 + (champLevel - 1) * 0.45, 1, 9.6);
+  if (difficulty === 'normal') return clamp(4.5 + (champLevel - 1) * 0.55, 1, 9.8);
+  return clamp(6 + (champLevel - 1) * 0.45, 1, 10);
 }
 
 export function createOpponents(world: World, startX: number, difficulty: Difficulty, champLevel: number, seed: number): Opponent[] {

@@ -37,6 +37,13 @@ sept motos à gagner au garage.
 | **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
+### Plus difficile (v2.18) — réglé pour un adulte
+- **Trial** : obstacles nettement plus gros dès le début (rochers jusqu'à ~0,1 m sous ce que la moto attendue peut franchir), **45 gros modules** (caisses géantes, gros blocs béton, piles de pneus de tracteur, 1,05 à 1,8 m) ; les marches des structures montent jusqu'à ce que la moto franchit sur un module (table mesurée moto par moto et météo par météo, `MODULE_CLIMB`), sommets jusqu'à ~3 m ; parfois un **module géant** seul, à la limite de la moto. Temps cibles resserrés de 8 %.
+- **Enduro** : plus aucun petit obstacle posé au sol. Collines plus hautes (9 à 25 m) et plus raides, **toujours une portion très raide** (50 à 70 %) dans la montée, et une nouvelle **section technique** : enchaînement de courtes pentes raides en montée et en descente, rocailleuses et bosselées, avec de petits paliers. Mélange avec de **gros sauts** (tables, doubles, gaps).
+- **Course** : rivaux plus forts dès le circuit 1 (niveau moyen 3 en Facile, 4,5 en Moyen, 6 en Difficile, jusqu'à 10) et pistes plus relevées.
+- La balance du pilote est **20 % moins puissante** qu'en v2.17 (plus fine à doser).
+- **Réception parfaite** après un saut de plus de 1,5 s : petit bonus de 8 pièces (tous les modes sauf multijoueur).
+
 ### Difficultés et météo (tous les modes)
 Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a sa **météo** :
 

@@ -55,9 +55,10 @@ export function circuitRaceLevel(n: number): number {
  */
 export function trialRockRange(n: number, diff = 0): [number, number] {
   // never higher than what the bike expected at this circuit climbs in this weather
-  const cap = rockClimb(expectedBike(n, true).id, diff) - 0.2;
-  const hi = Math.min(2.5, cap, (0.6 + circuitGrade(n) * 1.9) * OBSTACLE_SCALE[diff]);
-  return [Math.max(0.5, hi - 0.7), Math.max(0.5, hi)];
+  // v2.18: bigger from the start, close to what the bike can do
+  const cap = rockClimb(expectedBike(n, true).id, diff) - 0.1;
+  const hi = Math.min(2.5, cap, (0.95 + circuitGrade(n) * 1.9) * OBSTACLE_SCALE[diff]);
+  return [Math.max(0.6, hi - 0.45), Math.max(0.6, hi)];
 }
 
 export type Medal = 0 | 1 | 2 | 3; // none, bronze, silver, gold
@@ -72,9 +73,9 @@ export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number
   const g = circuitGrade(n);
   let gold: number;
   // trial: a fast, clean ride (a careful rider gets silver)
-  if (mode === 'trial') gold = trialZones(n) * (10 + g * 14) + 6;
+  if (mode === 'trial') gold = (trialZones(n) * (10 + g * 14) + 6) * 0.92;
   // enduro: set for the bike the player can afford by then (see expectedBike)
-  else gold = circuitLength(mode, n) / (mode === 'enduro' ? 21.5 + g * 2.5 : 22);
+  else gold = circuitLength(mode, n) / (mode === 'enduro' ? 22.5 + g * 2.5 : 22);
   gold = Math.round(gold * [1, 1.08, 1.16][diff]);
   return { gold, silver: Math.round(gold * (mode === 'trial' ? 1.22 : 1.3)) };
 }
