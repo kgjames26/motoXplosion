@@ -182,6 +182,14 @@ export class Game {
   private outTimer = 0;
   private dustAcc = 0;
   private lastAir = 0;
+  /** v2.17 tricks: wheelie time (and grace gap), rotation in the air, coins, finish in a wheelie. */
+  wheelieT = 0;
+  private wheelieGap = 0;
+  private airSpin = 0;
+  private groundT = 0;
+  trickCoins = 0;
+  private finishWheelie = false;
+  private finishSeen = false;
   private events: GameEvents = {};
   /** Cruise control: owned, target speed (m/s, 0 = off) and its integrated throttle. */
   hasCruise = false;
@@ -241,6 +249,12 @@ export class Game {
     this.acc = 0;
     this.coinsRun = 0;
     this.stuntCoins = 0;
+    this.trickCoins = 0;
+    this.wheelieT = 0;
+    this.wheelieGap = 0;
+    this.airSpin = 0;
+    this.finishWheelie = false;
+    this.finishSeen = false;
     this.section = 0;
     this.zones = this.mode === 'trial' ? trialZones(this.circuit) : 0;
     this.inSection = false;
@@ -320,11 +334,11 @@ export class Game {
         inp.throttle = Math.max(inp.throttle, Math.max(0, Math.min(1, this.cruiseI + err * 0.35)));
       } else inp.throttle = Math.max(inp.throttle, 0.2);
     }
-    // brake held for 2 s at a standstill: the bike starts rolling backwards (up to 3 km/h)
+    // brake held for 1 s at a standstill: the bike starts rolling backwards (up to 5 km/h)
     if (inp.brake > 0.5 && inp.throttle < 0.05 && bike.forwardSpeed < 0.35 && bike.grounded && this.crashTimer <= 0) this.brakeHold += dt;
     else if (inp.brake < 0.3 || inp.throttle >= 0.05) this.brakeHold = 0;
     if (this.brakeHold > 1) {
-      inp.reverse = Math.min(1, (this.brakeHold - 1) / 0.35);
+      inp.reverse = Math.min(1, (this.brakeHold - 1) / 0.15);
       inp.brake = 0;
     }
     this.stepPhysics(dt, inp, true);
@@ -363,8 +377,18 @@ export class Game {
     else if (this.mode === 'trial') this.trialRules(dt);
     else if (this.mode === 'course') this.raceRules(dt);
 
+    this.trackWheelie(dt);
     // ---- landings, stunts & crashes
     const ev = bike.consumeEvents();
+    // rotation in the air (kept a moment after touchdown: the landing event can come late)
+    if (!bike.grounded) {
+      this.airSpin += bike.omega * dt;
+      this.groundT = 0;
+    } else if ((this.groundT += dt) > 0.25) this.airSpin = 0;
+    if (ev.landing > 0) {
+      if (this.crashTimer <= 0 && !ev.crashed) this.landFlip();
+      this.airSpin = 0;
+    }
     if (ev.landing > 0 && this.crashTimer <= 0) {
       // ev.landing = speed into the ground (m/s). Up to ~8.5 m/s the suspension absorbs it;
       // beyond, the rider takes the hit. Landing crooked makes it worse.
@@ -711,6 +735,63 @@ export class Game {
     }
   }
 
+  /** Tricks pay everywhere except in multiplayer. */
+  private get tricksOn(): boolean {
+    return !this.multi && this.state === 'playing';
+  }
+
+  /** Wheelie: rear wheel on the ground, front up, nose up, moving. Pays when it ends. */
+  private trackWheelie(dt: number): void {
+    const b = this.bike;
+    const rel = wrapAngle(b.angle - this.world.slopeAt(b.x));
+    const on = this.tricksOn && this.crashTimer <= 0 && !this.finished && b.rear.contact && !b.front.contact && rel > 0.18 && b.forwardSpeed > 1.5;
+    // crossing the finish line in a wheelie: +10 % on the run's coins
+    if (this.finished && !this.finishSeen) {
+      this.finishSeen = true;
+      if (this.wheelieT >= 0.4 && this.tricksOn) {
+        this.finishWheelie = true;
+        this.popup(b.x + 1, b.y + 3.6, 'ARRIVÉE EN WHEELING ! +10 %', '#7dff7a');
+      }
+    }
+    if (on) {
+      const before = this.wheelieT;
+      this.wheelieT += dt + this.wheelieGap;
+      this.wheelieGap = 0;
+      if (this.wheelieT >= 1 && Math.floor(this.wheelieT) > Math.floor(before)) this.popup(b.x + 0.5, b.y + 2.6, `WHEELING ${Math.floor(this.wheelieT)} s  ×${fmtMult(wheelieMult(this.wheelieT))}`, '#9dffb0');
+      return;
+    }
+    if (this.wheelieT <= 0) return;
+    this.wheelieGap += dt;
+    // a short touch of the front wheel does not break it; a fall loses it
+    if (this.crashTimer > 0) {
+      this.wheelieT = this.wheelieGap = 0;
+      return;
+    }
+    if (this.wheelieGap < 0.2 && !this.finished) return;
+    const t = this.wheelieT;
+    this.wheelieT = this.wheelieGap = 0;
+    if (t < 1) return;
+    const coins = Math.round(t * 2 * wheelieMult(t));
+    this.trick(coins, `WHEELING ${t.toFixed(1).replace('.', ',')} s ×${fmtMult(wheelieMult(t))}`);
+  }
+
+  /** Landing: full turns in the air are flips (backwards = nose up). */
+  private landFlip(): void {
+    const turns = Math.floor((Math.abs(this.airSpin) + 0.9) / (Math.PI * 2));
+    if (turns < 1 || !this.tricksOn) return;
+    const mult = 1 + 0.5 * (turns - 1);
+    const coins = Math.round(15 * turns * mult);
+    const name = this.airSpin > 0 ? 'SALTO ARRIÈRE' : 'SALTO AVANT';
+    this.trick(coins, `${turns > 1 ? turns + ' × ' : ''}${name}${turns > 1 ? ' ×' + fmtMult(mult) : ''}`);
+  }
+
+  private trick(coins: number, text: string): void {
+    this.trickCoins += coins;
+    this.coinsRun += coins;
+    this.popup(this.bike.x, this.bike.y + 3, `${text}  +${coins}`, '#7dff7a');
+    this.events.stunt = true;
+  }
+
   private stunt(coins: number, text: string): void {
     this.stuntCoins += coins;
     this.coinsRun += coins;
@@ -723,11 +804,12 @@ export class Game {
     const lines: { label: string; coins: number }[] = [];
     let score = 0;
     let scoreLabel = '';
-    const picked = this.coinsRun - this.stuntCoins;
+    const picked = this.coinsRun - this.stuntCoins - this.trickCoins;
     // cruising is where the money is made (long rides): coins and stunts count 1.5×, distance 1.8×
     const cm = this.mode === 'cruising' ? CRUISE_PAY : 1;
     if (picked > 0) lines.push({ label: 'Pièces ramassées', coins: Math.round(picked * cm) });
     if (this.stuntCoins > 0) lines.push({ label: 'Sauts et réceptions', coins: Math.round(this.stuntCoins * cm) });
+    if (this.trickCoins > 0) lines.push({ label: 'Figures (wheelings, saltos)', coins: Math.round(this.trickCoins * cm) });
     let standings: RunResult['standings'];
     let place: number | undefined;
     let time: number | undefined;
@@ -770,6 +852,10 @@ export class Game {
         } else scoreLabel = 'Abandon';
         break;
       }
+    }
+    if (this.finishWheelie && reason === 'finish') {
+      const base = lines.reduce((a, l) => a + l.coins, 0);
+      lines.push({ label: 'Arrivée en wheeling (+10 %)', coins: Math.max(1, Math.round(base * 0.1)) });
     }
     const total = lines.reduce((a, l) => a + l.coins, 0);
     return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place, time, medal, circuit: this.circuit || undefined };
@@ -1051,4 +1137,9 @@ export function fmtClock(s: number): string {
   const m = Math.floor(s / 60);
   const r = s - m * 60;
   return `${m}:${r.toFixed(1).padStart(4, '0')}`;
+}
+
+/** Wheelie multiplier: grows with the time on the back wheel (×1.25 per second, up to ×6). */
+function wheelieMult(t: number): number {
+  return Math.min(6, 1 + 0.25 * Math.floor(t));
 }

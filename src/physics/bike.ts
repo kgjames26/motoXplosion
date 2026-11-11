@@ -248,8 +248,8 @@ export class Bike {
     const wheelSpeed = rear.spin * rear.radius;
     let drive = 0;
     if (!this.crashed && (input.reverse ?? 0) > 0 && input.throttle <= 0.01) {
-      // reverse creep: gentle torque towards -3 km/h
-      drive = clamp((-0.86 * input.reverse! - wheelSpeed) * 600 - 95 * input.reverse!, -320, 80);
+      // reverse creep: gentle torque towards -5 km/h (reached in about a second)
+      drive = clamp((-1.36 * input.reverse! - wheelSpeed) * 1800 - 220 * input.reverse!, -900, 80);
     } else if (!this.crashed && input.throttle > 0.01) {
       const powerLimited = (this.power * rear.radius) / Math.max(Math.abs(wheelSpeed), 4);
       const limiter = clamp((this.maxSpeed - wheelSpeed) / 3, 0, 1);
@@ -403,7 +403,8 @@ export class Bike {
     // ---- rider: weight shift torque (on ground) and body english (in the air)
     if (!this.crashed) {
       if (anyContact) {
-        torque += -this.lean * 330;
+        // v2.17: the rider's weight counts more (wheelies on purpose)
+        torque += -this.lean * 450;
         // Rider instinct: on the ground a real rider stops a wheelie (or a stoppie) from
         // looping by moving his body and feathering the controls. Pulling hard on the balance
         // (ARRIÈRE / AVANT) overrides it, so wheelies and stoppies stay possible on purpose.
@@ -411,16 +412,17 @@ export class Bike {
         const wantWheelie = clamp(-this.lean, 0, 1);
         const wantStoppie = clamp(this.lean, 0, 1);
         if (rel > 0.12) {
-          const k = 1 - wantWheelie * 0.7;
+          const k = 1 - wantWheelie * 0.9;
           torque -= (rel - 0.12) * 3400 * k + Math.max(0, this.omega) * 80 * k;
         } else if (rel < -0.1) {
-          const k = 1 - wantStoppie * 0.7;
+          const k = 1 - wantStoppie * 0.9;
           torque += (-0.1 - rel) * 3400 * k - Math.min(0, this.omega) * 80 * k;
         }
       } else {
-        torque += -this.lean * 300 * this.airControl;
-        // pitch damping in the air keeps control precise
-        torque -= this.omega * 150;
+        // v2.17: pulling the balance all the way spins the bike (flips); a light touch stays precise
+        const pull = Math.abs(this.lean);
+        torque += -this.lean * (300 + 520 * pull * pull) * this.airControl;
+        torque -= this.omega * (150 - 100 * pull);
       }
     }
 
