@@ -19,6 +19,8 @@ export interface Obstacle {
   tier: 1 | 2 | 3;
   /** Big trial obstacle (circuits since v2.6). */
   big?: boolean;
+  /** Trial rock (v2.7): climbed on its own steep face, no earth ramp. */
+  rock?: boolean;
 }
 
 export interface AssetDef {

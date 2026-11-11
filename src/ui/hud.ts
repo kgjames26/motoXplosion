@@ -1,5 +1,6 @@
 import { clamp } from '../core/math';
 import { CHECKPOINT_EVERY, fmtClock, fmtMult, Game } from '../game';
+import { WEATHER_ICONS, WEATHER_NAMES } from '../weather';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -43,9 +44,9 @@ export class Hud {
       this.last.clock = -1;
       this.last.mult = -1;
     }
-    if (game.circuit !== this.last.circuit) {
-      this.last.circuit = game.circuit;
-      this.level.textContent = game.mode === 'course' ? `Circuit ${game.circuit} · ${game.difficulty === 'facile' ? 'Facile' : game.difficulty === 'difficile' ? 'Difficile' : 'Moyen'}` : `Circuit ${game.circuit}`;
+    if (game.circuit * 10 + game.weather !== this.last.circuit) {
+      this.last.circuit = game.circuit * 10 + game.weather;
+      this.level.innerHTML = `${WEATHER_ICONS[game.weather]}${game.circuit ? `Circuit ${game.circuit} · ` : ''}${WEATHER_NAMES[game.weather]}`;
       this.riders.innerHTML = '';
       this.dots = [];
     }

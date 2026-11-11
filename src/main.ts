@@ -8,10 +8,11 @@ import { Controls } from './ui/controls';
 import { Hud } from './ui/hud';
 import { Garage } from './ui/garage';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
-import { bikeById } from './bikes';
-import { DIFFICULTIES, MODES, ModeId } from './modes';
+import { bikeById, BIKES, rockClimb } from './bikes';
+import { Difficulty, DIFFICULTIES, MODES, ModeId } from './modes';
 import { bestKey, loadProfile, saveProfile } from './profile';
 import { outfitById } from './outfits';
+import { DIFF_ORDER, diffIndex, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import {
   CIRCUITS,
   CircuitMode,
@@ -19,6 +20,8 @@ import {
   circuitLength,
   CircuitRecord,
   circuitRaceLevel,
+  CRUISE_UNLOCK,
+  trialRockRange,
   fmtTime,
   isCircuitMode,
   MEDAL_BONUS,
@@ -41,7 +44,7 @@ const renderer = new GLRenderer($('app'), settings.quality);
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
 const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), difficulty: profile.difficulty, circuit: circuitOf() });
 const outfit = () => outfitById(profile.outfit);
-const game = new Game({ ...runOpts(), mode: 'cruising' });
+const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
 renderer.setPlayerModel(game.model, outfit());
 const garage = new Garage(profile, saveP);
 const controls = new Controls();
@@ -92,20 +95,32 @@ const MODE_SHORT: Record<ModeId, string> = {
   course: '8 pilotes',
 };
 
-const rec = (mode: CircuitMode, n: number): CircuitRecord | undefined => profile.circuits[circuitKey(mode, settings.region, n)];
-const unlocked = (mode: CircuitMode, n: number) => n === 1 || !!rec(mode, n - 1)?.done;
-/** Medal counts for a mode in the current world: [bronze+, silver+, gold] and circuits done. */
+const rec = (mode: CircuitMode, n: number, d: Difficulty): CircuitRecord | undefined => profile.circuits[circuitKey(mode, settings.region, n, d)];
+const doneAny = (mode: CircuitMode, n: number) => DIFF_ORDER.some((d) => rec(mode, n, d)?.done);
+const unlocked = (mode: CircuitMode, n: number) => n === 1 || doneAny(mode, n - 1);
+/** Each difficulty (= weather) of a circuit opens once the previous one is finished. */
+const diffUnlocked = (mode: CircuitMode, n: number, d: Difficulty) => {
+  const i = diffIndex(d);
+  return i === 0 || !!rec(mode, n, DIFF_ORDER[i - 1])?.done;
+};
+const cruiseLevel = () => profile.cruiseUnlock[settings.region] ?? 0;
+/** Medal counts for a mode in the current world (every difficulty) and circuits done. */
 function medalCounts(mode: CircuitMode): { done: number; gold: number; silver: number; bronze: number } {
   const c = { done: 0, gold: 0, silver: 0, bronze: 0 };
   for (let n = 1; n <= CIRCUITS; n++) {
-    const r = rec(mode, n);
-    if (!r?.done) continue;
-    c.done++;
-    if (r.medal === 3) c.gold++;
-    else if (r.medal === 2) c.silver++;
-    else if (r.medal === 1) c.bronze++;
+    if (doneAny(mode, n)) c.done++;
+    for (const d of DIFF_ORDER) {
+      const r = rec(mode, n, d);
+      if (r?.medal === 3) c.gold++;
+      else if (r?.medal === 2) c.silver++;
+      else if (r?.medal === 1) c.bronze++;
+    }
   }
   return c;
+}
+/** Difficulty buttons with their weather icon (locked ones greyed). */
+function diffButtons(isOpen: (d: Difficulty) => boolean): string {
+  return DIFF_ORDER.map((d, i) => `<button class="diff wx${i}${profile.difficulty === d ? ' selected' : ''}" data-diff="${d}"${isOpen(d) ? '' : ' disabled'}>${WEATHER_ICONS[i]}<span>${DIFFICULTIES[i].name}</span><small>${WEATHER_NAMES[i]}</small></button>`).join('');
 }
 const medalIco = (m: number) => `<i class="medal-ico" style="--m:${MEDAL_COLORS[m] || '#666'}"></i>`;
 
@@ -119,6 +134,12 @@ function updateBest(): void {
     const v = profile.best[bestKey(mode, settings.region)] ?? 0;
     $('best-title').textContent = v ? `${v.toLocaleString('fr-FR')} m` : '—';
     $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
+  }
+  const cd = $('cruise-diffs');
+  cd.classList.toggle('hidden', mode !== 'cruising');
+  if (mode === 'cruising') {
+    if (diffIndex(profile.difficulty) > cruiseLevel()) profile.difficulty = DIFF_ORDER[cruiseLevel()];
+    cd.innerHTML = diffButtons((d) => diffIndex(d) <= cruiseLevel());
   }
   $('title-coins').textContent = profile.coins.toLocaleString('fr-FR');
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card')) {
@@ -146,12 +167,14 @@ function buildModes(): void {
       saveP();
       refreshTitle();
     });
-  $('circ-diffs').innerHTML = DIFFICULTIES.map((d) => `<button class="diff" data-diff="${d.id}">${d.name}</button>`).join('');
-  for (const el of $('circ-diffs').querySelectorAll('.diff'))
-    el.addEventListener('click', () => {
-      profile.difficulty = (el as HTMLElement).dataset.diff as typeof profile.difficulty;
+  for (const id of ['circ-diffs', 'cruise-diffs'])
+    $(id).addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLButtonElement>('.diff');
+      if (!el || el.disabled) return;
+      profile.difficulty = el.dataset.diff as Difficulty;
       saveP();
-      renderCircuits();
+      if (id === 'circ-diffs') renderCircuits();
+      else updateBest();
     });
 }
 
@@ -170,39 +193,49 @@ function openCircuits(): void {
 function renderCircuits(): void {
   const mode = profile.mode as CircuitMode;
   const sel = circuitOf();
+  // keep the chosen difficulty only if it is open on this circuit
+  while (!diffUnlocked(mode, sel, profile.difficulty)) profile.difficulty = DIFF_ORDER[diffIndex(profile.difficulty) - 1];
+  const dsel = profile.difficulty;
+  const di = diffIndex(dsel);
   $('circ-mode').textContent = MODES.find((m) => m.id === mode)!.name;
   $('circ-world').textContent = REGIONS[settings.region].name;
   const c = medalCounts(mode);
   $('circ-medals').innerHTML = `<span>${medalIco(3)} ${c.gold}</span><span>${medalIco(2)} ${c.silver}</span><span>${medalIco(1)} ${c.bronze}</span>`;
   let next = 0;
-  for (let n = 1; n <= CIRCUITS && !next; n++) if (!rec(mode, n)?.done) next = n;
+  for (let n = 1; n <= CIRCUITS && !next; n++) if (!doneAny(mode, n)) next = n;
   const tiles: string[] = [];
   for (let n = 1; n <= CIRCUITS; n++) {
-    const r = rec(mode, n);
     const open = unlocked(mode, n);
+    const r = rec(mode, n, dsel);
+    const best = Math.max(0, ...DIFF_ORDER.map((d) => rec(mode, n, d)?.medal ?? 0));
     const sub = r?.done ? (mode === 'course' ? `${r.place}${r.place === 1 ? 'er' : 'e'}` : fmtTime(r.time ?? 0)) : '';
+    const pips = DIFF_ORDER.map((d, i) => `<i class="pip wx${i}${rec(mode, n, d)?.done ? ' on' : ''}"></i>`).join('');
     const cls = ['circ-tile', open ? '' : 'locked', n === sel ? 'selected' : '', n === next && open ? 'next' : ''].join(' ');
-    tiles.push(`<button class="${cls}" data-n="${n}"${open ? '' : ' disabled'}>${r?.medal ? medalIco(r.medal) : ''}<b>${n}</b>${sub ? `<small>${sub}</small>` : ''}</button>`);
+    tiles.push(`<button class="${cls}" data-n="${n}"${open ? '' : ' disabled'}>${best ? medalIco(best) : ''}<b>${n}</b>${sub ? `<small>${sub}</small>` : ''}<span class="pips">${pips}</span></button>`);
   }
   $('circ-grid').innerHTML = tiles.join('');
   // details of the selected circuit
   $('circ-num').textContent = `Circuit ${sel}`;
-  const meta =
-    mode === 'trial'
-      ? `${trialZones(sel)} zones d’obstacles · chute = +15 s`
-      : mode === 'enduro'
-        ? `${(circuitLength(mode, sel) / 1000).toFixed(1).replace('.', ',')} km · grosses collines`
-        : `${(circuitLength(mode, sel) / 1000).toFixed(1).replace('.', ',')} km · pilotes niveau ${circuitRaceLevel(sel)}`;
-  $('circ-meta').textContent = meta;
-  $('circ-diffs').classList.toggle('hidden', mode !== 'course');
-  for (const el of $('circ-diffs').querySelectorAll('.diff')) el.classList.toggle('selected', (el as HTMLElement).dataset.diff === profile.difficulty);
-  const r = rec(mode, sel);
+  const km = (circuitLength(mode, sel) / 1000).toFixed(1).replace('.', ',');
+  let meta = '';
+  if (mode === 'trial') {
+    const hi = trialRockRange(sel, di)[1];
+    const cap = rockClimb(profile.bike, di);
+    const need = BIKES.find((b) => rockClimb(b.id, di) >= hi - 0.05);
+    meta = `${trialZones(sel)} zones · rochers jusqu’à ${hi.toFixed(1).replace('.', ',')} m · chute = +15 s`;
+    if (cap < hi - 0.05) meta += ` <b class="warn">⚠ ${bikeById(profile.bike).name} trop faible : il faut ${need ? need.name : 'une meilleure moto'}</b>`;
+  } else if (mode === 'enduro') meta = `${km} km · grosses collines`;
+  else meta = `${km} km · pilotes niveau ${circuitRaceLevel(sel)}`;
+  $('circ-meta').innerHTML = meta;
+  $('circ-diffs').classList.remove('hidden');
+  $('circ-diffs').innerHTML = diffButtons((d) => diffUnlocked(mode, sel, d));
+  const r = rec(mode, sel, dsel);
   const got = r?.medal ?? 0;
   if (mode === 'course') {
     $('circ-goals').innerHTML = [3, 2, 1].map((m) => `<li class="${got >= m ? 'got' : ''}">${medalIco(m)} ${m === 3 ? '1re place' : m === 2 ? '2e place' : '3e place'}</li>`).join('');
     $('circ-best').textContent = r?.place ? `Meilleure place : ${r.place}${r.place === 1 ? 're' : 'e'}` : '';
   } else {
-    const p = parTimes(mode, sel);
+    const p = parTimes(mode, sel, di);
     $('circ-goals').innerHTML = [
       `<li class="${got >= 3 ? 'got' : ''}">${medalIco(3)} moins de ${fmtTime(p.gold)}</li>`,
       `<li class="${got >= 2 ? 'got' : ''}">${medalIco(2)} moins de ${fmtTime(p.silver)}</li>`,
@@ -250,7 +283,7 @@ function buildRegions(): void {
       settings.region = id as RegionId;
       saveSettings(settings);
       for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
-      game.newRun({ ...runOpts(), mode: 'cruising' });
+      game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
       game.state = 'title';
       updateBest();
       renderer.render(game, 0, true);
@@ -388,7 +421,7 @@ function home(): void {
     game.quit();
     finishRun(false);
   }
-  game.newRun({ ...runOpts(), mode: 'cruising' });
+  game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
   game.state = 'title';
   audio.setElectric(!!game.model.electric);
   refreshTitle();
@@ -409,10 +442,13 @@ function finishRun(display: boolean): void {
   if (!r) return;
   const mode = game.mode;
   let bestText = '';
+  let unlockMsg = '';
   if (isCircuitMode(mode) && r.circuit) {
-    const key = circuitKey(mode, game.region, r.circuit);
+    const key = circuitKey(mode, game.region, r.circuit, game.difficulty);
     const old = profile.circuits[key] ?? { medal: 0, done: false };
     if (r.reason === 'finish') {
+      const di = diffIndex(game.difficulty);
+      if (!old.done && di < 2) unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué sur ce circuit : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
       const nr: CircuitRecord = { ...old, done: true };
       if (r.time !== undefined && (old.time === undefined || r.time < old.time)) {
         r.newRecord = old.time !== undefined;
@@ -434,6 +470,11 @@ function finishRun(display: boolean): void {
     bestText = cur?.time !== undefined ? `Record : ${fmtTime(cur.time)}` : cur?.place ? `Meilleure place : ${cur.place}${cur.place === 1 ? 're' : 'e'}` : '';
   } else {
     const key = bestKey(mode, game.region);
+    const di = diffIndex(game.difficulty);
+    if (mode === 'cruising' && r.score >= CRUISE_UNLOCK && di === cruiseLevel() && di < 2) {
+      profile.cruiseUnlock[game.region] = di + 1;
+      unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
+    }
     if (r.score > (profile.best[key] ?? 0)) {
       r.newRecord = (profile.best[key] ?? 0) > 0;
       profile.best[key] = r.score;
@@ -455,8 +496,8 @@ function finishRun(display: boolean): void {
   $('over-best').textContent = bestText;
   $('over-record').classList.toggle('hidden', !r.newRecord);
   const om = $('over-medal');
-  om.classList.toggle('hidden', !r.medal);
-  om.innerHTML = r.medal ? `${medalIco(r.medal)} Médaille ${MEDAL_NAMES[r.medal]}` : '';
+  om.classList.toggle('hidden', !r.medal && !unlockMsg);
+  om.innerHTML = (r.medal ? `<span>${medalIco(r.medal)} Médaille ${MEDAL_NAMES[r.medal]}</span>` : '') + (unlockMsg ? `<span class="unlock">${unlockMsg}</span>` : '');
   const st = $('over-standings');
   st.classList.toggle('hidden', !r.standings);
   st.innerHTML = (r.standings ?? []).map((s) => `<li class="${s.you ? 'you' : ''}">${s.name}${s.you ? '' : `<small>Niv.${s.level}</small>`}</li>`).join('');
@@ -477,7 +518,7 @@ garage.onChange = () => {
   updateBest();
   if (game.state === 'title') {
     renderer.setPlayerModel(bikeById(profile.bike), outfit());
-    game.newRun({ ...runOpts(), mode: 'cruising' });
+    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
     game.state = 'title';
     audio.setElectric(!!game.model.electric);
   }
@@ -604,10 +645,10 @@ function frame(now: number): void {
     audio.over();
     finishRun(true);
   }
-  // engine: the demo bike behind the home screen is heard too (a bit quieter than in a run)
-  const demo = game.state === 'title';
-  const running = (game.state === 'playing' && (!game.usesEnergy || game.fuel > 0)) || demo;
-  audio.engine(game.bike.rpm, game.state === 'playing' || demo ? game.input.throttle * (demo ? 0.7 : 1) : 0, game.bike.speed, running);
+  audio.rain(game.state === 'playing' && game.weather === 2 ? 1 : game.state === 'playing' && game.weather === 1 ? 0.15 : 0);
+  // engine: heard only while riding (silent on the home screen and every menu)
+  const running = game.state === 'playing' && (!game.usesEnergy || game.fuel > 0);
+  audio.engine(game.bike.rpm, running ? game.input.throttle : 0, game.state === 'playing' ? game.bike.speed : 0, running);
   if (game.state !== 'paused') renderer.render(game, dt);
   if (game.state === 'playing') renderer.adapt((now - prevNow) / 1000);
   prevNow = now;

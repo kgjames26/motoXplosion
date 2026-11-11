@@ -37,6 +37,46 @@ const FOV = 32;
  * from the side (2.5D): track band, field and hills in depth, painted backdrop far away,
  * billboard trees, 3D bridges, a 3D bike with its rider, dust particles.
  */
+const RAIN_DROPS = 700;
+const GREY_SKY = new THREE.Color(0x8e97a3);
+
+/** Soft grey cloud deck (tileable horizontally), opaque at the top, fading downwards. */
+function cloudTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, 'rgba(150,158,170,1)');
+  grad.addColorStop(0.7, 'rgba(170,178,190,0.9)');
+  grad.addColorStop(1, 'rgba(190,198,208,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 1024, 256);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 160; i++) {
+    const x = rnd() * 1024;
+    const y = 40 + rnd() * 150;
+    const r = 30 + rnd() * 70;
+    const shade = 120 + Math.floor(rnd() * 70);
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    const a = 0.35 * (1 - y / 230);
+    rg.addColorStop(0, `rgba(${shade},${shade + 8},${shade + 18},${a})`);
+    rg.addColorStop(1, `rgba(${shade},${shade + 8},${shade + 18},0)`);
+    for (const dx of [-1024, 0, 1024]) {
+      g.save();
+      g.translate(dx, 0);
+      g.fillStyle = rg;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+      g.restore();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export class GLRenderer {
   renderer!: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -74,6 +114,14 @@ export class GLRenderer {
   debugZoom = 0;
   private dip = 0;
   private sunset = 0;
+  // ---- weather (0 sec → 1 nuageux → 2 pluie, smoothed)
+  private wet = 0;
+  private clouds: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private rain: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  private rainPos = new Float32Array(RAIN_DROPS * 6);
+  private lowerBase = new THREE.Color();
+  private fogBase = new THREE.Color();
+  private skyBase = new THREE.Color();
   camX = 0;
   camY = 0;
   private time = 0;
@@ -105,6 +153,26 @@ export class GLRenderer {
     this.lower.renderOrder = -2;
     this.lower.frustumCulled = false;
     this.scene.add(this.backdrop, this.lower);
+
+    // overcast sky: a soft grey cloud deck drawn over the painted sky
+    this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: cloudTexture(), transparent: true, opacity: 0, fog: false, depthWrite: false, toneMapped: false }));
+    this.clouds.renderOrder = -1;
+    this.clouds.frustumCulled = false;
+    this.clouds.visible = false;
+    this.scene.add(this.clouds);
+    // rain streaks around the camera
+    const rg = new THREE.BufferGeometry();
+    rg.setAttribute('position', new THREE.BufferAttribute(this.rainPos, 3));
+    for (let i = 0; i < RAIN_DROPS; i++) {
+      const x = (Math.random() - 0.5) * 60;
+      const y = (Math.random() - 0.5) * 30;
+      const z = -8 + Math.random() * 13;
+      this.rainPos.set([x, y, z, x, y, z], i * 6);
+    }
+    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xd4e2f2, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+    this.rain.frustumCulled = false;
+    this.rain.visible = false;
+    this.scene.add(this.rain);
 
     this.scene.add(this.bike3d.group);
     // soft blob shadow (always, under the real shadow)
@@ -313,7 +381,7 @@ export class GLRenderer {
     if (!this.bank) return;
     this.terrain?.dispose();
     this.bridgeBuilder?.dispose();
-    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : 'green', treeDensity: PRESETS[this.quality].trees });
+    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : 'green', treeDensity: PRESETS[this.quality].trees, wet: w.weather });
     this.bridgeBuilder = new BridgeBuilder(this.bank, this.terrain.waterMaterial);
   }
 
@@ -389,6 +457,13 @@ export class GLRenderer {
     this.sun.intensity = 2.2 + 0.4 * k;
     this.hemi.color.setRGB(0.84 + 0.14 * k, 0.92 - 0.2 * k, 1 - 0.3 * k);
     this.hemi.intensity = 1.35 - 0.35 * k;
+    // weather: dimmer, greyer light under clouds and rain
+    const wt = game.state === 'title' ? 0 : w.weather;
+    this.wet = snap ? wt : approach(this.wet, wt, 1.5, dt);
+    const ov = clamp(this.wet, 0, 1) * 0.6 + clamp(this.wet - 1, 0, 1) * 0.4;
+    this.sun.intensity *= 1 - ov * 0.62;
+    this.hemi.intensity *= 1 - ov * 0.15;
+    this.hemi.color.lerp(GREY_SKY, ov * 0.7);
     if (snap) {
       this.camX = tx;
       this.camY = ty;
@@ -411,6 +486,7 @@ export class GLRenderer {
     this.updateChunks(w);
     this.updateBridges(w);
     this.updateBackdrop(w, D, visH);
+    this.updateWeather(dt, D, visH);
     this.updatePickups(game);
 
     // ---- bike, lights, shadow (the rider is thrown off during a crash)
@@ -485,10 +561,10 @@ export class GLRenderer {
       this.backdropKey = key;
       this.backdrop.material.map = bd.tex;
       this.backdrop.material.needsUpdate = true;
-      (this.scene.background as THREE.Color).set(bd.sky);
+      this.skyBase.set(bd.sky);
       // band under the painting: halfway between its foot and the hills, so no seam shows
-      this.lower.material.color.set(new THREE.Color(bd.ground).lerp(new THREE.Color(key === 'alps-forest' ? 0x86b45a : bd.ground), 0.55));
-      (this.scene.fog as THREE.Fog).color.set(key === 'canyon' ? 0xe8b88c : key === 'desert' ? 0xf3d9b0 : new THREE.Color(bd.ground).lerp(new THREE.Color(0xbfdcf5), 0.45));
+      this.lowerBase.set(new THREE.Color(bd.ground).lerp(new THREE.Color(key === 'alps-forest' ? 0x86b45a : bd.ground), 0.55));
+      this.fogBase.set(key === 'canyon' ? 0xe8b88c : key === 'desert' ? 0xf3d9b0 : new THREE.Color(bd.ground).lerp(new THREE.Color(0xbfdcf5), 0.45));
     }
     // place a plane far behind, sized in screen terms: the painting's lower band (below its
     // horizon) covers the band just above the hills.
@@ -509,6 +585,59 @@ export class GLRenderer {
     // below the painting: its ground colour down to the bottom of the screen
     this.lower.scale.set(planeW, screenH, 1);
     this.lower.position.set(this.camX, bottomY - screenH / 2 + 0.5, -dist - 1);
+    // cloud deck over the upper part of the sky (in front of the painting)
+    const cd = dist - 10;
+    const cs = (D + cd) / D;
+    const cH = visH * cs;
+    const cTop = this.camera.position.y + (this.camY - this.camera.position.y) * cs + cH / 2;
+    this.clouds.scale.set(cH * aspect * 1.25, cH * 0.78, 1);
+    this.clouds.position.set(this.camX, cTop - cH * 0.39 + cH * 0.02, -cd);
+    this.clouds.material.map!.offset.x = this.camX * 0.004 + this.time * 0.004;
+  }
+
+  /** Overcast colours, cloud deck and rain streaks for the current weather level. */
+  private updateWeather(dt: number, D: number, visH: number): void {
+    const ov = clamp(this.wet, 0, 1) * 0.6 + clamp(this.wet - 1, 0, 1) * 0.4;
+    const rain = clamp(this.wet - 1, 0, 1);
+    const tint = (c: THREE.Color, base: THREE.Color, k: number) => c.copy(base).lerp(GREY_SKY, k).multiplyScalar(1 - ov * 0.25);
+    this.backdrop.material.color.setRGB(1 - ov * 0.42, 1 - ov * 0.38, 1 - ov * 0.3);
+    tint(this.lower.material.color, this.lowerBase, ov * 0.35);
+    tint((this.scene.fog as THREE.Fog).color, this.fogBase, ov * 0.6);
+    (this.scene.fog as THREE.Fog).far = 150 - ov * 55;
+    tint(this.scene.background as THREE.Color, this.skyBase, ov * 0.7);
+    this.clouds.visible = ov > 0.01;
+    this.clouds.material.opacity = Math.min(1, ov * 1.45);
+    this.clouds.material.color.setScalar(1 - rain * 0.3);
+    this.rain.visible = rain > 0.01;
+    if (!this.rain.visible) return;
+    this.rain.material.opacity = 0.55 * rain;
+    const aspect = this.W / this.H;
+    const bw = visH * aspect * 1.9 + 10;
+    const bh = visH * 1.9 + 6;
+    const vy = -17;
+    const vx = -3.5;
+    const len = 0.55;
+    const P = this.rainPos;
+    for (let i = 0; i < RAIN_DROPS; i++) {
+      const o = i * 6;
+      let x = P[o] + vx * dt;
+      let y = P[o + 1] + vy * dt;
+      const z = P[o + 2];
+      // keep drops in a box around the camera target
+      const rx = x - this.camX;
+      const ry = y - this.camY;
+      if (rx < -bw / 2) x += bw;
+      else if (rx > bw / 2) x -= bw;
+      if (ry < -bh / 2) y += bh;
+      else if (ry > bh / 2) y -= bh;
+      P[o] = x;
+      P[o + 1] = y;
+      P[o + 3] = x - vx * (len / 17);
+      P[o + 4] = y - vy * (len / 17);
+      P[o + 5] = z;
+    }
+    this.rain.geometry.attributes.position.needsUpdate = true;
+    void D;
   }
 
   /** Shared geometry/materials per pickup kind (never recreated → no GPU leak). */

@@ -26,10 +26,12 @@ export interface Profile {
   circuits: Record<string, CircuitRecord>;
   /** Last circuit picked per `mode:region`. */
   circuitSel: Record<string, number>;
+  /** Cruising: highest difficulty unlocked per world (0 facile, 1 moyen, 2 difficile). */
+  cruiseUnlock: Record<string, number>;
 }
 
 const KEY = 'mx.profile.v1';
-const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {} };
+const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {} };
 
 export function loadProfile(): Profile {
   try {
@@ -43,7 +45,11 @@ export function loadProfile(): Profile {
         if (old > (p.best[k] ?? 0)) p.best[k] = old;
       }
       if (!BIKES.some((b) => b.id === p.bike)) p.bike = 'explorer';
-      p.circuits = { ...p.circuits };
+      // v2.7: circuit records are kept per difficulty (older ones count as Facile)
+      const circ: Profile['circuits'] = {};
+      for (const [k, v] of Object.entries(p.circuits ?? {})) circ[k.split(':').length === 3 ? k + ':facile' : k] = v;
+      p.circuits = circ;
+      p.cruiseUnlock = { ...p.cruiseUnlock };
       p.outfits = [...p.outfits];
       p.owned = [...p.owned];
       p.circuitSel = { ...p.circuitSel };
@@ -53,7 +59,7 @@ export function loadProfile(): Profile {
   } catch {
     /* storage unavailable */
   }
-  return { ...DEFAULT, best: {}, owned: ['explorer'], outfits: ['moto'], circuits: {}, circuitSel: {} };
+  return { ...DEFAULT, best: {}, owned: ['explorer'], outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {} };
 }
 
 export function saveProfile(p: Profile): void {

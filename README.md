@@ -17,6 +17,35 @@ L'accueil tient sur un seul écran paysage : la carte **MODE** (Cruising, Trial,
 | **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (7 à 22 m de haut, de plus en plus raides, bosses et marches rocheuses sur les pentes), racines, troncs, gués ; essence et eau gérées, chrono | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
+### Difficultés et météo (tous les modes)
+Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a sa **météo** :
+
+| Difficulté | Météo | Effets |
+| --- | --- | --- |
+| Facile | ☀ Sec | conditions de base |
+| Moyen | ☁ Nuageux | ciel couvert, lumière plus terne, sol un peu humide (adhérence −5 à −10 %) |
+| Difficile | 🌧 Pluie | pluie qui tombe, bruit de pluie, sol sombre et mouillé, flaques de boue, beaucoup moins d'adhérence (terre −12 %, herbe −20 %, rochers −12 %, bois −18 % ; le sable, lui, se tasse) |
+
+- On débloque les difficultés une par une : sur chaque circuit, finir en Facile ouvre Moyen, finir en Moyen ouvre Difficile. En cruising, rouler 2 km dans une difficulté ouvre la suivante, monde par monde. Le choix se fait par des boutons à icône (soleil, nuage, pluie) sur l'écran des circuits ou, pour le cruising, au-dessus de JOUER.
+- Ce qui change en plus selon le mode : le cruising est un peu plus relevé (+6 % en Moyen, +12 % en Difficile), les collines d'enduro plus hautes (+8 % / +15 %), les rivaux de course plus forts. En trial, les rochers sont un peu moins hauts quand c'est mouillé, sinon les derniers circuits seraient impossibles.
+- Les gains sont multipliés par 1,25 en Moyen et 1,5 en Difficile ; les temps cibles des médailles sont un peu plus larges quand le sol est mouillé. Les records et médailles sont gardés par difficulté.
+
+### Rochers de trial et choix de la moto
+- **300 rochers** à franchir (granit dans les Alpes, rochers moussus en forêt, grès rouge au canyon, roche ocre au désert ; formes bloc, dôme et dalle ; **0,5 à 2,5 m**). Ils grandissent avec les circuits : 0,6 m au plus sur le circuit 1, jusqu'à 2,5 m sur le circuit 25, et la dernière zone garde toujours le plus gros.
+- La face à monter devient plus raide quand le rocher grandit (40° pour les petits, 58° à partir de 1,2 m). C'est la physique qui décide : couple, poids et adhérence des pneus. **Une moto trop faible glisse et ne passe pas.** Hauteur maximale mesurée (sec / nuageux / pluie) :
+
+| Moto | Sec | Nuageux | Pluie |
+| --- | --- | --- | --- |
+| Explorer 98 | 1,3 m | 1,3 m | 1,15 m |
+| Sprint 125 | 1,5 m | 1,35 m | 1,3 m |
+| Trailblazer 250 | 2,0 m | 1,9 m | 1,5 m |
+| Fury 450 | 2,15 m | 2,15 m | 2,0 m |
+| Dakar 690 | 2,15 m | 2,0 m | 2,0 m |
+| Volt X | 2,5 m | 2,35 m | 2,15 m |
+| Ridge T300 (trial) | 2,5 m | 2,35 m | 2,35 m |
+
+- L'écran des circuits indique la hauteur des rochers et prévient si la moto est trop faible (« il faut une Fury 450 »). En trial, après trois essais ratés sur un rocher trop haut, un message le rappelle aussi. Le garage affiche une barre « Rochers ».
+
 ### Circuits et médailles
 - Chaque circuit est toujours le même (graine fixe par mode, monde et numéro) et devient plus dur avec son numéro : obstacles plus gros en trial, collines plus hautes en enduro, rivaux plus forts et piste plus longue en course.
 - Écran de choix : grille de **5 × 5** circuits (numéro, médaille, meilleur temps ou meilleure place, cadenas). Terminer un circuit débloque le suivant ; le panneau de droite donne les objectifs.
@@ -123,12 +152,13 @@ Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des su
 
 ## Son
 
+- Le moteur ne s'entend **qu'en jeu** : il est coupé sur l'accueil et dans tous les menus.
+- Sous la pluie, un bruit de pluie (bruit filtré) accompagne la course ; plus léger par temps nuageux.
 - **Pause** : la musique et tous les sons s'arrêtent, ils reprennent au retour en jeu.
-- **Accueil** : on entend le moteur de la moto de démonstration derrière la musique.
 - **Musiques** : `public/audio/music-menu.mp3` (accueil, pause, fin de partie) et `music-game.mp3` (en course, en boucle). La boucle saute le silence du début et de la fin et enchaîne avec un fondu de 4 s, sans coupure. Les musiques passent de l'une à l'autre en fondu.
 - **Moteur** : synthétisé en temps réel (AudioWorklet, `src/audio/engineWorklet.ts`), modèle d'un monocylindre 4 temps de cross : une explosion tous les deux tours, avec des irrégularités aléatoires, excitant deux résonateurs (échappement et carter). S'y ajoutent le claquement de combustion sous charge et des pétarades à la décélération, puis un filtre passe-bas qui donne un son un peu sourd.
 
-## Catalogue d'assets (1 097 éléments)
+## Catalogue d'assets (1 397 éléments)
 
 Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en familles paramétrées : chaque élément est une variante distincte (espèce, taille, saison, couleur, forme), dessinée au premier usage puis mise en cache.
 
@@ -145,6 +175,7 @@ Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en fa
 | v2.6 — Désert | 55 | caravanes de dromadaires, mares d'oasis, étals de marché, poteries, tapis, feux de camp, fennecs, piliers de roche, acacias, fort en ruine, obélisques, camions de rallye… |
 | v2.6 — Trial | 80 | 64 **gros obstacles** physiques (0,4 à 1,3 m) avec rampes de terre tassée + arches de chrono, banderoles, fanions, spectateurs, mécaniciens |
 | v2.6 — Enduro | 70 | grosses racines, marches en rondins et en pierre (physiques), drapeaux et panneaux de colline, rochers de crête, arbres penchés, arches d'arrivée, photographes, quad de secours… |
+| v2.7 — Rochers de trial | 300 | 4 roches × 3 formes × 25 hauteurs de 0,5 à 2,5 m, physiques (face raide, dessus, descente plus douce), fissures, strates, lichens, mousse |
 | Course | 111 | arche d'arrivée, grille de départ, banderoles de sponsors inventés, tribunes, tentes et camions d'équipe, murs de pneus, foule, tours TV… |
 
 Le générateur tire une « palette » d'une vingtaine d'éléments tous les 100 à 150 m : chaque portion de route a son caractère et le décor ne se répète jamais à l'identique.
@@ -168,6 +199,7 @@ src/
   modes.ts                modes de jeu et leurs constantes
   circuits.ts             25 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
   outfits.ts              tenues du pilote vendues au garage
+  weather.ts              météo par difficulté : adhérence par surface, icônes
   bikes.ts                les 7 motos : style, couleurs, caractéristiques, prix
   profile.ts              progression sauvegardée : pièces, motos, tenues, records, circuits et médailles
   ai.ts                   pilotes IA de la course (niveaux 1-10)

@@ -1416,10 +1416,8 @@ button {
   right: calc(var(--u) * 3 + var(--safe-r));
   display: none;
 }
-#hud[data-mode='course'] .hud-level,
-#hud[data-mode='trial'] .hud-level,
-#hud[data-mode='enduro'] .hud-level {
-  display: block;
+#hud .hud-level {
+  display: flex;
 }
 .rider-tags {
   position: absolute;
@@ -2107,7 +2105,7 @@ button {
 }
 .hud-mult {
   position: absolute;
-  top: calc(var(--u) * 15);
+  top: calc(var(--u) * 20.5);
   right: calc(var(--u) * 3 + var(--safe-r));
   display: none;
   padding: calc(var(--u) * 0.5) calc(var(--u) * 1.8);
@@ -2121,4 +2119,105 @@ button {
 }
 #hud[data-mode='cruising'] .hud-mult {
   display: block;
+}
+
+/* ------------------------------------------------------------------ v2.7 weather */
+
+.wx-ico {
+  width: 1.2em;
+  height: 1.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.wx-ico.sun {
+  color: #ffd23f;
+}
+.wx-ico.cloud {
+  color: #d6dbe4;
+}
+.wx-ico.rain {
+  color: #7fc4ff;
+}
+.diff {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.6);
+}
+.diff small {
+  font-size: 0.75em;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.diff.selected small {
+  opacity: 1;
+}
+.diff:disabled {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.diff.selected .wx-ico.sun {
+  color: #e08a00;
+}
+.diff.selected .wx-ico.cloud {
+  color: #6a7280;
+}
+.diff.selected .wx-ico.rain {
+  color: #1f6fd6;
+}
+.circ-info .diffs {
+  flex-wrap: wrap;
+}
+.cruise-diffs {
+  justify-content: center;
+  margin-bottom: calc(var(--u) * 0.8);
+}
+.circ-tile .pips {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+.pip {
+  width: calc(var(--u) * 1.2);
+  height: calc(var(--u) * 1.2);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.pip.wx0.on {
+  background: #ffd23f;
+}
+.pip.wx1.on {
+  background: #c8ced8;
+}
+.pip.wx2.on {
+  background: #4fa8ff;
+}
+.circ-meta .warn {
+  display: block;
+  margin-top: calc(var(--u) * 0.5);
+  color: #ff8a6a;
+}
+.over-medal {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.over-medal span {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1);
+}
+.over-medal .unlock {
+  font-size: calc(var(--u) * 2.6);
+  color: #7dff7a;
+}
+.hud-level {
+  align-items: center;
+  gap: calc(var(--u) * 0.6);
+}
+
+.circ-tile.locked .pips {
+  visibility: hidden;
 }

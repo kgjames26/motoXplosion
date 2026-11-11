@@ -3,6 +3,8 @@ import { BikeModel, BIKES } from './bikes';
 import { clamp, wrapAngle } from './core/math';
 import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
+import { rockClimb } from './bikes';
+import { diffIndex, Weather, weatherFor } from './weather';
 import { Bike, BikeInput } from './physics/bike';
 import { Particles } from './render/particles';
 import type { RegionId } from './world/regions';
@@ -43,6 +45,7 @@ export interface GameEvents {
   countdown?: number;
   finish?: number;
   stunt?: boolean;
+  weak?: boolean;
 }
 
 /** End-of-run summary (coins earned and why). */
@@ -94,6 +97,7 @@ export class Game {
   difficulty: Difficulty = 'normal';
   raceLevel = 1;
   circuit = 0;
+  weather: Weather = 0;
   /** Circuit chrono (s), started at GO, stopped at the finish. */
   clock = 0;
   /** Trial: seconds of fall penalties. */
@@ -127,6 +131,8 @@ export class Game {
   inSection = false;
   sectionsCleared = 0;
   private sectionStartX = 0;
+  private zoneRetries = 0;
+  private weakWarned = false;
   // enduro
   checkpoints = 0;
   // course
@@ -167,7 +173,10 @@ export class Game {
     const cm = this.mode as CircuitMode;
     this.raceLevel = this.circuit ? circuitRaceLevel(this.circuit) : 1;
     const seed = this.circuit ? circuitSeed(cm, this.region, this.circuit) : (Math.random() * 2 ** 31) | 0;
-    this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit);
+    this.weather = weatherFor(this.difficulty);
+    this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.weather);
+    this.zoneRetries = 0;
+    this.weakWarned = false;
     this.world.ensure(220);
     this.bike = new Bike(this.model.spec);
     this.bike.reset(this.world, this.startX);
@@ -360,6 +369,29 @@ export class Game {
     return clamp((this.bike.x - this.startX) / this.raceLen, 0, 1);
   }
 
+  /**
+   * Trial: after a few failed tries in a zone, tell the player when the rock ahead is higher
+   * than what this bike can climb (a better bike from the garage is needed).
+   */
+  private zoneRetry(): void {
+    if (this.mode !== 'trial' || !this.inSection) return;
+    this.zoneRetries++;
+    if (this.zoneRetries < 3 || this.weakWarned) return;
+    const cap = rockClimb(this.model.id, this.weather);
+    let tallest = 0;
+    for (const p of this.world.props) {
+      if (p.depth !== 0 || !p.asset?.startsWith('tr.rock.') || Math.abs(p.x - this.bike.x) > 8) continue;
+      tallest = Math.max(tallest, Number(p.asset.split('.')[4]));
+    }
+    const h = 0.5 + (2 * tallest) / 24;
+    if (tallest && h > cap + 0.05) {
+      this.weakWarned = true;
+      this.popup(this.bike.x + 1, this.bike.y + 3, 'ROCHER TROP HAUT POUR CETTE MOTO !', '#ff9a5a');
+      this.popup(this.bike.x + 1, this.bike.y + 2.2, 'IL FAUT UNE MEILLEURE MOTO (GARAGE)', '#ffd23f');
+      this.events.weak = true;
+    }
+  }
+
   /** Circuits: reached the finish line (player only). */
   private checkFinish(): void {
     if (this.finished || this.bike.x < this.world.finishX) return;
@@ -394,6 +426,8 @@ export class Game {
         this.section = m.n!;
         this.inSection = true;
         this.sectionStartX = m.x0 - 3;
+        this.zoneRetries = 0;
+        this.weakWarned = false;
         this.popup(bike.x + 3, bike.y + 3.4, `ZONE ${this.section}/${this.zones}`, '#ffffff');
         this.events.section = 'start';
       }
@@ -504,20 +538,21 @@ export class Game {
     let medal: Medal | undefined;
     const g = circuitGrade(this.circuit);
     const done = reason === 'finish';
+    const dm = [1, 1.25, 1.5][diffIndex(this.difficulty)];
     switch (this.mode) {
       case 'cruising':
         score = Math.round(this.distance);
         scoreLabel = `${score.toLocaleString('fr-FR')} m`;
-        lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins) });
+        lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins * dm) });
         break;
       case 'enduro':
       case 'trial':
         if (done) {
           time = this.chrono;
-          medal = medalForTime(this.mode, this.circuit, time);
+          medal = medalForTime(this.mode, this.circuit, time, diffIndex(this.difficulty));
           score = Math.round(time * 10);
           scoreLabel = fmtClock(time) + (this.falls ? ` · ${this.falls} chute${this.falls > 1 ? 's' : ''}` : '');
-          lines.push({ label: 'Circuit terminé', coins: Math.round((this.mode === 'trial' ? 25 : 35) + g * 40) });
+          lines.push({ label: 'Circuit terminé', coins: Math.round(((this.mode === 'trial' ? 25 : 35) + g * 40) * dm) });
         } else {
           scoreLabel = 'Abandon';
           if (this.mode === 'enduro') lines.push({ label: 'Distance', coins: Math.floor(this.distance / 40) });
@@ -530,7 +565,7 @@ export class Game {
           medal = medalForPlace(place);
           score = 9 - place;
           scoreLabel = `${place}e / 8`;
-          const mult = (1 + g * 0.6) * (this.difficulty === 'facile' ? 0.8 : this.difficulty === 'difficile' ? 1.3 : 1);
+          const mult = (1 + g * 0.6) * dm;
           lines.push({ label: `Prix de la ${place}e place`, coins: Math.round(PRIZES[place - 1] * mult) });
           // final standings: finishers in order, then the others by distance
           const rest = this.opponents.filter((o) => !o.finished).sort((a, b) => b.bike.x - a.bike.x);
@@ -634,7 +669,10 @@ export class Game {
       this.stuckTimer = 0;
       if (this.usesEnergy) this.stamina -= 4;
       // in trial you retry the obstacle from a bit further back (no skipping)
-      if (trial) this.respawn(bike.x - 3);
+      if (trial) {
+        this.zoneRetry();
+        this.respawn(bike.x - 3);
+      }
       else this.respawn(bike.x + 6);
       this.popup(bike.x, bike.y + 2, 'HOP !', '#ffffff');
     }
@@ -651,6 +689,7 @@ export class Game {
     this.landingDust(1);
     this.falls++;
     if (this.mode === 'trial') {
+      this.zoneRetry();
       this.penalty += TRIAL_PENALTY;
       this.popup(hx, hy + 1.5, `CHUTE  +${TRIAL_PENALTY} s`, '#ff6b5a');
     } else this.popup(hx, hy + 1.5, 'CHUTE !', '#ff6b5a');
@@ -733,7 +772,8 @@ export class Game {
     const s = SURFACES[rw.surface];
     const slip = Math.abs(rw.slip);
     const sp = Math.abs(b.forwardSpeed);
-    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate;
+    // wet weather: little dust, more mud clods
+    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.65, 0.35][this.weather];
     while (this.dustAcc > 1) {
       this.dustAcc -= 1;
       const water = rw.surface === Surface.Water;
@@ -751,7 +791,7 @@ export class Game {
         g: s.dust[1] + (Math.random() - 0.5) * 20,
         b: s.dust[2] + (Math.random() - 0.5) * 20,
       });
-      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < 0.35) {
+      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather === 2 ? 0.8 : 0.35)) {
         this.particles.spawn({
           kind: 'clod',
           x: rw.x - rw.radius,

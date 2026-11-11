@@ -30,6 +30,8 @@ export interface TerrainStyle {
   /** Ground set: green (Alpes, Forêt), canyon (red rock), desert (sand dunes). */
   kind: 'green' | 'canyon' | 'desert';
   treeDensity: number; // quality multiplier
+  /** Weather: 0 dry, 1 damp, 2 wet (darker ground). */
+  wet?: number;
 }
 
 /** Height of the field behind the track at (x, z). */
@@ -140,13 +142,18 @@ export class TerrainBuilder {
     hillKind = style.kind;
     const lambert = (map: THREE.Texture, color = 0xffffff) => new THREE.MeshLambertMaterial({ map, vertexColors: true, color });
     this.mats = {
-      track: lambert(bank.groundTex(desert ? 'sand' : 'dirt', desert ? 2.6 : 3.2), desert ? 0xf4dcc0 : warm ? 0xffe2c4 : 0xffffff),
+      // canyon: a darker, cooler packed-earth track so it stands out from the red rock around it
+      track: lambert(bank.groundTex(desert ? 'sand' : 'dirt', desert ? 2.6 : 3.2), desert ? 0xf4dcc0 : warm ? 0x8f8580 : 0xffffff),
       ground: lambert(bank.groundTex(desert ? 'sand' : warm ? 'rockWarm' : 'grass', desert ? 4 : warm ? 7 : 3.4)),
       rock: lambert(bank.groundTex(warm ? 'rockWarm' : 'rock', 6)),
       hills: lambert(bank.groundTex(desert ? 'sand' : warm ? 'rockWarm' : 'grass', desert ? 9 : warm ? 14 : 9)),
       water: new THREE.MeshLambertMaterial({ color: 0x3aa6e0, transparent: true, opacity: 0.88 }),
-      lip: lambert(bank.groundTex('dirt', 3.2), 0x8a6a52),
+      lip: lambert(bank.groundTex('dirt', 3.2), style.kind === 'canyon' ? 0x4e3a30 : 0x8a6a52),
     };
+    // damp / wet ground looks darker
+    const wk = [1, 0.9, 0.74][style.wet ?? 0];
+    if (wk < 1)
+      for (const m of [this.mats.track, this.mats.ground, this.mats.hills, this.mats.lip, this.mats.rock]) (m as THREE.MeshLambertMaterial).color.multiplyScalar(wk);
   }
 
   dispose(): void {
@@ -162,7 +169,7 @@ export class TerrainBuilder {
   private billboardMat(s: Sprite): THREE.Material {
     let m = this.spriteMat.get(s);
     if (!m) {
-      m = new THREE.MeshBasicMaterial({ map: this.bank.spriteTex(s), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+      m = new THREE.MeshBasicMaterial({ map: this.bank.spriteTex(s), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, color: new THREE.Color().setScalar([1, 0.86, 0.72][this.style.wet ?? 0]) });
       this.spriteMat.set(s, m);
     }
     return m;

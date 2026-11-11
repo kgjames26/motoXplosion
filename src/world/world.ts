@@ -2,6 +2,7 @@ import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
 import type { ModeId } from '../modes';
+import { Weather, weatherGrip } from '../weather';
 import {
   Biome,
   Bridge,
@@ -59,9 +60,16 @@ export class World {
     readonly level = 1,
     /** Circuit number (1..25) for trial / enduro / course, 0 = endless. */
     readonly circuit = 0,
+    /** 0 sec, 1 nuageux, 2 pluie (also the difficulty index). */
+    readonly weather: Weather = 0,
   ) {
     this.region = REGIONS[regionId];
-    this.gen = new Generator(this, seed, this.region, mode, level, circuit);
+    this.gen = new Generator(this, seed, this.region, mode, level, circuit, weather);
+  }
+
+  /** Grip multiplier of the weather for a surface. */
+  gripK(s: Surface): number {
+    return this.weather ? weatherGrip(this.weather, s) : 1;
   }
 
   /** True when x is over a bridge deck (no ground band drawn there). */

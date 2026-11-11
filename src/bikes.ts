@@ -135,6 +135,23 @@ export function bikeById(id: string): BikeModel {
 }
 
 /** Ratings 1..10 shown in the garage. */
+/**
+ * Highest trial rock (m) each bike climbs, measured with the physics on the v2.7 rocks
+ * (sec, nuageux, pluie). Torque, weight and tyre grip decide: the trial bike goes highest.
+ */
+export const ROCK_CLIMB: Record<string, [number, number, number]> = {
+  explorer: [1.3, 1.3, 1.15],
+  sprint: [1.5, 1.35, 1.3],
+  ridge: [2.5, 2.35, 2.35],
+  trail: [2.0, 1.9, 1.5],
+  fury: [2.15, 2.15, 2.0],
+  volt: [2.5, 2.35, 2.15],
+  dakar: [2.15, 2.0, 2.0],
+};
+export function rockClimb(id: string, weather = 0): number {
+  return (ROCK_CLIMB[id] ?? ROCK_CLIMB.explorer)[weather];
+}
+
 export function ratings(m: BikeModel): { label: string; value: number }[] {
   const s = m.spec;
   const r = (v: number, lo: number, hi: number) => Math.max(1, Math.min(10, Math.round(1 + ((v - lo) / (hi - lo)) * 9)));
@@ -145,5 +162,6 @@ export function ratings(m: BikeModel): { label: string; value: number }[] {
     { label: 'Agilité', value: r(s.air * 2 - s.mass / 100, 1.8 - 1.92, 2.8 - 1.38) },
     { label: 'Adhérence', value: r(s.grip, 1, 1.25) },
     { label: 'Autonomie', value: r(1 / s.consumption, 1 / 1.15, 1 / 0.6) },
+    { label: 'Rochers', value: r(rockClimb(m.id), 1.3, 2.5) },
   ];
 }

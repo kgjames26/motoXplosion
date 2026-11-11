@@ -95,6 +95,8 @@ export class Audio {
   private engineGain!: GainNode;
   private fallback: { osc: OscillatorNode; osc2: OscillatorNode } | null = null;
   private windGain!: GainNode;
+  private rainGain: GainNode | null = null;
+  private rainLevel = 0;
   private noiseBuf!: AudioBuffer;
   private tracks: Partial<Record<Track, MusicTrack>> = {};
   private current: Track | null = null;
@@ -153,6 +155,20 @@ export class Audio {
     this.windGain.gain.value = 0;
     wind.connect(wf).connect(this.windGain).connect(this.sfxBus);
     wind.start();
+
+    // rain: high hiss + low rumble from the same noise, level set by the weather
+    const rain = ctx.createBufferSource();
+    rain.buffer = this.noiseBuf;
+    rain.loop = true;
+    rain.playbackRate.value = 0.83;
+    const rf = ctx.createBiquadFilter();
+    rf.type = 'bandpass';
+    rf.frequency.value = 2600;
+    rf.Q.value = 0.35;
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = this.rainLevel;
+    rain.connect(rf).connect(this.rainGain).connect(this.sfxBus);
+    rain.start();
 
     this.tracks.menu = new MusicTrack(ctx, '/audio/music-menu.mp3');
     this.tracks.game = new MusicTrack(ctx, '/audio/music-game.mp3');
@@ -261,6 +277,12 @@ export class Audio {
     this.suspended = false;
     void this.ctx.resume();
     if (this.current) this.tracks[this.current]?.play();
+  }
+
+  /** Rain loop level (0 = dry, ~0.35 = light, 1 = heavy), faded. */
+  rain(level: number): void {
+    this.rainLevel = level * 0.16;
+    if (this.ctx && this.rainGain) this.rainGain.gain.setTargetAtTime(this.rainLevel, this.ctx.currentTime, 0.6);
   }
 
   engine(rpm: number, throttle: number, speed: number, running: boolean): void {

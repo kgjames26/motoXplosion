@@ -1,4 +1,4 @@
-import type { ModeId } from './modes';
+import type { Difficulty, ModeId } from './modes';
 import type { RegionId } from './world/regions';
 
 /**
@@ -47,6 +47,15 @@ export function circuitRaceLevel(n: number): number {
   return 1 + Math.round(circuitGrade(n) * 9);
 }
 
+/**
+ * Trial: range of rock heights (m) on a circuit: 0.6 m max on circuit 1, 2.5 m on circuit 25.
+ * Wetter weathers (moyen, difficile) keep them a bit smaller since the grip drops.
+ */
+export function trialRockRange(n: number, diff = 0): [number, number] {
+  const hi = Math.min(2.5, (0.6 + circuitGrade(n) * 1.9) * [1, 0.94, 0.92][diff]);
+  return [Math.max(0.5, hi - 0.7), Math.max(0.5, hi)];
+}
+
 export type Medal = 0 | 1 | 2 | 3; // none, bronze, silver, gold
 export const MEDAL_NAMES = ['', 'Bronze', 'Argent', 'Or'];
 export const MEDAL_COLORS = ['', '#d98a4a', '#d6dbe4', '#f6c23a'];
@@ -55,17 +64,17 @@ export const MEDAL_COLORS = ['', '#d98a4a', '#d6dbe4', '#f6c23a'];
  * Time limits for silver and gold (s), from the circuit size: gold needs a clean, quick ride,
  * silver a steady one, bronze is any finish.
  */
-export function parTimes(mode: CircuitMode, n: number): { gold: number; silver: number } {
+export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number; silver: number } {
   const g = circuitGrade(n);
   let gold: number;
   if (mode === 'trial') gold = trialZones(n) * (19 + g * 8) + 10;
   else gold = circuitLength(mode, n) / (mode === 'enduro' ? 21 - g * 1.5 : 22);
-  gold = Math.round(gold);
+  gold = Math.round(gold * [1, 1.06, 1.14][diff]);
   return { gold, silver: Math.round(gold * 1.3) };
 }
 
-export function medalForTime(mode: CircuitMode, n: number, t: number): Medal {
-  const p = parTimes(mode, n);
+export function medalForTime(mode: CircuitMode, n: number, t: number, diff = 0): Medal {
+  const p = parTimes(mode, n, diff);
   return t <= p.gold ? 3 : t <= p.silver ? 2 : 1;
 }
 
@@ -85,9 +94,12 @@ export interface CircuitRecord {
   done: boolean;
 }
 
-export function circuitKey(mode: CircuitMode, region: RegionId, n: number): string {
-  return `${mode}:${region}:${n}`;
+export function circuitKey(mode: CircuitMode, region: RegionId, n: number, d: Difficulty): string {
+  return `${mode}:${region}:${n}:${d}`;
 }
+
+/** Cruising: distance (m) to ride in a difficulty to unlock the next one. */
+export const CRUISE_UNLOCK = 2000;
 
 export function fmtTime(s: number): string {
   const m = Math.floor(s / 60);

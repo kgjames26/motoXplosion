@@ -4,7 +4,8 @@ import type { World } from './world';
 import { BridgeKind, RegionDef } from './regions';
 import { AssetDef, AssetGroup, assetsFor, Slot } from '../catalog';
 import { ENDURO_CP, ModeId, raceLength } from '../modes';
-import { circuitGrade, circuitLength, isCircuitMode, trialZones } from '../circuits';
+import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
+import { rockKindFor } from '../catalog/rocks';
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -209,6 +210,8 @@ export class Generator {
     private mode: ModeId = 'cruising',
     level = 1,
     private circuit = 0,
+    /** Difficulty index = weather (0 sec, 1 nuageux, 2 pluie). */
+    private diff = 0,
   ) {
     this.rng = new Rng(seed);
     this.biome = region.start;
@@ -217,7 +220,7 @@ export class Generator {
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
     this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
-    this.hard = mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.35 : 1;
+    this.hard = mode === 'cruising' ? 1.05 * [1, 1.06, 1.12][diff] : mode === 'course' ? 1.05 * 1.35 : 1;
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     // A calm start straight.
@@ -340,12 +343,27 @@ export class Generator {
       },
       props: 0.5,
     });
-    const obstacles = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ);
+    const all = assetsFor(['trial'], 'obstacle');
+    const obstacles = all.filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ && !a.obstacle!.rock);
     const count = circ ? 3 + Math.round(this.grade * 2 + pos) : 3 + Math.min(4, Math.floor(n / 2));
+    // circuits: mostly rocks of the world's stone, bigger with the circuit number; the last
+    // zone always holds the biggest one
+    const kind = rockKindFor(this.region.id);
+    const rocks = all.filter((a) => a.obstacle!.rock && a.id.startsWith(`tr.rock.${kind}.`));
+    const [lo, hi] = circ ? trialRockRange(this.circuit, this.diff) : [0, 0];
+    const pickRock = (h: number) => {
+      let best = rocks[0];
+      for (const a of rocks) if (a.obstacle!.h <= h + 1e-6 && (a.obstacle!.h > best.obstacle!.h || (a.obstacle!.h === best.obstacle!.h && r.chance(0.5)))) best = a;
+      return best;
+    };
     for (let k = 0; k < count; k++) {
-      const a = r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)));
+      let a: AssetDef;
+      if (circ && (r.chance(0.7) || (n === this.trialZones && k === 0))) {
+        const h = n === this.trialZones && k === 0 ? hi : lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
+        a = pickRock(h);
+      } else a = r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)));
       this.queue.push(this.obstacleSeg(a));
-      this.queue.push(this.flat(r.range(3, 5.5), Surface.Dirt));
+      this.queue.push(this.flat(r.range(3.5, 6), Surface.Dirt));
     }
     this.queue.push({
       len: 8,
@@ -452,6 +470,13 @@ export class Generator {
   }
 
   private baseSurface(x: number): Surface {
+    const s = this.dryBaseSurface(x);
+    // rain: puddles of mud on the earth and the grass
+    if (this.diff === 2 && (s === Surface.Dirt || s === Surface.Grass) && noise1(x / 17, 33) > 0.3) return Surface.Mud;
+    return s;
+  }
+
+  private dryBaseSurface(x: number): Surface {
     const def = BIOMES[this.biome];
     const n = noise1(x / 23, 77);
     switch (this.biome) {
@@ -826,7 +851,7 @@ export class Generator {
         // enduro: a big hill to climb then ride down without falling, bumps and steps on the
         // faces; higher and steeper with the circuit number
         const g = this.circuit ? this.grade : d * 0.5;
-        const H = r.range(7, 10) + g * 12;
+        const H = (r.range(7, 10) + g * 12) * [1, 1.08, 1.15][this.diff];
         const sUp = r.range(0.2, 0.25) + g * 0.12; // mean slope (peak ≈ 1.5×)
         const sDn = r.range(0.22, 0.27) + g * 0.12;
         const up = H / sUp;
