@@ -11,6 +11,10 @@ sept motos à gagner au garage.
 - En revenant d'une partie au menu, l'affiche réapparaît **1,5 s** sans boutons, avec un fondu au noir à l'entrée et à la sortie.
 - **Accueil** : à gauche, trois boutons néon empilés — **MODE**, **MONDE** (avec leur icône) et, un peu plus bas, **Garage** (icône de garage avec clé). Un toucher sur Mode ou Monde ouvre le choix en cartes ; en bas à droite le gros bouton **JOUER** ; au centre la phrase du mode et, en cruising, les boutons de difficulté/météo. Le pseudo s'affiche à côté du porte-monnaie.
 
+## Icône du jeu
+
+- Quand on installe le jeu (écran d'accueil du téléphone), l'icône reprend le pilote orange et blanc de l'affiche, détouré, en plein saut devant un grand **X** orange et turquoise (celui du logo), sur un coucher de soleil avec des rayons, des montagnes et une piste en terre. Une version « maskable » (pilote un peu plus petit) remplit les icônes rondes d'Android sans rien couper ; icône Apple 180 px et favicon 48 px. Sources en 1024 px dans `art/source/icon-1024.png` et `icon-maskable-1024.png`.
+
 ## Multijoueur (2 à 4 pilotes, gratuit)
 
 - Dans le choix du mode, la carte **Multijoueur** ouvre l'écran des salons : **Créer un salon** (un code de 5 lettres s'affiche) ou **Rejoindre** avec ce code (on peut aussi ouvrir le jeu avec `?salon=CODE`).

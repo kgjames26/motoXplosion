@@ -4,12 +4,13 @@
  * - Hashed build assets (/assets/*) and icons: cache first (immutable).
  * Bump CACHE whenever files in public/assets change (their names are not hashed).
  */
-const CACHE = 'motoxplosion-v15';
+const CACHE = 'motoxplosion-v16';
 const SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/icons/icon.svg',
+  '/icons/favicon-48.png',
+  '/icons/apple-touch-icon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/res/backdrops.json',
