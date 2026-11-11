@@ -434,7 +434,9 @@ export class Generator {
     };
     const pick = (h: number) => (r.chance(city ? 0.12 : 0.45) || !tech.length ? pickRock(h) : pickTech(h));
     const height = () => lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
-    const gap = () => r.range(1.1, 2.2) + (1 - g) * 1.5;
+    // more run-up when the ground is slippery (rain, snow): the bike needs room to get going
+    const wet = [1, 1.25, 1.5][this.diff];
+    const gap = () => (r.range(1.1, 2.2) + (1 - g) * 1.5) * wet;
     let left = count;
     let first = true;
     while (left > 0) {
@@ -444,13 +446,13 @@ export class Generator {
       if (p === 'pair' && left >= 2) {
         const h2 = height();
         // enough run-up between the two for the second one (and for a restart after a fall)
-        this.queue.push(this.obstacleSeg(pick(h)), this.flat(Math.max(gap() * 0.8, 1.2 + h2 * 1.4), Surface.Dirt), this.obstacleSeg(pick(h2)));
+        this.queue.push(this.obstacleSeg(pick(h)), this.flat(Math.max(gap() * 0.8, (1.2 + h2 * 1.4) * wet), Surface.Dirt), this.obstacleSeg(pick(h2)));
         left -= 2;
       } else if (p === 'stair' && left >= 2) {
         const k = Math.min(left, 3);
         for (let j = 0; j < k; j++) {
           const hj = lo + ((h - lo) * (j + 1)) / k;
-          this.queue.push(this.obstacleSeg(pick(hj)), this.flat(Math.max(gap() * 0.7, 1 + hj * 1.3), Surface.Dirt));
+          this.queue.push(this.obstacleSeg(pick(hj)), this.flat(Math.max(gap() * 0.7, (1 + hj * 1.3) * wet), Surface.Dirt));
         }
         left -= k;
         continue;
@@ -474,7 +476,7 @@ export class Generator {
         left--;
       }
       // a real run-up before whatever comes next (also where you restart after a fall)
-      this.queue.push(this.flat(Math.max(gap() + 1, 3.2 + hi * 0.8), Surface.Dirt));
+      this.queue.push(this.flat(Math.max(gap() + 1, (3.2 + hi * 0.8) * wet), Surface.Dirt));
     }
     void rocks;
   }
@@ -495,7 +497,7 @@ export class Generator {
       const list = mods.filter((a) => boxKinds.includes(a.obstacle!.module!) && near(a.obstacle!.h, h) && a.obstacle!.w >= minW && a.obstacle!.w <= maxW);
       return list.length ? r.pick(list) : mods.find((a) => a.obstacle!.module === 'caisse' && near(a.obstacle!.h, h))!;
     };
-    const maxStep = Math.min(0.5, 0.3 + g * 0.25) * (this.diff ? 0.92 : 1) + 1e-6;
+    const maxStep = Math.min(0.5, 0.3 + g * 0.25) * [1, 0.92, 0.8][this.diff] + 1e-6;
     const top = Math.max(0.45, Math.min(maxH, small ? maxH : 0.6 + g * 0.8));
     // reachable levels: one block, or a block of at most one step stacked on a 0.6 / 0.9 base
     const steps = [0.3, 0.45, 0.6].filter((t) => t <= maxStep);
@@ -511,7 +513,7 @@ export class Generator {
       const start = Math.max(0, x - prevRun * 0.9);
       if ([0.3, 0.45, 0.6, 0.9].some((h) => near(h, v))) {
         // each step is wide enough to settle the bike before the next one
-        const a = box(v, small ? 0.8 : 1.2, small ? 1.6 : 2.4);
+        const a = box(v, small ? 0.8 : this.diff === 2 ? 1.6 : 1.2, small ? 1.6 : 2.4);
         place.push({ a, x: start, y: 0 });
         x = start + a.obstacle!.w;
         prevRun = Math.min(a.obstacle!.w / 3, v * 0.52);
@@ -535,7 +537,7 @@ export class Generator {
         v = r.chance(0.6) ? next[next.length - 1] : r.pick(next);
         out.push(v);
         // a stacked block is the summit: only one tower per structure
-        if (out.length >= (small ? 2 : 5) || v >= top - 0.01 || v > 0.91) break;
+        if (out.length >= (small ? 2 : this.diff === 2 ? 3 : 5) || v >= top - 0.01 || v > 0.91) break;
       }
       return out.length ? out : [0.3];
     };

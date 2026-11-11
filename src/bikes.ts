@@ -141,9 +141,10 @@ export function bikeById(id: string): BikeModel {
  * decide: the trial bike goes highest.
  */
 export const ROCK_CLIMB: Record<string, [number, number, number]> = {
+  // snow re-measured in v2.13 (slipperier earth since v2.10: the run-up counts)
   explorer: [1.33, 1.25, 1.17],
   sprint: [1.5, 1.33, 1.25],
-  ridge: [2.5, 2.33, 2.17],
+  ridge: [2.5, 2.33, 1.42],
   trail: [2.0, 1.5, 1.33],
   fury: [2.17, 1.5, 1.42],
   volt: [2.5, 2.0, 1.42],

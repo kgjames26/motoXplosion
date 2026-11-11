@@ -803,7 +803,7 @@ export class Game {
       // in trial you retry the obstacle from a bit further back (no skipping)
       if (trial) {
         this.zoneRetry();
-        this.respawn(bike.x - 3);
+        this.respawn(this.runUpStart(bike.x));
       }
       else this.respawn(bike.x + 6);
       this.popup(bike.x, bike.y + 2, 'HOP !', '#ffffff');
@@ -845,6 +845,25 @@ export class Game {
       r.vx *= 0.7;
       r.omega *= 0.6;
     }
+  }
+
+  /**
+   * Trial restart point: back from where the bike got stuck to the beginning of the flat
+   * ground in front of the obstacle, so the next try has all the run-up there is.
+   */
+  private runUpStart(x: number): number {
+    const w = this.world;
+    let p = x - 0.5;
+    // first get off the obstacle face (if stuck on it)
+    for (let k = 0; k < 16 && Math.abs(w.slopeAt(p)) > 0.12; k++) p -= 0.5;
+    // then walk back along the flat
+    let start = p;
+    for (let k = 0; k < 24; k++) {
+      const q = start - 0.5;
+      if (Math.abs(w.heightAt(q) - w.heightAt(p)) > 0.05 || Math.abs(w.slopeAt(q)) > 0.08) break;
+      start = q;
+    }
+    return Math.min(start + 0.6, x - 1);
   }
 
   private resetBikeAt(b: Bike, x: number): void {
