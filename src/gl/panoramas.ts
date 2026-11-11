@@ -191,19 +191,27 @@ function sf(i: number): PanoSpec {
 }
 
 /**
- * v2.19: 100 panoramas, 20 per world. Alpes and Grande Forêt: painted (cut from the painted
- * references and re-lit, see tools/build_panoramas.py). Canyon, Désert and San Francisco: the
- * recipes, now under the painted skies (public/res/pano/sky-*.webp).
+ * v2.20: 100 painted panoramas, 20 per world. Alpes and Grande Forêt: 10 cut from the
+ * reference paintings and re-lit (tools/build_panoramas.py) + 10 invented; Canyon, Désert and
+ * San Francisco: 20 invented each, painted offline (tools/paint_worlds.py). The recipes below
+ * stay as a fallback painter.
  */
-const painted = (world: string, n: number): PanoSpec[] =>
-  Array.from({ length: n }, (_, i) => ({ ...alpes(i), id: `${world}.${i}`, name: 'Paysage peint', grand: true, painted: { skyTop: '#2a78e4', ground: '#4a8a5a', horizon: 0.7 } }));
-void foret; // v2.19: the forest recipes gave way to the painted panoramas
+const paintedSpec = (id: string): PanoSpec => ({ ...alpes(0), id, name: 'Paysage peint', grand: true, painted: { skyTop: '#2a78e4', ground: '#4a8a5a', horizon: 0.7 } });
+/** ids: `<world>.<n>` = cut from the reference paintings, `<world>.p<n>` = invented and painted. */
+const painted = (world: string, fromRefs: number, invented: number): PanoSpec[] => [
+  ...Array.from({ length: fromRefs }, (_, i) => paintedSpec(`${world}.${i}`)),
+  ...Array.from({ length: invented }, (_, i) => paintedSpec(`${world}.p${i}`)),
+];
+void foret;
+void canyon;
+void desert;
+void sf;
 export const PANORAMAS: Record<string, PanoSpec[]> = {
-  alpes: painted('alpes', 20),
-  foret: painted('foret', 20),
-  canyon: Array.from({ length: 20 }, (_, i) => canyon(i)),
-  desert: Array.from({ length: 20 }, (_, i) => desert(i)),
-  sf: Array.from({ length: 20 }, (_, i) => sf(i)),
+  alpes: painted('alpes', 10, 10),
+  foret: painted('foret', 10, 10),
+  canyon: painted('canyon', 0, 20),
+  desert: painted('desert', 0, 20),
+  sf: painted('sf', 0, 20),
 };
 
 const PANO_BASE = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';

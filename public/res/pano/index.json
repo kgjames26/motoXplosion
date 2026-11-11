@@ -10,44 +10,20 @@
  "alpes.1": {
   "look": "jour",
   "season": "",
-  "src": "meadow",
-  "skyTop": "#2d92f6",
-  "ground": "#528f7e",
-  "horizon": 0.7
- },
- "alpes.2": {
-  "look": "jour",
-  "season": "",
   "src": "valley",
   "skyTop": "#4aadf6",
   "ground": "#4e7f5b",
   "horizon": 0.7
  },
+ "alpes.2": {
+  "look": "couchant",
+  "season": "",
+  "src": "meadow",
+  "skyTop": "#705188",
+  "ground": "#547058",
+  "horizon": 0.7
+ },
  "alpes.3": {
-  "look": "dore",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#80a2d4",
-  "ground": "#588151",
-  "horizon": 0.7
- },
- "alpes.4": {
-  "look": "couchant",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#705188",
-  "ground": "#547058",
-  "horizon": 0.7
- },
- "alpes.5": {
-  "look": "couchant",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#705188",
-  "ground": "#547058",
-  "horizon": 0.7
- },
- "alpes.6": {
   "look": "matin",
   "season": "",
   "src": "valley",
@@ -55,12 +31,36 @@
   "ground": "#56805d",
   "horizon": 0.7
  },
- "alpes.7": {
-  "look": "matin",
-  "season": "spring",
+ "alpes.4": {
+  "look": "jour",
+  "season": "winter",
+  "src": "valley",
+  "skyTop": "#4aadf6",
+  "ground": "#618771",
+  "horizon": 0.7
+ },
+ "alpes.5": {
+  "look": "dore",
+  "season": "",
+  "src": "valley",
+  "skyTop": "#80a2d4",
+  "ground": "#588151",
+  "horizon": 0.7
+ },
+ "alpes.6": {
+  "look": "dore",
+  "season": "",
   "src": "meadow",
-  "skyTop": "#87a6e1",
-  "ground": "#58957e",
+  "skyTop": "#7198d5",
+  "ground": "#5d916e",
+  "horizon": 0.7
+ },
+ "alpes.7": {
+  "look": "orage",
+  "season": "",
+  "src": "valley",
+  "skyTop": "#495061",
+  "ground": "#356248",
   "horizon": 0.7
  },
  "alpes.8": {
@@ -72,91 +72,11 @@
   "horizon": 0.7
  },
  "alpes.9": {
-  "look": "gris",
-  "season": "winter",
-  "src": "meadow",
-  "skyTop": "#9ba3ad",
-  "ground": "#648d8f",
-  "horizon": 0.7
- },
- "alpes.10": {
-  "look": "dore",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#82a3d4",
-  "ground": "#588151",
-  "horizon": 0.7
- },
- "alpes.11": {
-  "look": "crepuscule",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#4b3a64",
-  "ground": "#334d4a",
-  "horizon": 0.7
- },
- "alpes.12": {
-  "look": "dore",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#7198d5",
-  "ground": "#5d916e",
-  "horizon": 0.7
- },
- "alpes.13": {
-  "look": "matin",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#87a6e1",
-  "ground": "#5a907d",
-  "horizon": 0.7
- },
- "alpes.14": {
-  "look": "orage",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#495061",
-  "ground": "#356248",
-  "horizon": 0.7
- },
- "alpes.15": {
-  "look": "jour",
-  "season": "winter",
-  "src": "meadow",
-  "skyTop": "#2d92f5",
-  "ground": "#6a9a99",
-  "horizon": 0.7
- },
- "alpes.16": {
-  "look": "jour",
-  "season": "winter",
-  "src": "valley",
-  "skyTop": "#4aadf6",
-  "ground": "#618771",
-  "horizon": 0.7
- },
- "alpes.17": {
-  "look": "brume",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#4aadf6",
-  "ground": "#528363",
-  "horizon": 0.7
- },
- "alpes.18": {
   "look": "crepuscule",
   "season": "",
   "src": "meadow",
   "skyTop": "#3c315e",
   "ground": "#365765",
-  "horizon": 0.7
- },
- "alpes.19": {
-  "look": "gris",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#9ba3ad",
-  "ground": "#52857a",
   "horizon": 0.7
  },
  "foret.0": {
@@ -176,22 +96,6 @@
   "horizon": 0.7
  },
  "foret.2": {
-  "look": "jour",
-  "season": "autumn",
-  "src": "valley",
-  "skyTop": "#4aadf6",
-  "ground": "#627652",
-  "horizon": 0.7
- },
- "foret.3": {
-  "look": "dore",
-  "season": "autumn",
-  "src": "meadow",
-  "skyTop": "#7198d5",
-  "ground": "#698b69",
-  "horizon": 0.7
- },
- "foret.4": {
   "look": "brume",
   "season": "",
   "src": "valley",
@@ -199,15 +103,7 @@
   "ground": "#528363",
   "horizon": 0.7
  },
- "foret.5": {
-  "look": "brume",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#2d92f5",
-  "ground": "#569385",
-  "horizon": 0.7
- },
- "foret.6": {
+ "foret.3": {
   "look": "matin",
   "season": "autumn",
   "src": "valley",
@@ -215,31 +111,15 @@
   "ground": "#697955",
   "horizon": 0.7
  },
- "foret.7": {
-  "look": "jour",
-  "season": "spring",
-  "src": "meadow",
-  "skyTop": "#2d92f6",
-  "ground": "#4f947f",
-  "horizon": 0.7
- },
- "foret.8": {
+ "foret.4": {
   "look": "couchant",
   "season": "autumn",
   "src": "valley",
-  "skyTop": "#7f5b89",
-  "ground": "#635d39",
+  "skyTop": "#805b89",
+  "ground": "#635c39",
   "horizon": 0.7
  },
- "foret.9": {
-  "look": "dore",
-  "season": "spring",
-  "src": "valley",
-  "skyTop": "#80a2d4",
-  "ground": "#558650",
-  "horizon": 0.7
- },
- "foret.10": {
+ "foret.5": {
   "look": "gris",
   "season": "",
   "src": "valley",
@@ -247,15 +127,7 @@
   "ground": "#4e785e",
   "horizon": 0.7
  },
- "foret.11": {
-  "look": "brume",
-  "season": "autumn",
-  "src": "meadow",
-  "skyTop": "#2d92f5",
-  "ground": "#618d80",
-  "horizon": 0.7
- },
- "foret.12": {
+ "foret.6": {
   "look": "couchant",
   "season": "autumn",
   "src": "meadow",
@@ -263,15 +135,7 @@
   "ground": "#606b54",
   "horizon": 0.7
  },
- "foret.13": {
-  "look": "dore",
-  "season": "",
-  "src": "valley",
-  "skyTop": "#82a3d4",
-  "ground": "#588151",
-  "horizon": 0.7
- },
- "foret.14": {
+ "foret.7": {
   "look": "orage",
   "season": "",
   "src": "meadow",
@@ -279,15 +143,7 @@
   "ground": "#386f65",
   "horizon": 0.7
  },
- "foret.15": {
-  "look": "crepuscule",
-  "season": "autumn",
-  "src": "valley",
-  "skyTop": "#4b3a64",
-  "ground": "#3f4943",
-  "horizon": 0.7
- },
- "foret.16": {
+ "foret.8": {
   "look": "matin",
   "season": "spring",
   "src": "valley",
@@ -295,15 +151,7 @@
   "ground": "#54855c",
   "horizon": 0.7
  },
- "foret.17": {
-  "look": "matin",
-  "season": "",
-  "src": "meadow",
-  "skyTop": "#87a6e1",
-  "ground": "#5a907d",
-  "horizon": 0.7
- },
- "foret.18": {
+ "foret.9": {
   "look": "jour",
   "season": "",
   "src": "valley",
@@ -311,12 +159,404 @@
   "ground": "#4e7f5b",
   "horizon": 0.7
  },
- "foret.19": {
-  "look": "orage",
-  "season": "autumn",
-  "src": "meadow",
-  "skyTop": "#444a5b",
-  "ground": "#416b60",
+ "canyon.p0": {
+  "skyTop": "#5b3c85",
+  "ground": "#c18462",
+  "horizon": 0.7
+ },
+ "desert.p0": {
+  "skyTop": "#5c80d6",
+  "ground": "#dab27d",
+  "horizon": 0.7
+ },
+ "sf.p0": {
+  "skyTop": "#5a3c84",
+  "ground": "#9c9571",
+  "horizon": 0.7
+ },
+ "alpes.p0": {
+  "skyTop": "#7089dd",
+  "ground": "#7d9a6d",
+  "horizon": 0.7
+ },
+ "foret.p1": {
+  "skyTop": "#5c80d5",
+  "ground": "#aa8c4a",
+  "horizon": 0.7
+ },
+ "canyon.p1": {
+  "skyTop": "#5c80d6",
+  "ground": "#a98c76",
+  "horizon": 0.7
+ },
+ "desert.p2": {
+  "skyTop": "#5d3d85",
+  "ground": "#d9a46f",
+  "horizon": 0.7
+ },
+ "foret.p0": {
+  "skyTop": "#7089de",
+  "ground": "#566c55",
+  "horizon": 0.7
+ },
+ "alpes.p2": {
+  "skyTop": "#5d3d85",
+  "ground": "#68784e",
+  "horizon": 0.7
+ },
+ "canyon.p2": {
+  "skyTop": "#3b82e8",
+  "ground": "#b68c79",
+  "horizon": 0.7
+ },
+ "alpes.p3": {
+  "skyTop": "#567cd5",
+  "ground": "#69845a",
+  "horizon": 0.7
+ },
+ "canyon.p3": {
+  "skyTop": "#738bdf",
+  "ground": "#a86854",
+  "horizon": 0.7
+ },
+ "canyon.p4": {
+  "skyTop": "#2f1f45",
+  "ground": "#ad7362",
+  "horizon": 0.7
+ },
+ "canyon.p5": {
+  "skyTop": "#559be7",
+  "ground": "#a79e96",
+  "horizon": 0.7
+ },
+ "canyon.p6": {
+  "skyTop": "#3a4050",
+  "ground": "#b18777",
+  "horizon": 0.7
+ },
+ "canyon.p7": {
+  "skyTop": "#5c80d6",
+  "ground": "#aa6a49",
+  "horizon": 0.7
+ },
+ "canyon.p8": {
+  "skyTop": "#5b3c85",
+  "ground": "#b37759",
+  "horizon": 0.7
+ },
+ "canyon.p9": {
+  "skyTop": "#3a82e8",
+  "ground": "#a1a0a5",
+  "horizon": 0.7
+ },
+ "canyon.p10": {
+  "skyTop": "#738bdf",
+  "ground": "#b98b73",
+  "horizon": 0.7
+ },
+ "canyon.p11": {
+  "skyTop": "#141a3c",
+  "ground": "#905151",
+  "horizon": 0.7
+ },
+ "canyon.p12": {
+  "skyTop": "#597ed6",
+  "ground": "#c0926e",
+  "horizon": 0.7
+ },
+ "canyon.p13": {
+  "skyTop": "#5f3e85",
+  "ground": "#b07a6a",
+  "horizon": 0.7
+ },
+ "canyon.p14": {
+  "skyTop": "#3d84e8",
+  "ground": "#b89483",
+  "horizon": 0.7
+ },
+ "canyon.p15": {
+  "skyTop": "#2f1f45",
+  "ground": "#9e5349",
+  "horizon": 0.7
+ },
+ "canyon.p16": {
+  "skyTop": "#569ce8",
+  "ground": "#b98e74",
+  "horizon": 0.7
+ },
+ "canyon.p17": {
+  "skyTop": "#5b7fd6",
+  "ground": "#a48f7c",
+  "horizon": 0.7
+ },
+ "canyon.p18": {
+  "skyTop": "#718adf",
+  "ground": "#bf8f77",
+  "horizon": 0.7
+ },
+ "canyon.p19": {
+  "skyTop": "#5e3e85",
+  "ground": "#a7583b",
+  "horizon": 0.7
+ },
+ "desert.p1": {
+  "skyTop": "#5199e7",
+  "ground": "#d2a97e",
+  "horizon": 0.7
+ },
+ "desert.p3": {
+  "skyTop": "#3a82e7",
+  "ground": "#c29b7b",
+  "horizon": 0.7
+ },
+ "desert.p4": {
+  "skyTop": "#718adf",
+  "ground": "#dab289",
+  "horizon": 0.7
+ },
+ "desert.p5": {
+  "skyTop": "#2f1f44",
+  "ground": "#c18e6d",
+  "horizon": 0.7
+ },
+ "desert.p6": {
+  "skyTop": "#569ce7",
+  "ground": "#c5986f",
+  "horizon": 0.7
+ },
+ "desert.p7": {
+  "skyTop": "#12193a",
+  "ground": "#b88f75",
+  "horizon": 0.7
+ },
+ "desert.p8": {
+  "skyTop": "#5d81d7",
+  "ground": "#d9b07e",
+  "horizon": 0.7
+ },
+ "desert.p9": {
+  "skyTop": "#5b3c85",
+  "ground": "#d49e69",
+  "horizon": 0.7
+ },
+ "desert.p10": {
+  "skyTop": "#3a82e7",
+  "ground": "#d7b590",
+  "horizon": 0.7
+ },
+ "desert.p11": {
+  "skyTop": "#728bdf",
+  "ground": "#cfa278",
+  "horizon": 0.7
+ },
+ "desert.p12": {
+  "skyTop": "#539ae7",
+  "ground": "#d9b68d",
+  "horizon": 0.7
+ },
+ "desert.p13": {
+  "skyTop": "#583a84",
+  "ground": "#c99160",
+  "horizon": 0.7
+ },
+ "desert.p14": {
+  "skyTop": "#597ed6",
+  "ground": "#cea16e",
+  "horizon": 0.7
+ },
+ "desert.p15": {
+  "skyTop": "#2d1e44",
+  "ground": "#bc8b6c",
+  "horizon": 0.7
+ },
+ "desert.p16": {
+  "skyTop": "#3c83e8",
+  "ground": "#d4b493",
+  "horizon": 0.7
+ },
+ "desert.p17": {
+  "skyTop": "#728bdf",
+  "ground": "#d0a47a",
+  "horizon": 0.7
+ },
+ "desert.p18": {
+  "skyTop": "#5199e6",
+  "ground": "#c9a57d",
+  "horizon": 0.7
+ },
+ "desert.p19": {
+  "skyTop": "#5b3c84",
+  "ground": "#c8905e",
+  "horizon": 0.7
+ },
+ "sf.p1": {
+  "skyTop": "#5c80d5",
+  "ground": "#99a47a",
+  "horizon": 0.7
+ },
+ "sf.p2": {
+  "skyTop": "#3b82e6",
+  "ground": "#90a488",
+  "horizon": 0.7
+ },
+ "sf.p3": {
+  "skyTop": "#728ade",
+  "ground": "#a0a589",
+  "horizon": 0.7
+ },
+ "sf.p4": {
+  "skyTop": "#141b3c",
+  "ground": "#799180",
+  "horizon": 0.7
+ },
+ "sf.p5": {
+  "skyTop": "#2e1f44",
+  "ground": "#869078",
+  "horizon": 0.7
+ },
+ "sf.p6": {
+  "skyTop": "#818c98",
+  "ground": "#919e8c",
+  "horizon": 0.7
+ },
+ "sf.p7": {
+  "skyTop": "#587dd5",
+  "ground": "#9ca37d",
+  "horizon": 0.7
+ },
+ "sf.p8": {
+  "skyTop": "#5d3d85",
+  "ground": "#95946d",
+  "horizon": 0.7
+ },
+ "sf.p9": {
+  "skyTop": "#3d83e7",
+  "ground": "#98a28c",
+  "horizon": 0.7
+ },
+ "sf.p10": {
+  "skyTop": "#7089dd",
+  "ground": "#95a481",
+  "horizon": 0.7
+ },
+ "sf.p11": {
+  "skyTop": "#12193a",
+  "ground": "#7b9182",
+  "horizon": 0.7
+ },
+ "sf.p12": {
+  "skyTop": "#3a4051",
+  "ground": "#899b85",
+  "horizon": 0.7
+ },
+ "sf.p13": {
+  "skyTop": "#587dd5",
+  "ground": "#98a17b",
+  "horizon": 0.7
+ },
+ "sf.p14": {
+  "skyTop": "#5b3c85",
+  "ground": "#98956f",
+  "horizon": 0.7
+ },
+ "sf.p15": {
+  "skyTop": "#322145",
+  "ground": "#879178",
+  "horizon": 0.7
+ },
+ "sf.p16": {
+  "skyTop": "#3a81e6",
+  "ground": "#959f8b",
+  "horizon": 0.7
+ },
+ "sf.p17": {
+  "skyTop": "#738bde",
+  "ground": "#9fa388",
+  "horizon": 0.7
+ },
+ "sf.p18": {
+  "skyTop": "#131a3b",
+  "ground": "#799282",
+  "horizon": 0.7
+ },
+ "sf.p19": {
+  "skyTop": "#5d80d5",
+  "ground": "#9aa67a",
+  "horizon": 0.7
+ },
+ "alpes.p1": {
+  "skyTop": "#3e83e7",
+  "ground": "#789a74",
+  "horizon": 0.7
+ },
+ "alpes.p4": {
+  "skyTop": "#322145",
+  "ground": "#647e5e",
+  "horizon": 0.7
+ },
+ "alpes.p5": {
+  "skyTop": "#3a81e6",
+  "ground": "#739472",
+  "horizon": 0.7
+ },
+ "alpes.p6": {
+  "skyTop": "#6f88dd",
+  "ground": "#738e67",
+  "horizon": 0.7
+ },
+ "alpes.p7": {
+  "skyTop": "#567cd5",
+  "ground": "#708a5b",
+  "horizon": 0.7
+ },
+ "alpes.p8": {
+  "skyTop": "#818c98",
+  "ground": "#63866b",
+  "horizon": 0.7
+ },
+ "alpes.p9": {
+  "skyTop": "#131a3b",
+  "ground": "#548167",
+  "horizon": 0.7
+ },
+ "foret.p2": {
+  "skyTop": "#3d83e7",
+  "ground": "#5b7763",
+  "horizon": 0.7
+ },
+ "foret.p3": {
+  "skyTop": "#5b3d84",
+  "ground": "#a07939",
+  "horizon": 0.7
+ },
+ "foret.p4": {
+  "skyTop": "#818c98",
+  "ground": "#4f6e5f",
+  "horizon": 0.7
+ },
+ "foret.p5": {
+  "skyTop": "#738bde",
+  "ground": "#9c834b",
+  "horizon": 0.7
+ },
+ "foret.p6": {
+  "skyTop": "#597ed5",
+  "ground": "#576c4c",
+  "horizon": 0.7
+ },
+ "foret.p7": {
+  "skyTop": "#312146",
+  "ground": "#a17d4a",
+  "horizon": 0.7
+ },
+ "foret.p8": {
+  "skyTop": "#3d83e7",
+  "ground": "#536f5d",
+  "horizon": 0.7
+ },
+ "foret.p9": {
+  "skyTop": "#3a4051",
+  "ground": "#987b4f",
   "horizon": 0.7
  }
 }

@@ -170,8 +170,10 @@ def build():
                   ("valley", "gris", None), ("meadow", "brume", "autumn"), ("meadow", "couchant", "autumn"), ("valley", "dore", None), ("meadow", "orage", None),
                   ("valley", "crepuscule", "autumn"), ("valley", "matin", "spring"), ("meadow", "matin", None), ("valley", "jour", None), ("meadow", "orage", "autumn")],
     }
-    meta = {}
+    idx_path = os.path.join(OUT, "index.json")
+    meta = json.load(open(idx_path)) if os.path.exists(idx_path) else {}
     for world, items in plan.items():
+        items = items[::2]  # v2.20: 10 per world from the references (+10 invented, tools/paint_worlds.py)
         rnd = random.Random(world)
         for i, (src, look, season) in enumerate(items):
             im, hz, mk = srcs[src]
@@ -200,7 +202,7 @@ def build():
     for look in ("jour", "matin", "dore", "couchant", "crepuscule", "gris", "orage", "chaud"):
         g = dict(LOOKS[look]); g.pop("haze", None)
         to_img(grade(sa, ones, g)).save(os.path.join(OUT, f"sky-{look}.webp"), "WEBP", quality=80, method=6)
-    json.dump(meta, open(os.path.join(OUT, "index.json"), "w"), indent=1)
+    json.dump(meta, open(idx_path, "w"), indent=1)
     print(len(meta), "panoramas")
 
 if __name__ == "__main__":
