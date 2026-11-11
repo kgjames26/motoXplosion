@@ -23,6 +23,8 @@ export interface Obstacle {
   rock?: boolean;
   /** v2.8 technical trial obstacle: furniture or nature. */
   tech?: 'mobilier' | 'nature';
+  /** v2.12 trial module (stackable building block). */
+  module?: string;
 }
 
 export interface AssetDef {

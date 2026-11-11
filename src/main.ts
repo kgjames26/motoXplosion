@@ -504,6 +504,8 @@ function pause(): void {
   controls.reset();
   // a championship stage cannot be restarted alone
   $('btn-restart').classList.toggle('hidden', mp.inStage);
+  // cruising: stop the ride and see what it brought in
+  $('btn-stop').classList.toggle('hidden', game.mode !== 'cruising' || mp.inStage);
   show('pause');
 }
 
@@ -542,6 +544,7 @@ const OVER_TITLES: Record<string, string> = {
   stamina: 'PILOTE ÉPUISÉ !',
   time: 'TEMPS ÉCOULÉ !',
   quit: 'PARTIE ARRÊTÉE',
+  stop: 'BELLE BALADE !',
 };
 
 /** Bank the run: coins, records, circuit medals. Shows the results when asked. */
@@ -593,7 +596,7 @@ function finishRun(display: boolean): void {
   profile.totalEarned += r.total;
   saveP();
   if (!display) return;
-  let title = OVER_TITLES[r.reason] ?? 'FIN';
+  let title = OVER_TITLES[mode === 'cruising' && r.reason === 'quit' ? 'stop' : r.reason] ?? 'FIN';
   if (r.reason === 'finish') {
     if (mode === 'course') title = r.place === 1 ? 'VICTOIRE !' : r.place! <= 3 ? 'PODIUM !' : `${r.place}e PLACE`;
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
@@ -656,6 +659,12 @@ $('btn-restart').addEventListener('click', () => {
   start();
 });
 $('btn-resume').addEventListener('click', resume);
+$('btn-stop').addEventListener('click', () => {
+  // ends the ride: the usual results screen with distance, bonus and coins
+  if (game.state !== 'paused') return;
+  game.state = 'playing';
+  game.quit();
+});
 $('btn-home').addEventListener('click', home);
 $('btn-home2').addEventListener('click', home);
 $('btn-pause').addEventListener('click', pause);

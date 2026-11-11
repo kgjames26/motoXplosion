@@ -5,13 +5,14 @@ import { ROCK_ASSETS } from './rocks';
 import { TECH_ASSETS } from './trialtech';
 import { DECOR_ASSETS } from './decor';
 import { SF_ASSETS } from './sf';
+import { MODULE_ASSETS } from './modules';
 import { NATURE_ASSETS } from './nature';
 import type { AssetDef, AssetGroup, Slot } from './types';
 
 export type { AssetDef, AssetGroup, Slot, Obstacle } from './types';
 
 /** Every asset of the game, by id. */
-export const CATALOG: AssetDef[] = [...NATURE_ASSETS, ...MODE_ASSETS, ...EXTRA_ASSETS, ...ROCK_ASSETS, ...TECH_ASSETS, ...DECOR_ASSETS, ...SF_ASSETS];
+export const CATALOG: AssetDef[] = [...NATURE_ASSETS, ...MODE_ASSETS, ...EXTRA_ASSETS, ...ROCK_ASSETS, ...TECH_ASSETS, ...DECOR_ASSETS, ...SF_ASSETS, ...MODULE_ASSETS];
 const byId = new Map(CATALOG.map((a) => [a.id, a]));
 const sprites = new Map<string, Sprite>();
 

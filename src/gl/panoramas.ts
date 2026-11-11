@@ -615,11 +615,26 @@ export function paintPanorama(spec: PanoSpec): Backdrop {
   return b;
 }
 
-/** Which panorama shows at a given distance (changes every ~650 m, varies with the seed). */
-export function panoramaAt(world: string, seed: number, x: number): PanoSpec | null {
+/**
+ * Which panorama shows at a given distance. Cruising: a new one every 1000 m, drawn at random
+ * (never the same twice in a row); other modes: every ~650 m in a fixed order.
+ */
+export function panoramaAt(world: string, seed: number, x: number, cruising = false): PanoSpec | null {
   const list = PANORAMAS[world];
   if (!list) return null;
-  const k = Math.floor(Math.max(0, x - 200) / 650);
   if (x < 200) return null; // the start keeps the world's main painting
+  if (cruising) {
+    const pick = (k: number) => {
+      let h = (seed ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0;
+      h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+      h = (h ^ (h >>> 13)) >>> 0;
+      return h % list.length;
+    };
+    const k = Math.floor((x - 200) / 1000);
+    let i = pick(k);
+    if (k > 0 && i === pick(k - 1)) i = (i + 1 + (k % (list.length - 1))) % list.length;
+    return list[i];
+  }
+  const k = Math.floor(Math.max(0, x - 200) / 650);
   return list[(((seed >>> 3) + k * 5) % list.length + list.length) % list.length];
 }

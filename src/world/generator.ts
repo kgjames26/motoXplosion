@@ -355,17 +355,17 @@ export class Generator {
     const level = this.grade * 0.75 + pos * 0.35;
     const tierMax = circ ? (level < 0.2 ? 1 : level < 0.55 ? 2 : 3) : n <= 2 ? 1 : n <= 4 ? 2 : 3;
     this.queue.push({
-      len: 10,
+      len: circ ? 6 : 10,
       shape: () => 0,
       surface: () => Surface.Dirt,
       onStart: (x0) => {
-        this.world.marks.push({ x0: x0 + 5, x1: x0 + 5.5, kind: 'sectionStart', n });
-        this.decor(x0 + 5, 'trial', 't.gate.0', 0.08);
+        this.world.marks.push({ x0: x0 + 3, x1: x0 + 3.5, kind: 'sectionStart', n });
+        this.decor(x0 + 3, 'trial', 't.gate.0', 0.08);
       },
       props: 0.5,
     });
     const all = assetsFor(['trial'], 'obstacle');
-    const obstacles = all.filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ && !a.obstacle!.rock);
+    const obstacles = all.filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ && !a.obstacle!.rock && !a.obstacle!.module);
     const count = circ ? 3 + Math.round(this.grade * 2 + pos) : 3 + Math.min(4, Math.floor(n / 2));
     // circuits: mostly rocks of the world's stone, bigger with the circuit number; the last
     // zone always holds the biggest one
@@ -409,7 +409,10 @@ export class Generator {
       });
       return;
     }
-    this.queue.push(this.base(r.range(14, 22), 0.25));
+    if (circ) {
+      // short liaison to the next zone, with a little module structure on the way
+      this.queue.push(this.flat(r.range(3, 4.5), Surface.Dirt), this.moduleStructure(Math.min(0.9, 0.45 + this.grade * 0.6), true), this.flat(r.range(3, 4.5), Surface.Dirt));
+    } else this.queue.push(this.base(r.range(14, 22), 0.25));
   }
 
   /**
@@ -435,7 +438,7 @@ export class Generator {
     let left = count;
     let first = true;
     while (left > 0) {
-      const p = first && n === this.trialZones ? 'single' : r.weighted(['single', 'pair', 'stair', 'slope', 'drop'], [2, 1 + g * 2, 0.6 + g * 2, 0.6 + g, 0.5 + g * 1.5]);
+      const p = first && n === this.trialZones ? 'single' : r.weighted(['single', 'pair', 'stair', 'slope', 'drop', 'modules'], [2, 1 + g * 2, 0.6 + g * 2, 0.6 + g, 0.5 + g * 1.5, 3.5]);
       const h = first && n === this.trialZones ? hi : height();
       first = false;
       if (p === 'pair' && left >= 2) {
@@ -457,6 +460,10 @@ export class Generator {
         const L = r.range(5, 8);
         this.queue.push(this.dirt(this.slopeProfile([[L, s]], 0, 0, 2)), this.obstacleSeg(pick(Math.min(h, hi * 0.85))), this.dirt(this.slopeProfile([[L * 0.8, 0.02], [L, -s]], 0, 0, 2)));
         left--;
+      } else if (p === 'modules') {
+        // a structure of stacked trial modules (from the first circuits on)
+        this.queue.push(this.moduleStructure(hi));
+        left--;
       } else if (p === 'drop') {
         // up an obstacle, then a step down: control the front on the way down
         const D = r.range(0.4, 0.6 + g * 0.5) * (this.diff ? 0.8 : 1);
@@ -470,6 +477,139 @@ export class Generator {
       this.queue.push(this.flat(Math.max(gap() + 1, 3.2 + hi * 0.8), Surface.Dirt));
     }
     void rocks;
+  }
+
+  /**
+   * Trial module structure: modules side by side and stacked into staircases, pyramids,
+   * towers, tables with ramps, doubles… Each rise is at most one module step (0.3 → 0.6 m
+   * with the circuit), the top never above `maxH`. Neighbouring blocks overlap their
+   * chamfers so there is no trap between them.
+   */
+  private moduleStructure(maxH: number, small = false): Segment {
+    const r = this.rng;
+    const g = this.grade;
+    const mods = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.module);
+    const boxKinds = this.region.id === 'sf' ? ['bloc', 'plateau', 'palette', 'pneus'] : this.region.id === 'foret' || this.region.id === 'alpes' ? ['caisse', 'pierre', 'palette', 'bloc'] : ['caisse', 'bloc', 'pneus', 'plateau', 'pierre'];
+    const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
+    const box = (h: number, minW = 0, maxW = 9) => {
+      const list = mods.filter((a) => boxKinds.includes(a.obstacle!.module!) && near(a.obstacle!.h, h) && a.obstacle!.w >= minW && a.obstacle!.w <= maxW);
+      return list.length ? r.pick(list) : mods.find((a) => a.obstacle!.module === 'caisse' && near(a.obstacle!.h, h))!;
+    };
+    const maxStep = Math.min(0.5, 0.3 + g * 0.25) * (this.diff ? 0.92 : 1) + 1e-6;
+    const top = Math.max(0.45, Math.min(maxH, small ? maxH : 0.6 + g * 0.8));
+    // reachable levels: one block, or a block of at most one step stacked on a 0.6 / 0.9 base
+    const steps = [0.3, 0.45, 0.6].filter((t) => t <= maxStep);
+    const stackOf = new Map<number, [number, number]>();
+    for (const b of [0.6, 0.9]) for (const t of steps) if (!stackOf.has(Math.round((b + t) * 100))) stackOf.set(Math.round((b + t) * 100), [b, t]);
+    const LEVELS = [...new Set([0.3, 0.45, 0.6, 0.9, ...[...stackOf.keys()].map((k) => k / 100)])].filter((v) => v <= top + 1e-6).sort((a, b) => a - b);
+    type Place = { a: AssetDef; x: number; y: number };
+    const place: Place[] = [];
+    let x = 0;
+    let prevRun = 0;
+    /** A column reaching `v`: one block, or a narrower block stacked on a wide one. */
+    const column = (v: number): void => {
+      const start = Math.max(0, x - prevRun * 0.9);
+      if ([0.3, 0.45, 0.6, 0.9].some((h) => near(h, v))) {
+        // each step is wide enough to settle the bike before the next one
+        const a = box(v, small ? 0.8 : 1.2, small ? 1.6 : 2.4);
+        place.push({ a, x: start, y: 0 });
+        x = start + a.obstacle!.w;
+        prevRun = Math.min(a.obstacle!.w / 3, v * 0.52);
+        return;
+      }
+      const [b, t] = stackOf.get(Math.round(v * 100)) ?? [0.6, Math.round((v - 0.6) * 100) / 100];
+      // wide base, at least ~0.7 m of ledge each side of the block on top
+      const base = box(b, 2.6, 3.2);
+      const topB = box(t, 0.8, Math.max(0.8, base.obstacle!.w - 1.4));
+      place.push({ a: base, x: start, y: 0 });
+      place.push({ a: topB, x: start + (base.obstacle!.w - topB.obstacle!.w) / 2, y: b });
+      x = start + base.obstacle!.w;
+      prevRun = Math.min(base.obstacle!.w / 3, b * 0.52);
+    };
+    const climb = (): number[] => {
+      const out: number[] = [];
+      let v = 0;
+      while (true) {
+        const next = LEVELS.filter((l) => l > v + 0.01 && l - v <= maxStep);
+        if (!next.length) break;
+        v = r.chance(0.6) ? next[next.length - 1] : r.pick(next);
+        out.push(v);
+        // a stacked block is the summit: only one tower per structure
+        if (out.length >= (small ? 2 : 5) || v >= top - 0.01 || v > 0.91) break;
+      }
+      return out.length ? out : [0.3];
+    };
+    const pattern = small ? r.pick(['escalier', 'pyramide'] as const) : r.weighted(['escalier', 'pyramide', 'tour', 'table', 'double', 'touret'] as const, [3, 3, 0.8 + g, 1.5, 1 + g, 1]);
+    const ramp = (h: number, dir: 'up' | 'down') => {
+      const list = mods.filter((a) => a.obstacle!.module === 'rampe' && near(a.obstacle!.h, h) && a.id.endsWith(dir));
+      return list.length ? r.pick(list) : null;
+    };
+    if (pattern === 'table') {
+      const h = [0.45, 0.6, 0.9].filter((v) => v <= top + 1e-6).pop() ?? 0.45;
+      const up = ramp(h, 'up');
+      const deck = mods.filter((a) => a.obstacle!.module === 'plateau' && near(a.obstacle!.h, h));
+      const down = ramp(h, 'down');
+      if (up && deck.length && down) {
+        const d = r.pick(deck);
+        place.push({ a: up, x: 0, y: 0 });
+        x = up.obstacle!.w - 0.25;
+        place.push({ a: d, x, y: 0 });
+        x += d.obstacle!.w - 0.25;
+        place.push({ a: down, x, y: 0 });
+        x += down.obstacle!.w;
+      } else climb().forEach(column);
+    } else if (pattern === 'double') {
+      for (let k = 0; k < 2; k++) {
+        climb().slice(0, 2).forEach(column);
+        x += r.range(1, 1.6);
+        prevRun = 0;
+      }
+    } else if (pattern === 'touret') {
+      const spool = mods.filter((a) => a.obstacle!.module === 'touret' && a.obstacle!.h <= Math.min(top, maxStep * 1.6) + 1e-6);
+      column(0.3);
+      if (spool.length) {
+        const s0 = r.pick(spool);
+        place.push({ a: s0, x: x - 0.1, y: 0 });
+        x += s0.obstacle!.w - 0.1;
+        prevRun = 0.2;
+      }
+      column(Math.min(0.45, top));
+    } else {
+      const ups = climb();
+      ups.forEach(column);
+      if (pattern === 'pyramide' || pattern === 'tour') ups.slice(0, -1).reverse().forEach(column);
+      else {
+        // end: a ramp down when one fits, otherwise step down (the drop is part of the game)
+        const last = ups[ups.length - 1];
+        const dn = ramp(last, 'down');
+        if (dn && r.chance(0.6)) {
+          place.push({ a: dn, x: x - 0.2, y: 0 });
+          x += dn.obstacle!.w - 0.2;
+        }
+      }
+    }
+    const len = x + 0.6;
+    return {
+      len,
+      shape: (t) => {
+        let y = 0;
+        for (const p of place) {
+          const o = p.a.obstacle!;
+          const u = (t - 0.3 - p.x) / o.w;
+          if (u > 0 && u < 1) y = Math.max(y, p.y + o.h * o.profile(u));
+        }
+        return y;
+      },
+      visual: () => 0,
+      surface: () => Surface.Rock,
+      noPickup: [[0, len]],
+      onStart: (x0, h0) => {
+        // stacked blocks are pushed after their base, so they are drawn on top of it
+        for (const p of place) this.world.props.push({ x: x0 + 0.3 + p.x + p.a.obstacle!.w / 2, kind: 'asset', asset: p.a.id, depth: 0, scale: 1, variant: 0, flip: false, baseY: h0 + p.y });
+        for (const [dx, f] of [[0.1, 'tb.flag.0'], [len - 0.1, 'tb.flag.1']] as [number, string][]) this.world.props.push({ x: x0 + dx, kind: 'asset', asset: f, depth: 0.03, scale: 0.75, variant: 0, flip: false });
+      },
+      props: 0.3,
+    };
   }
 
   /** Packed earth surface on a segment (trial zones keep their grip whatever the weather). */

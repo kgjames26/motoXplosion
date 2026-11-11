@@ -310,6 +310,7 @@ export class Multi {
   setNext(next: Partial<StageSettings>, winsNeeded?: number): void {
     if (!this.isHost) return;
     Object.assign(this.lobby.next, next);
+    if (this.lobby.next.mode === 'cruising') this.lobby.next.mode = 'course'; // no cruising in multiplayer
     if (winsNeeded) this.lobby.winsNeeded = winsNeeded;
     this.broadcastLobby();
   }

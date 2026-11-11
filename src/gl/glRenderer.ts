@@ -602,8 +602,13 @@ export class GLRenderer {
   private updateBackdrop(w: World, D: number, visH: number): void {
     const base = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.id === 'sf' ? 'sf.0' : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
     // v2.8: painted panoramas take turns while riding (not behind the home screen)
-    const pano = this.sunset < 0.5 || w.region.id === 'sf' ? panoramaAt(w.region.id, w.seed, Math.max(this.camX, w.region.id === 'sf' ? 250 : 0)) : null;
+    const pano = this.sunset < 0.5 || w.region.id === 'sf' ? panoramaAt(w.region.id, w.seed, Math.max(this.camX, w.region.id === 'sf' ? 250 : 0), w.mode === 'cruising') : null;
     const key = pano ? pano.id : base;
+    // paint the next panorama a little before it is needed (no hitch at the switch)
+    if (pano && w.mode === 'cruising') {
+      const ahead = panoramaAt(w.region.id, w.seed, this.camX + 150, true);
+      if (ahead && ahead.id !== pano.id) paintPanorama(ahead);
+    }
     const bd = pano ? paintPanorama(pano) : this.backdropTex[key];
     if (!bd) {
       this.backdrop.visible = this.lower.visible = false;
@@ -643,7 +648,8 @@ export class GLRenderer {
     this.backdrop.position.set(this.camX, bottomY + imgH / 2, -dist);
     bd.tex.repeat.set(planeW / imgW, 1);
     bd.tex.offset.x = (this.camX * 0.6) / imgW - planeW / imgW / 2;
-    this.fadeT = Math.max(0, this.fadeT - this.frameDt / 3);
+    // slow, gentle cross-fade (longer in cruising, where the scenery is the show)
+    this.fadeT = Math.max(0, this.fadeT - this.frameDt / (w.mode === 'cruising' ? 5 : 3));
     this.fade.visible = this.fadeT > 0 && !!this.fadeBd;
     if (this.fade.visible && this.fadeBd) {
       const fb = this.fadeBd;
@@ -653,7 +659,7 @@ export class GLRenderer {
       this.fade.position.set(this.camX, bottomY + fH / 2, -dist + 2);
       fb.tex.repeat.set(planeW / fW, 1);
       fb.tex.offset.x = (this.camX * 0.6) / fW - planeW / fW / 2;
-      this.fade.material.opacity = this.fadeT;
+      this.fade.material.opacity = this.fadeT * this.fadeT * (3 - 2 * this.fadeT);
       this.fade.material.color.copy(this.backdrop.material.color);
     }
     // below the painting: its ground colour down to the bottom of the screen

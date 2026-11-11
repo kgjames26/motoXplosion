@@ -17,6 +17,7 @@ sept motos à gagner au garage.
 - **Pair à pair** (WebRTC via PeerJS) : le serveur public gratuit de PeerJS ne sert qu'à se présenter, ensuite tout passe directement entre les navigateurs. Pas de serveur à payer, quel que soit le nombre de joueurs (chaque salon ne dépend que de ses 4 navigateurs). Le créateur du salon est **l'hôte** : il tient le salon et le championnat et relaie les positions de chacun (~12 fois par seconde).
 - **Salon** : liste des pilotes (couleur, moto, statut, couronne de l'hôte, victoires et points), et réglages de l'hôte : mode, monde, circuit, difficulté/météo, **nombre de victoires** pour remporter le championnat.
 - **Rejoindre à tout moment** : pendant une épreuve, un nouveau pilote entre directement s'il arrive dans les 8 premières secondes, sinon il regarde le classement en direct depuis le salon et court à l'épreuve suivante.
+- **Modes proposés en multijoueur** : trial, enduro et course (pas de cruising).
 - **Pendant l'épreuve**, tout le monde roule sur la même piste (même circuit, même graine) et voit les autres pilotes (avec leur nom). Panneau en direct à droite : en course et en enduro les **positions et écarts** (en secondes) ; en trial la **zone, les chutes et le chrono** de chacun ; en cruising la distance. Pas d'IA en multijoueur.
 - **Fin d'épreuve** : en course et enduro, les autres ont 45 s / 60 s après le premier arrivé ; en **trial tout le monde attend que tous aient fini** (écran d'attente avec les performances de chacun ; l'hôte peut clore l'étape) ; en cruising (balade libre, sans chrono) l'hôte termine l'étape quand il veut.
 - **Récapitulatif obligatoire après chaque épreuve** : classement de l'épreuve (temps, chutes, points 10 / 6 / 4 / 2, trophée au vainqueur) et classement général (victoires puis points). Le premier à atteindre le nombre de victoires choisi est **champion**. L'hôte prépare l'épreuve suivante (ou un nouveau championnat).
@@ -26,7 +27,7 @@ sept motos à gagner au garage.
 
 | Mode | Règles | Gains |
 | --- | --- | --- |
-| **Cruising** | balade infinie et libre : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
+| **Cruising** | balade infinie et libre : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Dans la pause, **J'ARRÊTE** termine la balade et affiche le résumé (distance, bonus, gains) ; **Accueil** enregistre aussi les gains, sans résumé. Tous les **1 000 m**, le fond passe en **fondu lent (5 s)** à un autre panorama tiré au hasard parmi les 12 du monde. Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
 | **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
 | **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
@@ -46,6 +47,11 @@ Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a
 
 ### Objectifs calés sur une moto qu'on peut se payer
 Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés pour la moto qu'un joueur est censé avoir pu acheter à ce stade (et non la moto de départ, sauf pour les tout premiers circuits) : Explorer pour les circuits 1-2, Sprint 3-6, puis Trailblazer (ou Ridge en trial) 7-11, Fury 12-16, Volt 17-21, Dakar 22-25. Il faut donc **cruiser** pour gagner l'argent des meilleures motos et de leurs améliorations.
+
+### Modules de trial (v2.12)
+- **200 modules** qui s'imbriquent comme dans un vrai parc de trial : caisses en bois, blocs béton, plateaux acier à bords jaunes et noirs, rampes montantes et descendantes, tourets, modules de pneus, de palettes, escaliers, pierres taillées, en hauteurs standard (0,3 / 0,45 / 0,6 / 0,9 m) pour s'emboîter.
+- Le générateur les assemble en **structures** dès les premiers circuits : escaliers, pyramides, tour (un bloc posé sur une large base, avec un palier de chaque côté), table (rampe, plateau, rampe), doubles, touret entre deux caisses. Chaque marche fait au plus une hauteur de module (0,3 m au début, jusqu'à 0,5 m), les blocs voisins se chevauchent pour ne laisser aucun piège entre eux.
+- **Peu de temps morts** : liaisons courtes entre les zones, avec une petite structure de modules au passage ; seules de courtes respirations restent (élan avant un obstacle, portes de zone).
 
 ### Rochers et obstacles de trial
 - Le trial est **plus technique** : chaque zone mélange rochers, **mobilier** crédible (pneus de tracteur, escaliers de traverses, buses béton, tourets, poutres IPN, palettes, cuves IBC, fûts couchés, séparateurs, palettes de briques, big bags, bottes de foin, abreuvoirs et charrettes, bancs, bacs, escaliers de bordures, madriers sur tréteaux) et **éléments naturels** (troncs couchés, souches déracinées, souches, dalles en escalier, paires de rochers, marches rocheuses, tas de rondins, talus à racines, éboulis, arbres morts, gués de pierres, troncs posés sur rochers), enchaînés en lignes : paires serrées, escaliers d'obstacles, obstacle posé sur une montée, obstacle suivi d'une marche descendante. Les objets hauts ont une rampe d'accès (planche, sacs ou terre) dessinée exactement sur la pente que suit la roue.
@@ -132,7 +138,7 @@ Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record e
 
 - **Balance ARRIÈRE / AVANT** (en bas à gauche) : déplace le poids du pilote. Au sol, elle change le centre de gravité (balance à moitié en arrière = wheelie, tout en arrière plein gaz = on se retourne). En l'air, elle fait tourner la moto pour préparer l'atterrissage. Elle revient au centre quand on la lâche.
 - **Disque de frein** (juste à gauche de l'accélérateur) : freins avant + arrière.
-- **Poignée d'accélérateur** (à droite) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
+- **Poignée d'accélérateur** (à droite, deux fois plus large depuis la v2.12) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
 - **Marche arrière** : à l'arrêt, garder le frein appuyé 1 seconde : la moto recule et atteint 3 km/h en une seconde environ.
 - **Pause** en haut à droite. Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
 - **Options** (accueil et menu pause) : **pseudo** (affiché sur l'accueil, au-dessus de ta moto et dans le classement en course), volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
@@ -191,7 +197,7 @@ La piste est plus vivante : taches de couleur le long de la route, voie usée pl
 - **Musiques** : `public/audio/music-menu.mp3` (accueil, pause, fin de partie) et `music-game.mp3` (en course, en boucle). La boucle saute le silence du début et de la fin et enchaîne avec un fondu de 4 s, sans coupure. Les musiques passent de l'une à l'autre en fondu.
 - **Moteur** : synthétisé en temps réel (AudioWorklet, `src/audio/engineWorklet.ts`), modèle d'un monocylindre 4 temps de cross : une explosion tous les deux tours, avec des irrégularités aléatoires, excitant deux résonateurs (échappement et carter). S'y ajoutent le claquement de combustion sous charge et des pétarades à la décélération, puis un filtre passe-bas qui donne un son un peu sourd.
 
-## Catalogue d'assets (7 247 éléments)
+## Catalogue d'assets (7 447 éléments)
 
 Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en familles paramétrées : chaque élément est une variante distincte (espèce, taille, saison, couleur, forme), dessinée au premier usage puis mise en cache.
 
@@ -208,6 +214,7 @@ Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en fa
 | v2.6 — Désert | 55 | caravanes de dromadaires, mares d'oasis, étals de marché, poteries, tapis, feux de camp, fennecs, piliers de roche, acacias, fort en ruine, obélisques, camions de rallye… |
 | v2.6 — Trial | 80 | 64 **gros obstacles** physiques (0,4 à 1,3 m) avec rampes de terre tassée + arches de chrono, banderoles, fanions, spectateurs, mécaniciens |
 | v2.6 — Enduro | 70 | grosses racines, marches en rondins et en pierre (physiques), drapeaux et panneaux de colline, rochers de crête, arbres penchés, arches d'arrivée, photographes, quad de secours… |
+| v2.12 — Modules de trial | 200 | caisses, blocs béton, plateaux acier, rampes, tourets, pneus, palettes, escaliers, pierres taillées, empilables |
 | v2.8 — Obstacles techniques de trial | 350 | 189 mobilier + 161 nature (voir « Rochers et obstacles de trial ») |
 | v2.8 — Décors des 4 mondes | 2 000 | 500 par monde : arbres des espèces locales (5 tailles, 4 teintes, 3 formes), buissons, plantes, maisons et dépendances dans le style local, clôtures, mobilier (bidons de lait, ruches, roues de chariot, jarres, puits, lanternes…), rochers |
 | v2.8 — San Francisco | 3 500 | 864 maisons victoriennes, 720 immeubles et tours, 288 boutiques, 180 entrepôts, garages et casernes, 96 maisons de colline, 100 murs peints, 100 panneaux publicitaires, 200 meubles urbains, 60 lampadaires, 120 voitures garées, 48 food trucks, 24 cable cars/trams/bus, 60 bateaux, 50 arbres de rue, 60 massifs, 288 **supporters animés**, 96 passants, 16 animaux, 30 vélos, et 100 obstacles de trial (**voitures garées à franchir**, bennes, bacs, bancs, escaliers de rue) |

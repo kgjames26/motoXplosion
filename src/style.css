@@ -3432,3 +3432,24 @@ html.no-fs-api .fs-btn,
 html.no-fs-api .fs-row {
   display: none;
 }
+
+/* ------------------------------------------------------------------ v2.12 wider throttle, garage lower */
+.throttle {
+  width: calc(var(--u) * 32);
+}
+.thr-track {
+  width: calc(var(--u) * 26);
+  border-radius: calc(var(--u) * 7);
+}
+.thr-grip {
+  border-radius: calc(var(--u) * 6);
+}
+#controls.layout-gauche .brake {
+  right: calc(var(--u) * 38 + var(--safe-r));
+}
+#controls.layout-inverse .brake {
+  left: calc(var(--u) * 38 + var(--safe-l));
+}
+#btn-garage.neon-sel {
+  margin-top: calc(var(--u) * 7.5);
+}

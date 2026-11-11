@@ -599,7 +599,8 @@ export class TerrainBuilder {
         addFore(s, p.x, foreY(w, p.x, z) - 0.05, z, p.scale * 0.9, p.flip);
       } else if (isAsset) {
         // physical obstacle: exact size, base on the ground it was built on, just behind the bike
-        add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5, 1, false);
+        // tiny depth offset: overlapping neighbours (stacked modules) never flicker
+        add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5 + (Math.round(p.x * 7) % 5) * 0.006, 1, false);
         // light halo around it: an obstacle of the course, not a piece of scenery
         const halo = new THREE.Mesh(this.billboardGeo(s), this.haloMat(s));
         halo.position.set(p.x, (p.baseY ?? w.heightAt(p.x)) - 0.02, -0.56);

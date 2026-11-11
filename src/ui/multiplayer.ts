@@ -147,7 +147,7 @@ export class MultiUI {
     const opt = (key: string, val: string | number, label: string, on: boolean) => `<button class="mp-opt${on ? ' on' : ''}" data-k="${key}" data-v="${val}"${host ? '' : ' disabled'}>${label}</button>`;
     $('mp-settings').innerHTML = `
       <h3>${host ? 'Prochaine épreuve (tu choisis)' : 'Prochaine épreuve (choisie par l’hôte)'}</h3>
-      <div class="mp-row"><span>Mode</span>${MODES.map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
+      <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
       <div class="mp-row"><span>Monde</span>${REGION_ORDER.map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
       ${S.mode === 'cruising' ? '' : `<div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>`}
       <div class="mp-row"><span>Difficulté</span>${DIFFICULTIES.map((d, i) => opt('difficulty', d.id, `${WEATHER_ICONS[i]}${d.name} <small>${WEATHER_NAMES[i]}</small>`, S.difficulty === d.id)).join('')}</div>
