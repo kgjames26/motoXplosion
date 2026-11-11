@@ -418,11 +418,50 @@ function bindSettings(): void {
 // ---------------------------------------------------------------- flow
 
 /** Fullscreen + landscape lock where the platform allows it (Android, installed PWA). */
+type FsDoc = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => Promise<void> };
+type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+const fsSupported = () => !!(document.documentElement.requestFullscreen || (document.documentElement as FsEl).webkitRequestFullscreen);
+const isFullscreen = () => !!(document.fullscreenElement || (document as FsDoc).webkitFullscreenElement);
+
+async function enterFullscreen(): Promise<void> {
+  const el = document.documentElement as FsEl;
+  if (isFullscreen()) return;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+    else await el.webkitRequestFullscreen?.();
+  } catch {
+    /* refused (no user gesture, or not allowed) */
+  }
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (isFullscreen()) {
+    const d = document as FsDoc;
+    try {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else await d.webkitExitFullscreen?.();
+    } catch {
+      /* ignore */
+    }
+  } else await immersive();
+}
+
+/** Fullscreen class on <html>: out of fullscreen the buttons keep a small margin from the edges. */
+function syncFullscreen(): void {
+  const fs = isFullscreen();
+  document.documentElement.classList.toggle('fs', fs);
+  document.documentElement.classList.toggle('no-fs-api', !fsSupported());
+  for (const b of document.querySelectorAll('.fs-btn, .fs-toggle')) b.classList.toggle('active', fs);
+  const l = document.getElementById('fs-label');
+  if (l) l.textContent = fs ? 'QUITTER' : 'ACTIVER';
+  renderer.resize();
+}
+document.addEventListener('fullscreenchange', syncFullscreen);
+document.addEventListener('webkitfullscreenchange', syncFullscreen);
+
 async function immersive(): Promise<void> {
   try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen && matchMedia('(pointer: coarse)').matches) {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    }
+    await enterFullscreen();
     const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
     await o.lock?.('landscape');
   } catch {
@@ -595,6 +634,9 @@ garage.onChange = () => {
 };
 
 $('btn-play').addEventListener('click', play);
+$('btn-fs-title').addEventListener('click', () => void toggleFullscreen());
+$('btn-fs-settings').addEventListener('click', () => void toggleFullscreen());
+syncFullscreen();
 $('btn-circ-go').addEventListener('click', start);
 $('btn-circuits-back').addEventListener('click', () => {
   refreshTitle();
@@ -784,6 +826,9 @@ function flashSplash(): void {
   splashTimer = window.setTimeout(() => leaveSplash(), 1200);
 }
 
+// fullscreen as soon as possible: browsers only allow it on a touch, so the first touch on the
+// launch screen (anywhere) switches it on
+splash.addEventListener('pointerdown', () => void immersive(), { once: true });
 $('splash-play').addEventListener('click', () => {
   audio.unlock();
   void immersive();

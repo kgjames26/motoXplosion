@@ -3366,3 +3366,69 @@ u.mk {
   font-size: calc(var(--u) * 2.2);
   opacity: 0.8;
 }
+
+/* ------------------------------------------------------------------ v2.11 fullscreen & edges */
+
+:root {
+  --edge: calc(var(--u) * 1.8);
+}
+html.fs {
+  --edge: 0px;
+}
+#hud {
+  inset: var(--edge);
+}
+#controls {
+  left: var(--edge);
+  right: var(--edge);
+  bottom: var(--edge);
+}
+.screen {
+  inset: var(--edge);
+}
+#screen-garage,
+#screen-circuits,
+#screen-multi,
+#screen-champ,
+#screen-mpwait,
+#screen-settings,
+#screen-pause,
+#screen-over {
+  box-shadow: 0 0 0 var(--edge) rgba(8, 8, 12, 0.88);
+}
+.fs-btn {
+  right: calc(var(--u) * 13 + var(--safe-r));
+}
+.fs-btn svg,
+.fs-toggle svg {
+  fill: none !important;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fs-btn .fs-off,
+.fs-toggle .fs-off,
+.fs-btn.active .fs-on,
+.fs-toggle.active .fs-on {
+  display: none;
+}
+.fs-btn.active .fs-off,
+.fs-toggle.active .fs-off {
+  display: inline;
+}
+.fs-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 1);
+  padding: calc(var(--u) * 0.8) calc(var(--u) * 2);
+  font-size: calc(var(--u) * 2.6);
+}
+.fs-toggle svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+html.no-fs-api .fs-btn,
+html.no-fs-api .fs-row {
+  display: none;
+}
