@@ -15,6 +15,7 @@ export class Controls {
   private keys = new Set<string>();
   private kbThrottle = 0;
   onPause: () => void = () => {};
+  onCruise: () => void = () => {};
 
   private thrEl = document.getElementById('ctl-throttle')!;
   private thrTrack = this.thrEl.querySelector('.thr-track') as HTMLElement;
@@ -37,6 +38,7 @@ export class Controls {
       // Space would click the focused button / scroll, AltGr would open browser menus
       if (e.code === 'Space' || e.code === 'AltRight' || e.code === 'AltLeft') e.preventDefault();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
+      if (e.code === 'KeyC') this.onCruise();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.reset());

@@ -89,6 +89,12 @@ export class World {
       return ((v ^ (v >>> 13)) >>> 0) % 3;
     };
     let kind = h(k);
+    if (this.region.id === 'desert') {
+      // no snow in the desert: mostly sun, a rain shower now and then (never two in a row)
+      kind = kind === 1 ? 1 : 0;
+      if (k > 0 && kind === 1 && this.kindOf(k - 1) === 1) kind = 0;
+      return kind as Weather;
+    }
     if (k > 0) {
       const prev = this.kindOf(k - 1);
       if (kind === prev) kind = (kind + 1 + (h(k + 99) % 2)) % 3;

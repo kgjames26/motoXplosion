@@ -32,10 +32,12 @@ export interface Profile {
   upgrades: Record<string, Record<string, number>>;
   /** Tyre sets owned (sec, pluie, neige). */
   tyres: string[];
+  /** v2.15 gadgets bought in the garage (cruise control). */
+  gear: string[];
 }
 
 const KEY = 'mx.profile.v1';
-const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [] };
+const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [], gear: [] };
 
 export function loadProfile(): Profile {
   try {

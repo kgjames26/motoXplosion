@@ -5,10 +5,12 @@ import { Bike3D, disposeObject } from '../gl/bike3d';
 import { OUTFITS, outfitById } from '../outfits';
 import { Bike } from '../physics/bike';
 import type { Profile } from '../profile';
-import { BAR_RANGE, MAX_LEVEL, PARTS, partPrice, specNumbers, upgradedSpec } from '../upgrades';
+import { BAR_RANGE, CRUISE_CONTROL, MAX_LEVEL, PARTS, partPrice, specNumbers, upgradedSpec } from '../upgrades';
 import { TYRES, WEATHER_ICONS } from '../weather';
 
 const $ = (id: string) => document.getElementById(id)!;
+/** Speedometer with a lock: the cruise control. */
+export const CRUISE_ICON = '<svg class="cruise-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17a8.5 8.5 0 1 1 17 0" /><path d="M12 17l4.5-5" /><circle cx="12" cy="17" r="1.6" /><path d="M6 13.5l1.2.7M18 13.5l-1.2.7M12 9.5v1.4" /></svg>';
 type Tab = 'bikes' | 'parts' | 'tyres' | 'outfits';
 
 /**
@@ -58,6 +60,7 @@ export class Garage {
     $('g-tyres').addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tyre]');
       if (el) this.buyTyre(el.dataset.tyre!);
+      if ((e.target as HTMLElement).closest('[data-gear]')) this.buyCruise();
     });
     $('g-action').addEventListener('click', () => this.action());
     const view = $('garage-view');
@@ -295,15 +298,15 @@ export class Garage {
 
   private refreshTyres(): void {
     const p = this.profile;
-    $('g-name').textContent = 'Pneus';
+    $('g-name').textContent = 'Équipement';
     $('g-tag').textContent = 'Pour toutes tes motos';
-    $('g-desc').textContent = 'Chaque train de pneus est monté tout seul quand sa météo arrive.';
+    $('g-desc').textContent = 'Les pneus se montent tout seuls quand leur météo arrive.';
     $('g-tyres').innerHTML = TYRES.map((t, i) => {
       const own = p.tyres.includes(t.id);
       return `<div class="t-card${own ? ' own' : ''}">${WEATHER_ICONS[i]}<div class="p-txt"><b>${t.name}</b><small>${t.desc}</small></div>${
         own ? '<button class="p-buy max" disabled>✓</button>' : `<button class="p-buy${p.coins < t.price ? ' poor' : ''}" data-tyre="${t.id}"><i class="coin-ico"></i>${t.price.toLocaleString('fr-FR')}</button>`
       }</div>`;
-    }).join('');
+    }).join('') + this.cruiseCard();
     $('g-action').classList.add('hidden');
     $('garage-dots').innerHTML = '';
   }
@@ -354,6 +357,24 @@ export class Garage {
     this.preview = l + 1 < MAX_LEVEL ? id : null;
     this.justBought = id;
     setTimeout(() => (this.justBought = null), 900);
+    this.save();
+    this.refresh();
+    this.onChange();
+  }
+
+  private cruiseCard(): string {
+    const p = this.profile;
+    const c = CRUISE_CONTROL;
+    const own = p.gear.includes(c.id);
+    return `<div class="t-card cruise-card${own ? ' own' : ''}">${CRUISE_ICON}<div class="p-txt"><b>${c.name}</b><small>${c.desc}</small></div>${
+      own ? '<button class="p-buy max" disabled>✓</button>' : `<button class="p-buy${p.coins < c.price ? ' poor' : ''}" data-gear="${c.id}"><i class="coin-ico"></i>${c.price.toLocaleString('fr-FR')}</button>`
+    }</div>`;
+  }
+
+  private buyCruise(): void {
+    const c = CRUISE_CONTROL;
+    if (this.profile.gear.includes(c.id) || !this.pay(c.price)) return;
+    this.profile.gear.push(c.id);
     this.save();
     this.refresh();
     this.onChange();

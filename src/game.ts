@@ -35,6 +35,8 @@ export interface Popup {
 }
 
 export interface GameEvents {
+  /** Cruise control switched on (true) or off (false). */
+  cruise?: boolean;
   pickup?: 'fuel' | 'water';
   coin?: number;
   landing?: number;
@@ -85,6 +87,8 @@ export interface RunOptions {
   multi?: boolean;
   /** Home screen demo ride: calm, dry weather. */
   calm?: boolean;
+  /** Cruise control bought in the garage (cruising only). */
+  cruiseControl?: boolean;
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -179,6 +183,11 @@ export class Game {
   private dustAcc = 0;
   private lastAir = 0;
   private events: GameEvents = {};
+  /** Cruise control: owned, target speed (m/s, 0 = off) and its integrated throttle. */
+  hasCruise = false;
+  private ownsCruise = false;
+  cruiseTarget = 0;
+  private cruiseI = 0;
 
   constructor(opts: RunOptions) {
     this.newRun(opts);
@@ -207,6 +216,10 @@ export class Game {
     this.world.tyres = this.world.dynamic ? this.tyres : [];
     this.zoneRetries = 0;
     this.weakWarned = false;
+    if (opts.cruiseControl !== undefined) this.ownsCruise = opts.cruiseControl;
+    this.hasCruise = this.mode === 'cruising' && this.ownsCruise && !opts.calm && !this.multi;
+    this.cruiseTarget = 0;
+    this.cruiseI = 0;
     this.world.ensure(220);
     if (opts.spec || opts.model) this.spec = opts.spec ?? this.model.spec;
     if (opts.tyres) this.tyres = opts.tyres;
@@ -296,6 +309,16 @@ export class Game {
       inp.throttle = this.finished ? 0.15 : 0;
       inp.balance = 0;
       inp.brake = this.finished ? 0.3 : inp.brake;
+    }
+    // cruise control: holds the speed set by the player; braking or a fall switches it off,
+    // more throttle than the regulator gives still speeds up
+    if (this.cruiseTarget > 0) {
+      if (this.crashTimer > 0 || inp.brake > 0.3 || this.state !== 'playing') this.cruiseOff();
+      else if (bike.grounded) {
+        const err = this.cruiseTarget - bike.forwardSpeed;
+        this.cruiseI = Math.max(0, Math.min(1, this.cruiseI + err * 0.25 * dt));
+        inp.throttle = Math.max(inp.throttle, Math.max(0, Math.min(1, this.cruiseI + err * 0.35)));
+      } else inp.throttle = Math.max(inp.throttle, 0.2);
     }
     // brake held for 2 s at a standstill: the bike starts rolling backwards (up to 3 km/h)
     if (inp.brake > 0.5 && inp.throttle < 0.05 && bike.forwardSpeed < 0.35 && bike.grounded && this.crashTimer <= 0) this.brakeHold += dt;
@@ -416,6 +439,24 @@ export class Game {
   }
 
   /** Cruising distance multiplier (×1 → ×4). */
+  /** Cruise control button: set the current speed, or switch it off. */
+  toggleCruise(): void {
+    if (!this.hasCruise || this.state !== 'playing') return;
+    if (this.cruiseTarget > 0) return this.cruiseOff();
+    const v = this.bike.forwardSpeed;
+    if (v < 2.5 || this.crashTimer > 0) return;
+    this.cruiseTarget = v;
+    // start from the throttle that holds about this speed on the flat
+    this.cruiseI = Math.min(0.7, 0.15 + (v / Math.max(10, this.spec.maxSpeed)) * 0.5);
+    this.events.cruise = true;
+  }
+
+  cruiseOff(): void {
+    if (this.cruiseTarget <= 0) return;
+    this.cruiseTarget = 0;
+    this.events.cruise = false;
+  }
+
   get cruiseMult(): number {
     return Math.min(CRUISE_MAX, 1 + this.cruiseLevel * CRUISE_STEP);
   }

@@ -129,3 +129,11 @@ export const BAR_RANGE: Record<string, [number, number]> = {
   Autonomie: [80, 280],
   Rochers: [1, 2.7],
 };
+
+/** v2.15 cruise control: cruising only, holds the speed the player set. Dear on purpose. */
+export const CRUISE_CONTROL = {
+  id: 'cruise',
+  name: 'Régulateur de vitesse',
+  price: 7500,
+  desc: 'Cruising seulement : roule à ta vitesse, touche le bouton, la moto la garde toute seule. Un coup de frein l’arrête.',
+};

@@ -3700,3 +3700,74 @@ html.no-fs-api #btn-fs-pause { display: none; }
 .wx-retry {
   background: #3fa8ff;
 }
+
+/* ------------------------------------------------------------------ v2.15 cruise control */
+.cruise-btn {
+  position: absolute;
+  left: calc(var(--u) * 6 + var(--safe-l));
+  bottom: calc(var(--u) * 30 + var(--safe-b));
+  min-width: calc(var(--u) * 17);
+  height: calc(var(--u) * 9);
+  padding: 0 calc(var(--u) * 1.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.8);
+  pointer-events: auto;
+  border-radius: calc(var(--u) * 4.5);
+  border: calc(var(--u) * 0.6) solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(#3a3f4c, #262a34);
+  color: #cfd6e2;
+  font-weight: 900;
+  font-style: italic;
+  font-size: calc(var(--u) * 2.8);
+  box-shadow: 0 calc(var(--u) * 0.7) 0 rgba(0, 0, 0, 0.4);
+  transition: transform 0.06s, background 0.15s;
+}
+.cruise-btn.hidden {
+  display: none;
+}
+.cruise-btn svg,
+.cruise-ico {
+  width: calc(var(--u) * 4.6);
+  height: calc(var(--u) * 4.6);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cruise-btn:active {
+  transform: scale(0.94);
+}
+.cruise-btn.on {
+  background: linear-gradient(#3fe07a, #1fa850);
+  color: #0f2a18;
+  border-color: #d8ffe0;
+  font-size: calc(var(--u) * 3.6);
+  box-shadow:
+    0 calc(var(--u) * 0.7) 0 rgba(0, 0, 0, 0.4),
+    0 0 calc(var(--u) * 3) rgba(80, 255, 140, 0.7);
+}
+.cruise-btn.on b::after {
+  content: ' km/h';
+  font-size: 0.6em;
+}
+#controls.layout-gauche .cruise-btn {
+  left: auto;
+  right: calc(var(--u) * 32 + var(--safe-r));
+  bottom: calc(var(--u) * 27 + var(--safe-b));
+}
+#controls.layout-inverse .cruise-btn {
+  left: calc(var(--u) * 32 + var(--safe-l));
+  bottom: calc(var(--u) * 27 + var(--safe-b));
+}
+.cruise-card {
+  border-color: rgba(63, 224, 122, 0.5);
+  background: rgba(63, 224, 122, 0.08);
+}
+.cruise-card .cruise-ico {
+  width: 100%;
+  height: auto;
+  stroke: #3fe07a;
+}

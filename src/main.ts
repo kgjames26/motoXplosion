@@ -44,7 +44,7 @@ const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
-const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf() });
+const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf(), cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -692,6 +692,23 @@ $('btn-garage-back').addEventListener('click', () => {
   show(garageReturn);
 });
 controls.onPause = () => (game.state === 'paused' ? resume() : pause());
+controls.onCruise = () => game.toggleCruise();
+$('ctl-cruise').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  game.toggleCruise();
+});
+let cruiseShown = '';
+/** Cruise control button: only in cruising when bought; shows the speed it holds. */
+function syncCruise(): void {
+  const b = $('ctl-cruise');
+  const k = game.hasCruise ? (game.cruiseTarget > 0 ? 'on' + Math.round(game.cruiseTarget * 3.6) : 'off') : 'none';
+  if (k === cruiseShown) return;
+  cruiseShown = k;
+  b.classList.toggle('hidden', k === 'none');
+  b.classList.toggle('on', game.cruiseTarget > 0);
+  $('ctl-cruise-v').textContent = game.cruiseTarget > 0 ? `${Math.round(game.cruiseTarget * 3.6)}` : 'CRUISE';
+}
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
 });
@@ -877,6 +894,8 @@ function frame(now: number): void {
   game.input.balance = controls.balance;
   game.update(dt);
   const ev = game.consumeEvents();
+  syncCruise();
+  if (ev.cruise !== undefined) vibrate(ev.cruise ? [20, 30, 40] : 30);
   const inGame = game.state === 'playing' || game.state === 'over';
   if (ev.pickup) {
     audio.pickup(ev.pickup);
