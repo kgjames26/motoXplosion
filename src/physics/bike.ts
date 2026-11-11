@@ -1,6 +1,7 @@
 import { clamp, wrapAngle } from '../core/math';
 import { Surface, SURFACES } from '../world/types';
 import type { World } from '../world/world';
+import type { BikeSpec } from '../bikes';
 
 /**
  * Motocross physics, side view (x forward, y up, angles counter-clockwise).
@@ -66,20 +67,22 @@ const G = 9.81;
  * Geometry is expressed relative to the chassis centre of mass, which sits ~0.9 m above the
  * ground at static sag. Wheelbase ~1.48 m, 46 % of the weight on the front.
  */
-function makeWheel(front: boolean): Wheel {
+function makeWheel(front: boolean, spec?: BikeSpec): Wheel {
   // Fork rake ~27°, rear axis slightly inclined like a swing arm under load.
   const rake = front ? (27 * Math.PI) / 180 : (-8 * Math.PI) / 180;
-  const travel = front ? 0.3 : 0.32;
+  const tr = spec ? spec.travel : 1;
+  const ks = spec ? spec.suspK * (spec.mass / 178) : 1; // keep the sag right for the bike's weight
+  const travel = (front ? 0.3 : 0.32) * tr;
   return {
     mountX: front ? 0.7 : -0.646,
     mountY: front ? -0.235 : -0.217,
     axisX: Math.sin(rake),
     axisY: -Math.cos(rake),
     travel,
-    k: front ? 6900 : 7600,
-    preload: front ? 140 : 150,
-    cComp: front ? 700 : 800,
-    cReb: front ? 1500 : 1700,
+    k: (front ? 6900 : 7600) * ks / tr,
+    preload: (front ? 140 : 150) * ks,
+    cComp: (front ? 700 : 800) * Math.sqrt(ks),
+    cReb: (front ? 1500 : 1700) * Math.sqrt(ks),
     radius: 0.43, // matches the (slightly cartoon) proportions of the rider sprites
     mass: 11,
     inertia: 1.0,
@@ -106,10 +109,11 @@ export class Bike {
   vx = 0;
   vy = 0;
   omega = 0;
-  readonly mass = 178; // frame + engine + rider (wheels separate): a heavy scrambler
-  readonly inertia = 64;
-  rear = makeWheel(false);
-  front = makeWheel(true);
+  readonly mass: number; // frame + engine + rider (wheels separate)
+  readonly inertia: number;
+  rear: Wheel;
+  front: Wheel;
+  readonly spec: BikeSpec;
   /** Smoothed rider balance actually applied (-1..1). */
   lean = 0;
   airTime = 0;
@@ -128,10 +132,27 @@ export class Bike {
   private landingBase = 0;
 
   // tuning
-  readonly maxWheelTorque = 540; // N·m at the rear wheel
-  readonly power = 30000; // W at the wheel
-  readonly maxSpeed = 27; // m/s rev limiter (~97 km/h): a scrambler, not a race bike
-  readonly brakeTorque = 1100;
+  readonly maxWheelTorque: number; // N·m at the rear wheel
+  readonly power: number; // W at the wheel
+  readonly maxSpeed: number; // m/s rev limiter
+  readonly brakeTorque: number;
+  readonly grip: number;
+  readonly airControl: number;
+
+  /** Default values are the Explorer 98 (heavy scrambler, ~97 km/h). */
+  constructor(spec: BikeSpec = { power: 30000, torque: 540, maxSpeed: 27, mass: 178, suspK: 1, travel: 1, grip: 1, air: 1, consumption: 1, brakes: 1 }) {
+    this.spec = spec;
+    this.mass = spec.mass;
+    this.inertia = 64 * (spec.mass / 178);
+    this.rear = makeWheel(false, spec);
+    this.front = makeWheel(true, spec);
+    this.maxWheelTorque = spec.torque;
+    this.power = spec.power;
+    this.maxSpeed = spec.maxSpeed;
+    this.brakeTorque = 1100 * spec.brakes;
+    this.grip = spec.grip;
+    this.airControl = spec.air;
+  }
 
   reset(world: World, x: number): void {
     const slope = world.slopeAt(x);
@@ -299,7 +320,7 @@ export class Bike {
         const vt = wvx * tx + wvy * ty;
         const slipV = vt - w.spin * w.radius;
         w.slip = slipV;
-        const mu = surf.grip;
+        const mu = surf.grip * this.grip;
         let Ft = -mu * N * Math.tanh(slipV / 1.2);
         // rolling resistance
         Ft -= surf.rolling * N * Math.tanh(vt * 2);
@@ -389,7 +410,7 @@ export class Bike {
           torque += (-0.1 - rel) * 3400 * k - Math.min(0, this.omega) * 80 * k;
         }
       } else {
-        torque += -this.lean * 300;
+        torque += -this.lean * 300 * this.airControl;
         // pitch damping in the air keeps control precise
         torque -= this.omega * 150;
       }

@@ -1,9 +1,11 @@
 import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
+import type { ModeId } from '../modes';
 import {
   Biome,
   Bridge,
+  Coin,
   CHUNK_SAMPLES,
   DX,
   Pickup,
@@ -40,6 +42,7 @@ export class World {
   readonly chunks = new Map<number, Chunk>();
   props: Prop[] = [];
   pickups: Pickup[] = [];
+  coins: Coin[] = [];
   bridges: Bridge[] = [];
   marks: TrackMark[] = [];
   private gen: Generator;
@@ -49,9 +52,12 @@ export class World {
   constructor(
     readonly seed: number,
     regionId: RegionId = 'alpes',
+    readonly mode: ModeId = 'cruising',
+    /** Course: championship level (race length, density). */
+    readonly level = 1,
   ) {
     this.region = REGIONS[regionId];
-    this.gen = new Generator(this, seed, this.region);
+    this.gen = new Generator(this, seed, this.region, mode, level);
   }
 
   /** True when x is over a bridge deck (no ground band drawn there). */
@@ -72,6 +78,7 @@ export class World {
     const minX = minChunk * CHUNK_SAMPLES * DX;
     if (this.props.length && this.props[0].x < minX) this.props = this.props.filter((p) => p.x >= minX);
     if (this.pickups.length && this.pickups[0].x < minX) this.pickups = this.pickups.filter((p) => p.x >= minX);
+    if (this.coins.length && this.coins[0].x < minX) this.coins = this.coins.filter((p) => p.x >= minX);
     this.bridges = this.bridges.filter((b) => b.x1 >= minX);
     this.marks = this.marks.filter((m) => m.x1 >= minX);
   }

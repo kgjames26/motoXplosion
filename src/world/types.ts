@@ -67,7 +67,11 @@ export type PropKind =
  */
 export interface Prop {
   x: number;
-  kind: PropKind;
+  kind: PropKind | 'asset';
+  /** Catalog asset id (kind === 'asset'). */
+  asset?: string;
+  /** Explicit ground height for the base (obstacles on the track). */
+  baseY?: number;
   depth: number;
   scale: number;
   variant: number;
@@ -75,6 +79,14 @@ export interface Prop {
 }
 
 export type PickupKind = 'fuel' | 'water';
+
+/** Coins to collect (the garage currency). */
+export interface Coin {
+  x: number;
+  y: number;
+  taken: boolean;
+  takenAt: number;
+}
 export interface Pickup {
   x: number;
   y: number;
@@ -102,5 +114,7 @@ export interface Bridge {
 export interface TrackMark {
   x0: number;
   x1: number;
-  kind: 'berm' | 'kicker' | 'whoops' | 'ford' | 'start' | 'checkpoint' | 'wadi' | 'oasis' | 'ledges';
+  kind: 'berm' | 'kicker' | 'whoops' | 'ford' | 'start' | 'checkpoint' | 'wadi' | 'oasis' | 'ledges' | 'sectionStart' | 'sectionEnd' | 'finish';
+  /** Section number (trial) or checkpoint index. */
+  n?: number;
 }

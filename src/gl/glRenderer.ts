@@ -7,7 +7,9 @@ import { pickupSprite } from '../render/sprites';
 import type { Pickup } from '../world/types';
 import { Biome, Bridge, CHUNK_SAMPLES, DX } from '../world/types';
 import type { World } from '../world/world';
-import { Bike3D } from './bike3d';
+import { Bike3D, disposeObject } from './bike3d';
+import type { BikeModel } from '../bikes';
+import type { Opponent } from '../ai';
 import { BridgeBuilder } from './bridges';
 import { ChunkVisual, TerrainBuilder } from './terrain';
 import { spriteGeometry, TextureBank } from './textures';
@@ -53,7 +55,11 @@ export class GLRenderer {
   private backdropTex: Record<string, { tex: THREE.Texture; aspect: number; horizon: number; sky: string; ground: string }> = {};
   private backdropKey = '';
   private lower: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  readonly bike3d = new Bike3D();
+  bike3d = new Bike3D();
+  private rivals = new Map<Opponent, Bike3D>();
+  private coinMesh: THREE.InstancedMesh;
+  private tagLayer: HTMLElement;
+  private tags = new Map<Opponent, HTMLElement>();
   private blob: THREE.Mesh;
   private particles: THREE.Points;
   private pGeo = new THREE.BufferGeometry();
@@ -130,6 +136,17 @@ export class GLRenderer {
     this.particles.frustumCulled = false;
     this.scene.add(this.particles);
 
+    // coins: one instanced mesh, spinning gold discs
+    const coinGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.06, 20).rotateX(Math.PI / 2);
+    const coinMat = new THREE.MeshStandardMaterial({ color: 0xf6c23a, metalness: 0.85, roughness: 0.25, emissive: 0x5a3a00, emissiveIntensity: 0.4 });
+    this.coinMesh = new THREE.InstancedMesh(coinGeo, coinMat, 256);
+    this.coinMesh.count = 0;
+    this.coinMesh.frustumCulled = false;
+    this.scene.add(this.coinMesh);
+    this.tagLayer = document.createElement('div');
+    this.tagLayer.className = 'rider-tags';
+    host.appendChild(this.tagLayer);
+
     this.popupLayer = document.createElement('div');
     this.popupLayer.className = 'popups';
     host.appendChild(this.popupLayer);
@@ -200,6 +217,86 @@ export class GLRenderer {
     this.backdropTex.canyon = canyonBackdrop();
     this.backdropTex.desert = desertBackdrop();
     if (this.world) this.setWorld(this.world, true);
+  }
+
+  /** The player's bike (garage choice). */
+  setPlayerModel(model: BikeModel): void {
+    if (this.bike3d.model.id === model.id) return;
+    this.scene.remove(this.bike3d.group);
+    disposeObject(this.bike3d.group);
+    this.bike3d = new Bike3D(model);
+    this.bike3d.setEnvironment(this.renderer);
+    this.scene.add(this.bike3d.group);
+  }
+
+  /** Race opponents: one 3D bike each, on its own lane. */
+  private syncRivals(game: Game, dt: number): void {
+    for (const [o, b3] of this.rivals) {
+      if (!game.opponents.includes(o)) {
+        this.scene.remove(b3.group);
+        disposeObject(b3.group);
+        this.rivals.delete(o);
+        this.tags.get(o)?.remove();
+        this.tags.delete(o);
+      }
+    }
+    const v = new THREE.Vector3();
+    for (const o of game.opponents) {
+      let b3 = this.rivals.get(o);
+      if (!b3) {
+        b3 = new Bike3D(o.model, o.look);
+        b3.lane = -0.25 + o.lane;
+        b3.setEnvironment(this.renderer);
+        this.scene.add(b3.group);
+        this.rivals.set(o, b3);
+        const tag = document.createElement('div');
+        tag.className = 'rider-tag';
+        tag.style.setProperty('--c', o.look.jersey);
+        tag.style.setProperty('--lvl', o.level >= 8 ? '#ff6a5a' : o.level >= 5 ? '#ffd23f' : '#7dff7a');
+        tag.innerHTML = `${o.name} <b>Niv.${o.level}</b>`;
+        this.tagLayer.appendChild(tag);
+        this.tags.set(o, tag);
+      }
+      const near = Math.abs(o.bike.x - this.camX) < 40;
+      b3.group.visible = near;
+      if (near) b3.update(o.bike, dt, o.crashTimer > 0);
+      const tag = this.tags.get(o)!;
+      if (near && game.state === 'playing') {
+        const [ox, oy] = o.bike.pointWorld(0, 0);
+        v.set(ox, oy + 1.7, b3.lane).project(this.camera);
+        tag.style.display = 'block';
+        tag.style.transform = `translate(${((v.x + 1) / 2) * this.W}px, ${((1 - v.y) / 2) * this.H}px) translate(-50%, -50%)`;
+      } else tag.style.display = 'none';
+    }
+  }
+
+  private coinMatrix = new THREE.Matrix4();
+  private updateCoins(game: Game): void {
+    let n = 0;
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const p = new THREE.Vector3();
+    const sc = new THREE.Vector3();
+    for (const c of game.world.coins) {
+      if (c.x < this.camX - 30 || c.x > this.camX + 40) continue;
+      let s = 1;
+      let y = c.y;
+      if (c.taken) {
+        const t = game.time - c.takenAt;
+        if (t > 0.3) continue;
+        s = 1 - t / 0.3;
+        y += t * 4;
+      }
+      e.set(0, this.time * 3 + c.x, 0);
+      q.setFromEuler(e);
+      p.set(c.x, y + Math.sin(this.time * 2.5 + c.x) * 0.08, -0.25);
+      sc.setScalar(s);
+      this.coinMatrix.compose(p, q, sc);
+      this.coinMesh.setMatrixAt(n++, this.coinMatrix);
+      if (n >= 256) break;
+    }
+    this.coinMesh.count = n;
+    this.coinMesh.instanceMatrix.needsUpdate = true;
   }
 
   /** New run (or new settings): drop every visual built for the previous world. */
@@ -330,6 +427,8 @@ export class GLRenderer {
     this.blob.scale.set(s, s, 1);
     (this.blob.material as THREE.MeshBasicMaterial).opacity = s;
 
+    this.syncRivals(game, dt);
+    this.updateCoins(game);
     this.updateParticles(game);
     this.renderer.render(this.scene, this.camera);
     this.updatePopups(game);

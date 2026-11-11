@@ -1,7 +1,40 @@
 # MotoXplosion
 
-PWA de **cruising motocross infini** en 2,5D (scène 3D WebGL vue de côté), jouable sur smartphone, de préférence en paysage (le portrait marche aussi) : une balade
-contemplative dans de grands paysages peints, et un vrai défi de pilotage grâce à une physique de moto exigeante.
+PWA de **motocross** en 2,5D (scène 3D WebGL vue de côté), jouable sur smartphone **en mode paysage uniquement** : une balade
+contemplative dans de grands paysages peints, un vrai défi de pilotage grâce à une physique de moto exigeante, quatre modes de jeu,
+sept motos à gagner au garage.
+
+## Modes de jeu
+
+| Mode | Règles | Gains |
+| --- | --- | --- |
+| **Cruising** | balade infinie : garder de l'essence (bidons) et de l'eau (bouteilles) | 1 pièce / 20 m + pièces ramassées + sauts |
+| **Trial** | épreuve de **15 zones** d'obstacles (palettes, caisses, blocs, tourets, pneus, fûts, troncs, marches rocheuses, buses, escaliers…), de plus en plus dures. S'arrêter dans une zone = « pied à terre » (+1 point), chute = +5 points et on reprend la zone. **3 casques** : chaque chute en coûte un | 15 / zone, +10 par zone à zéro faute, bonus de fin d'épreuve (120 − 4 × points) |
+| **Enduro** | contre la montre sur terrain cassant (racines, arbres tombés, pierriers, troncs moussus, gués, montées) : 70 s au départ, **+36 s à chaque contrôle** (tous les 700 m), essence et eau gérées, soif plus forte | 1 / 30 m, 20 par contrôle, pièces |
+| **Course** | **8 pilotes** sur une piste de 1,6 à 2,4 km (jumps, doubles, berms, whoops) avec départ arrêté (3-2-1-GO), classement en direct, points de couleur des rivaux sur la barre de progression | prix selon la place (150 → 12) × niveau × difficulté |
+
+### Course : IA et difficulté évolutive
+- Les 7 rivaux roulent sur **de vraies motos simulées** (même physique que le joueur). Chacun a son **niveau de 1 à 10**, affiché au-dessus de lui (« Léo Niv.7 »), qui règle sa vitesse visée, sa discipline avant les sauts, sa précision d'équilibre en l'air, son temps de réaction et ses hésitations. Les meilleurs pilotes ont aussi les meilleures motos.
+- Le joueur choisit **Facile / Normal / Difficile** : cela fixe la moyenne du plateau ; autour, les niveaux sont étalés (deux plus forts, deux plus faibles…). Un léger élastique garde le peloton groupé.
+- **Championnat** : chaque podium remplit une pastille ; **3 podiums = niveau supérieur** (une 7e ou 8e place en retire une). Le niveau relève tous les rivaux et allonge la course. Il est affiché par un **badge** (médaille Bronze niv. 1-3, Argent 4-6, Or 7-9, Diamant 10+, avec les pastilles de progression) sur l'accueil et pendant la course.
+
+## Garage et économie
+
+Le **garage** est accessible depuis l'accueil (bouton GARAGE à côté d'OPTIONS) et depuis l'écran de fin de partie, pour dépenser juste après avoir gagné. Vitrine 3D qui tourne (on peut la faire pivoter du doigt), barres de caractéristiques (en vert quand c'est mieux que la moto actuelle), achat et choix de la moto. Le pilote porte une tenue assortie à sa moto.
+
+| Moto | Style | Prix | Points forts |
+| --- | --- | --- | --- |
+| Explorer 98 | scrambler vintage | offerte | douce et lourde, idéale en balade |
+| Sprint 125 | cross 2 temps (jaune/bleu) | 1 200 | légère, tourne vite en l'air, boit plus |
+| Ridge T300 | trial (rouge/blanc) | 2 800 | très légère, gros couple, pneus collants ; lente (77 km/h) |
+| Trailblazer 250 | enduro (bleu/blanc, phare) | 4 500 | confortable, sobre, polyvalente |
+| Fury 450 | cross 4 temps (orange/noir) | 7 000 | puissante, suspensions de course |
+| Volt X | électrique (turquoise/noir) | 10 000 | couple instantané, sifflement électrique, autonomie correcte |
+| Dakar 690 | rallye-raid (blanc/rouge/bleu, tête de fourche) | 15 000 | la plus rapide (125 km/h), énorme autonomie, lourde en l'air |
+
+Chaque moto change vraiment la physique (puissance, couple, rupteur, masse, raideur et débattement des suspensions, adhérence, contrôle aérien, consommation, freins).
+
+**Gagner des pièces** sans que ce soit rébarbatif : des pièces dorées sont posées en lignes et en arcs **au-dessus des sauts** (il faut sauter pour les attraper), les beaux sauts rapportent (« BIG AIR » +3 au-delà d'1,1 s de vol, réception « PARFAIT » +2), et chaque partie paie selon le mode. Une bonne partie rapporte 300 à 600 pièces : la première moto s'achète en 2 ou 3 parties, la Dakar après plusieurs heures de jeu. Les gains d'une partie arrêtée depuis la pause sont gardés, ainsi que le record.
 
 Chaque partie (niveau) se déroule dans **une région**, dont on traverse les différents environnements :
 
@@ -22,7 +55,7 @@ Le **Désert** a son propre jeu de décor (saguaros, palmiers, buissons secs, ar
 
 Sur la piste : sauts, tabletops, doubles, gaps, step-ups, drops, whoops, berms, gués, troncs, pierriers, montées
 et descentes, et des ponts **en bois** (pont de corde), **en pierre** (arches, dos d'âne), **en fer** (treillis riveté)
-ou de grands **viaducs** au-dessus d'une vallée. Le record est gardé pour chaque région.
+ou de grands **viaducs** au-dessus d'une vallée. Le record est gardé pour chaque mode et chaque région.
 
 But du jeu : **aller le plus loin possible** en gérant deux énergies :
 
@@ -68,13 +101,34 @@ Le projet est un build Vite standard, sans configuration particulière :
 
 - `public/manifest.webmanifest` : plein écran, orientation `landscape`, icônes 192/512 (dont une maskable) et une icône SVG.
 - `public/sw.js` : réseau d'abord pour la page (avec repli hors ligne), cache d'abord pour le code hashé, les images de `public/res/` et les icônes. Après une première visite, le jeu fonctionne hors ligne (sans la musique, qui est diffusée en streaming). **Penser à changer `CACHE` dans `sw.js` quand un fichier de `public/res/` change.**
-- Au lancement d'une partie, le jeu demande le plein écran quand la plateforme le permet. L'orientation est libre : en portrait, la caméra garde ~15 m de piste en largeur et les commandes se réorganisent.
+- Le jeu se joue **en paysage uniquement** : au lancement il demande le plein écran et le verrouillage paysage quand la plateforme le permet ; en portrait, un écran « Tournez votre téléphone » recouvre le jeu et la partie se met en pause.
 - La musique d'accueil démarre dès l'ouverture du jeu ; si le navigateur bloque la lecture automatique, elle démarre au premier toucher. Elle revient à chaque retour dans les menus.
+
+## Retour haptique (Android)
+
+Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des suspensions, aux chutes, aux bidons, pièces et cascades, aux fautes et zones réussies en trial, au compte à rebours et à l'arrivée d'une course. Réglables dans les Options. (Les navigateurs iPhone ne permettent pas la vibration.)
 
 ## Son
 
+- **Pause** : la musique et tous les sons s'arrêtent, ils reprennent au retour en jeu.
+- **Accueil** : on entend le moteur de la moto de démonstration derrière la musique.
 - **Musiques** : `public/audio/music-menu.mp3` (accueil, pause, fin de partie) et `music-game.mp3` (en course, en boucle). La boucle saute le silence du début et de la fin et enchaîne avec un fondu de 4 s, sans coupure. Les musiques passent de l'une à l'autre en fondu.
 - **Moteur** : synthétisé en temps réel (AudioWorklet, `src/audio/engineWorklet.ts`), modèle d'un monocylindre 4 temps de cross : une explosion tous les deux tours, avec des irrégularités aléatoires, excitant deux résonateurs (échappement et carter). S'y ajoutent le claquement de combustion sous charge et des pétarades à la décélération, puis un filtre passe-bas qui donne un son un peu sourd.
+
+## Catalogue d'assets (722 éléments)
+
+Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en familles paramétrées : chaque élément est une variante distincte (espèce, taille, saison, couleur, forme), dessinée au premier usage puis mise en cache.
+
+| Groupe | Nombre | Exemples |
+| --- | --- | --- |
+| Cartes (Alpes, Forêt, partagés) | 204 | épicéas, mélèzes, bouleaux, feuillus d'automne, sapins, pins sylvestres, buissons, fleurs, fougères, champignons, rochers moussus, chalets, granges, bottes de foin, chapelle, refuges, vaches, chèvres, cerfs, randonneurs… |
+| Cartes (Canyon) | 92 | cheminées de fée, buttes, arches, falaises striées, genévriers, peupliers, yuccas, wagonnets, château d'eau, chariots, rochers gravés… |
+| Cartes (Désert) | 111 | saguaros, cactus tonneaux, agaves, arbres de Josué, palmiers, dromadaires, tentes nomades, maisons en adobe, ruines, 4x4, balises de rallye… |
+| Trial | 101 | 85 obstacles physiques (la piste suit exactement leur forme) + portes de zone, juges, tableau des points, spectateurs, conteneurs… |
+| Enduro | 103 | racines, arbres tombés, pierriers, troncs moussus (physiques) + flèches, contrôles, commissaires, ravitaillement, bornes kilométriques… |
+| Course | 111 | arche d'arrivée, grille de départ, banderoles de sponsors inventés, tribunes, tentes et camions d'équipe, murs de pneus, foule, tours TV… |
+
+Le générateur tire une « palette » d'une vingtaine d'éléments tous les 100 à 150 m : chaque portion de route a son caractère et le décor ne se répète jamais à l'identique.
 
 ## Graphismes et ressources
 
@@ -91,7 +145,13 @@ Moteur : **Three.js (WebGL)**. La version précédente dessinait tout en Canvas 
 
 ```
 src/
-  main.ts                 boucle de jeu, écrans, paramètres, régions, PWA
+  main.ts                 boucle de jeu, écrans, modes, garage, gains, haptique, PWA
+  modes.ts                modes de jeu et leurs constantes
+  bikes.ts                les 7 motos : style, couleurs, caractéristiques, prix
+  profile.ts              progression sauvegardée : pièces, motos, records, championnat
+  ai.ts                   pilotes IA de la course (niveaux 1-10)
+  catalog/                catalogue d'assets procéduraux (nature, trial, enduro, course)
+  ui/garage.ts            garage avec vitrine 3D
   settings.ts             paramètres enregistrés (volumes, disposition, région, vibrations)
   assets.ts               chargement des images et métadonnées (public/res)
   game.ts                 règles : énergies, bidons/bouteilles, chutes, relance, fin de partie, effets

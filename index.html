@@ -32,6 +32,12 @@
             <div class="speed"><span id="speed">0</span><small>km/h</small></div>
             <div class="speed-underline"></div>
           </div>
+          <div class="hud-timer panel" id="hud-timer"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="13" r="8" /><path d="M12 13V8M9 2h6" /></svg><b id="timer">1:10</b></div>
+          <div class="hud-trial" id="hud-trial">
+            <div class="lives" id="lives"></div>
+            <div class="trial-info panel"><span>ZONE</span><b id="trial-zone">0/15</b><span>POINTS</span><b id="trial-faults">0</b></div>
+          </div>
+          <div class="hud-race panel" id="hud-race"><b id="race-pos">1</b><small id="race-pos-sfx">er</small><span>/8</span></div>
           <div class="energies">
             <div class="energy fuel" aria-label="Essence">
               <svg viewBox="0 0 24 24" class="ico"><path d="M5 4h9l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm2 4l7 7m0-7l-7 7" /><path d="M14 2h5v4" class="spout" /></svg>
@@ -59,9 +65,12 @@
               <path d="M4 3h4v3.7H4zm8 0h4v3.7h-4zM8 6.7h4v3.6H8zm8 0h4v3.6h-4zM4 10.3h4V14H4zm8 0h4V14h-4z" class="check" />
             </svg>
           </div>
-          <div class="distance"><span id="distance">0</span> m</div>
+          <div class="riders" id="riders"></div>
+          <div class="distance"><span id="distance">0</span> <span id="distance-unit">m</span></div>
         </div>
 
+        <div class="hud-coins panel" id="hud-coins"><i class="coin-ico"></i><b id="coins">0</b></div>
+        <div class="hud-level" id="hud-level"></div>
         <button class="hud-tr panel btn-pause" id="btn-pause" aria-label="Pause">
           <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
         </button>
@@ -122,12 +131,20 @@
           <div class="word"><span class="w1">moto</span><span class="wx">X</span><span class="w2">plosion</span></div>
           <div class="tag">CRUISING MOTOCROSS ADVENTURE</div>
         </div>
+        <div class="wallet panel" id="title-wallet"><i class="coin-ico"></i><b id="title-coins">0</b></div>
         <div class="title-menu">
+          <div class="modes" id="modes"></div>
+          <div class="mode-desc" id="mode-desc"></div>
+          <div class="course-opts hidden" id="course-opts">
+            <div class="level-badge" id="level-badge"></div>
+            <div class="diffs" id="diffs"></div>
+          </div>
           <button class="btn-slant btn-jouer" id="btn-play">JOUER</button>
           <div class="regions" id="regions"></div>
           <div class="title-row">
             <button class="btn-slant small" id="btn-settings-title">OPTIONS</button>
-            <div class="best">RECORD <b id="best-title">0</b> m</div>
+            <button class="btn-slant small garage" id="btn-garage">GARAGE</button>
+            <div class="best">RECORD <b id="best-title">0</b></div>
           </div>
         </div>
         <div class="loading" id="loading">Chargement…</div>
@@ -149,16 +166,46 @@
 
       <div id="screen-over" class="screen hidden">
         <h2 id="over-title">PANNE D'ESSENCE !</h2>
-        <div class="over-stats">
-          <div><span>Distance</span><b id="over-distance">0 m</b></div>
-          <div><span>Temps</span><b id="over-time">0:00</b></div>
-          <div><span>Record</span><b id="over-best">0 m</b></div>
+        <div class="over-body">
+          <div class="over-left">
+            <div class="over-score panel"><span id="over-score-label">Distance</span><b id="over-score">0 m</b><small id="over-best">Record : 0</small></div>
+            <div class="new-record hidden" id="over-record">NOUVEAU RECORD !</div>
+            <div class="level-up hidden" id="over-levelup"></div>
+            <ol class="standings panel hidden" id="over-standings"></ol>
+          </div>
+          <div class="over-coins panel">
+            <h3><i class="coin-ico"></i> Gains</h3>
+            <ul id="over-lines"></ul>
+            <div class="over-total"><span>Total</span><b id="over-total">+0</b></div>
+            <div class="over-wallet">Solde : <b id="over-wallet">0</b></div>
+          </div>
         </div>
-        <div class="new-record hidden" id="over-record">NOUVEAU RECORD !</div>
         <div class="row">
           <button class="btn-primary" id="btn-again"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" /></svg> REJOUER</button>
+          <button class="btn-secondary" id="btn-garage2">GARAGE</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
         </div>
+      </div>
+
+      <div id="screen-garage" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="btn-garage-back">‹ RETOUR</button>
+          <h2>GARAGE</h2>
+          <div class="wallet panel"><i class="coin-ico"></i><b id="garage-coins">0</b></div>
+        </div>
+        <div class="garage-body">
+          <button class="garage-arrow" id="garage-prev" aria-label="Moto précédente">‹</button>
+          <div class="garage-view" id="garage-view"></div>
+          <div class="garage-info panel">
+            <div class="g-name" id="g-name"></div>
+            <div class="g-tag" id="g-tag"></div>
+            <p class="g-desc" id="g-desc"></p>
+            <div class="g-stats" id="g-stats"></div>
+            <button class="btn-primary g-action" id="g-action">CHOISIR</button>
+          </div>
+          <button class="garage-arrow" id="garage-next" aria-label="Moto suivante">›</button>
+        </div>
+        <div class="garage-dots" id="garage-dots"></div>
       </div>
 
       <div id="screen-settings" class="screen hidden">
@@ -207,6 +254,14 @@
         <button class="btn-primary" id="btn-settings-back">RETOUR</button>
       </div>
 
+    </div>
+    <div id="rotate">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="20" y="8" width="24" height="44" rx="4" class="phone" />
+        <path d="M10 40 a24 24 0 0 0 20 16" class="arrow" />
+        <path d="M26 52 l4 4 l-5 2" class="arrow" />
+      </svg>
+      <p>Tournez votre téléphone</p>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

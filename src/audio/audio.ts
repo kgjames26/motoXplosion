@@ -223,8 +223,48 @@ export class Audio {
   // second: scheduling a new automation event every frame makes the AudioParam timelines grow
   // and slowly eats CPU on phones.
   private eng = { rpm: 1400, thr: 0, gain: 0, wind: 0, lp: 900, t: 0 };
-  engine(rpm: number, throttle: number, speed: number, running: boolean): void {
+  /** Electric bikes: the combustion engine is muted, a motor whine plays instead. */
+  private electric = false;
+  private whine: { osc: OscillatorNode; osc2: OscillatorNode; gain: GainNode } | null = null;
+  setElectric(on: boolean): void {
+    this.electric = on;
     if (!this.ctx) return;
+    if (on && !this.whine) {
+      const ctx = this.ctx;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.3;
+      osc.connect(gain);
+      osc2.connect(g2).connect(gain);
+      gain.connect(this.sfxBus);
+      osc.start();
+      osc2.start();
+      this.whine = { osc, osc2, gain };
+    }
+  }
+
+  /** Pause: every sound stops (music, engine, wind, effects) until resume(). */
+  private suspended = false;
+  pauseAll(): void {
+    if (!this.ctx || this.suspended) return;
+    this.suspended = true;
+    for (const t of Object.values(this.tracks)) t?.pause();
+    void this.ctx.suspend();
+  }
+  resumeAll(): void {
+    if (!this.ctx || !this.suspended) return;
+    this.suspended = false;
+    void this.ctx.resume();
+    if (this.current) this.tracks[this.current]?.play();
+  }
+
+  engine(rpm: number, throttle: number, speed: number, running: boolean): void {
+    if (!this.ctx || this.suspended) return;
     const now = performance.now();
     const e = this.eng;
     const dt = Math.min(0.1, (now - e.t) / 1000);
@@ -246,8 +286,14 @@ export class Audio {
       this.fallback.osc2.frequency.value = f * 0.5;
     }
     this.engineFilter.frequency.value = e.lp;
-    this.engineGain.gain.value = e.gain;
+    this.engineGain.gain.value = this.electric ? 0 : e.gain;
     this.windGain.gain.value = e.wind;
+    if (this.whine) {
+      const f = 180 + speed * 38 + e.thr * 120;
+      this.whine.osc.frequency.value = f;
+      this.whine.osc2.frequency.value = f * 2.01;
+      this.whine.gain.gain.value = this.electric && running ? 0.05 + e.thr * 0.1 : 0;
+    }
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, vol: number, delay = 0, slide = 1): void {
@@ -298,6 +344,20 @@ export class Audio {
   crash(): void {
     this.noise(0.7, 0.5, 800);
     this.tone(80, 0.45, 'sawtooth', 0.18, 0, 0.3);
+  }
+
+  /** Coin: a short bright "ding" (throttled so a line of coins stays pleasant). */
+  private lastCoin = 0;
+  coin(): void {
+    if (!this.ctx || this.ctx.currentTime - this.lastCoin < 0.05) return;
+    this.lastCoin = this.ctx.currentTime;
+    this.tone(1318, 0.09, 'square', 0.06);
+    this.tone(1760, 0.14, 'triangle', 0.08, 0.05);
+  }
+
+  /** Race start lights: three beeps then a higher GO. */
+  countdown(n: number): void {
+    this.tone(n > 0 ? 660 : 1320, n > 0 ? 0.18 : 0.45, 'square', 0.12);
   }
 
   checkpoint(): void {

@@ -2,6 +2,8 @@ import { clamp, fbm1, noise1, Rng, smoothstep } from '../core/math';
 import { Biome, DX, PropKind, Surface } from './types';
 import type { World } from './world';
 import { BridgeKind, RegionDef } from './regions';
+import { AssetDef, AssetGroup, assetsFor, Slot } from '../catalog';
+import { ENDURO_CP, ModeId, raceLength } from '../modes';
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -20,6 +22,8 @@ interface Segment {
   onStart?: (x0: number, h0: number) => void;
   /** Prop density multiplier for the track side. */
   props?: number;
+  /** Coins to place: a line along the ground or an arc over the highest point. */
+  coins?: 'line' | 'arc';
 }
 
 type FeatureName =
@@ -37,6 +41,7 @@ type FeatureName =
   | 'descent'
   | 'logs'
   | 'rocks'
+  | 'enduroObs'
   // desert
   | 'dunes'
   | 'wadi'
@@ -184,17 +189,27 @@ export class Generator {
   private nextCheckpoint = 1000;
   private propsCursor = 0; // x up to which props have been spawned
 
+  private section = 0;
+  private raceLen: number;
+  private palette: Partial<Record<Slot, AssetDef[]>> = {};
+  private paletteEnd = -1;
+
   constructor(
     private world: World,
     seed: number,
     private region: RegionDef,
+    private mode: ModeId = 'cruising',
+    level = 1,
   ) {
     this.rng = new Rng(seed);
     this.biome = region.start;
     this.biomeEnd = 380;
+    this.raceLen = raceLength(level);
+    if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     // A calm start straight.
-    this.queue.push(this.flat(60, Surface.Dirt));
+    this.queue.push(this.flat(mode === 'trial' ? 20 : 60, Surface.Dirt));
     this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
+    if (mode === 'course') this.world.marks.push({ x0: 5 + this.raceLen, x1: 7 + this.raceLen, kind: 'finish' });
   }
 
   /** Difficulty 0..1 grows with distance. */
@@ -226,12 +241,18 @@ export class Generator {
     if (this.queue.length === 0) this.plan();
     this.seg = this.queue.shift()!;
     this.seg.onStart?.(this.segX0, this.segH0);
+    if (this.seg.coins) this.placeCoins(this.seg, this.segX0, this.segH0);
     this.spawnProps(this.segX0, this.segX0 + this.seg.len, this.seg.props ?? 1);
   }
 
   /** Decide what comes next: maybe switch biome, then a base stretch and a feature. */
   private plan(): void {
     const x = this.segX0;
+    if (this.mode === 'course' && x > this.raceLen + 5) {
+      // after the finish line: a long calm run-out
+      this.queue.push(this.flat(300, Surface.Dirt));
+      return;
+    }
     if (x >= this.biomeEnd) {
       // stay in the region: pick another of its environments
       const all = (Object.keys(this.region.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
@@ -242,16 +263,135 @@ export class Generator {
       // Smooth transition stretch.
       this.queue.push(this.base(this.rng.range(30, 45), 0.5));
     }
-    this.queue.push(this.base(this.rng.range(18, 50), 1));
+    if (this.mode === 'trial') {
+      this.planTrial();
+      return;
+    }
+    const baseSeg = this.base(this.rng.range(this.mode === 'course' ? 10 : 18, this.mode === 'course' ? 28 : 50), this.mode === 'course' ? 0.6 : 1);
+    if (this.mode !== 'course' && this.rng.chance(0.3)) baseSeg.coins = 'line';
+    this.queue.push(baseSeg);
     const def = BIOMES[this.biome];
-    const names = Object.keys(def.features) as FeatureName[];
-    const weights = names.map((n) => def.features[n]!);
+    let feats: Partial<Record<FeatureName, number>> = def.features;
+    if (this.mode === 'course') {
+      // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
+      feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
+    } else if (this.mode === 'enduro') {
+      feats = { ...def.features, enduroObs: 5, ford: 2, climb: 2, descent: 2, rocks: 2, logs: 1.5 };
+      delete feats.tabletop;
+      delete feats.double;
+    }
+    const names = Object.keys(feats) as FeatureName[];
+    const weights = names.map((n) => feats[n]!);
     const f = this.rng.weighted(names, weights);
-    this.queue.push(...this.feature(f, this.difficulty(x)));
-    if (x + 120 > this.nextCheckpoint) {
+    const segs = this.feature(f, this.difficulty(x));
+    if (f === 'tabletop' || f === 'double' || f === 'rollers' || f === 'dunes') {
+      const main = segs.reduce((a, b) => (b.len > a.len ? b : a));
+      if (this.rng.chance(this.mode === 'course' ? 0.35 : 0.6)) main.coins = 'arc';
+    }
+    this.queue.push(...segs);
+    const every = this.mode === 'enduro' ? ENDURO_CP : 1000;
+    if (this.mode !== 'course' && x + 120 > this.nextCheckpoint) {
       const cx = this.nextCheckpoint;
-      this.world.marks.push({ x0: cx, x1: cx + 2, kind: 'checkpoint' });
-      this.nextCheckpoint += 1000;
+      this.world.marks.push({ x0: cx, x1: cx + 2, kind: 'checkpoint', n: Math.round(cx / every) });
+      this.nextCheckpoint += every;
+    }
+  }
+
+  /**
+   * Trial: a chain of numbered sections. Each one = start gate, 3 to 6 obstacles taken from
+   * the trial catalog (harder tiers unlock as sections go by), end gate, then a short
+   * liaison. Obstacles keep a flat run-up and landing so they can be taken slowly.
+   */
+  private planTrial(): void {
+    const r = this.rng;
+    const n = ++this.section;
+    const tierMax = n <= 2 ? 1 : n <= 4 ? 2 : 3;
+    this.queue.push({
+      len: 10,
+      shape: () => 0,
+      surface: () => Surface.Dirt,
+      onStart: (x0) => {
+        this.world.marks.push({ x0: x0 + 5, x1: x0 + 5.5, kind: 'sectionStart', n });
+        this.decor(x0 + 5, 'trial', 't.gate.0', 0.08);
+      },
+      props: 0.5,
+    });
+    const obstacles = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tier <= tierMax);
+    const count = 3 + Math.min(4, Math.floor(n / 2));
+    for (let k = 0; k < count; k++) {
+      const a = r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)));
+      this.queue.push(this.obstacleSeg(a));
+      this.queue.push(this.flat(r.range(3, 5.5), Surface.Dirt));
+    }
+    this.queue.push({
+      len: 8,
+      shape: () => 0,
+      surface: () => Surface.Dirt,
+      onStart: (x0) => {
+        this.world.marks.push({ x0: x0 + 3, x1: x0 + 3.5, kind: 'sectionEnd', n });
+        this.decor(x0 + 3, 'trial', 't.gate.1', 0.08);
+        // judges, scoreboard and spectators around the end of the section
+        for (const slot of [0.3, 0.55, 0.8]) this.decor(x0 + r.range(-6, 6), 'trial', undefined, slot);
+      },
+    });
+    this.queue.push(this.base(r.range(14, 22), 0.25));
+  }
+
+  /** A physical catalog obstacle with a short flat margin on each side. */
+  private obstacleSeg(a: AssetDef): Segment {
+    const o = a.obstacle!;
+    const pad = 0.3;
+    return {
+      len: o.w + pad * 2,
+      shape: (t) => {
+        const u = (t - pad) / o.w;
+        return u <= 0 || u >= 1 ? 0 : o.h * o.profile(u);
+      },
+      // the drawn obstacle stands on the flat ground: the track band does not bulge under it
+      visual: () => 0,
+      surface: () => (a.id.includes('rock') || a.id.includes('stone') ? Surface.Rock : Surface.Wood),
+      noPickup: [[0, o.w + pad * 2]],
+      onStart: (x0, h0) => this.world.props.push({ x: x0 + pad + o.w / 2, kind: 'asset', asset: a.id, depth: 0, scale: 1, variant: 0, flip: false, baseY: h0 }),
+      props: 0.3,
+    };
+  }
+
+  /** Mode decor (trackside) at a given x: a specific asset or a random one of the group. */
+  private decor(x: number, group: AssetGroup, id?: string, depth = this.rng.range(0.05, 0.35)): void {
+    let assetId = id;
+    if (!assetId) {
+      const list = assetsFor([group], 'trackside');
+      if (!list.length) return;
+      assetId = this.rng.weighted(list, list.map((a) => a.weight ?? 1)).id;
+    }
+    this.world.props.push({ x, kind: 'asset', asset: assetId, depth, scale: 1, variant: 0, flip: false });
+  }
+
+  /** Coins along the ground (line) or in an arc over the top of a jump. */
+  private placeCoins(seg: Segment, x0: number, h0: number): void {
+    const n = 5;
+    if (seg.coins === 'line') {
+      const t0 = seg.len / 2 - 3;
+      for (let k = 0; k < n; k++) {
+        const t = t0 + k * 1.5;
+        if (t < 0 || t > seg.len) continue;
+        this.world.coins.push({ x: x0 + t, y: h0 + seg.shape(t) + 0.95, taken: false, takenAt: 0 });
+      }
+    } else {
+      let tMax = 0;
+      let hMax = -1e9;
+      for (let t = 0; t <= seg.len; t += 0.5) {
+        const h = seg.shape(t);
+        if (h > hMax) {
+          hMax = h;
+          tMax = t;
+        }
+      }
+      for (let k = 0; k < n; k++) {
+        const u = k / (n - 1) - 0.5;
+        const t = tMax + 2 + u * 7;
+        this.world.coins.push({ x: x0 + t, y: h0 + Math.max(seg.shape(Math.min(seg.len, Math.max(0, t))), hMax * 0.8) + 1.5 + (0.25 - u * u) * 2.4, taken: false, takenAt: 0 });
+      }
     }
   }
 
@@ -625,6 +765,16 @@ export class Generator {
           },
         ];
       }
+      case 'enduroObs': {
+        // one to three enduro obstacles (roots, fallen trees, stones, mossy logs) in a row
+        const list = assetsFor(['enduro'], 'obstacle');
+        const out: Segment[] = [];
+        for (let k = 0; k < r.int(1, 3); k++) {
+          out.push(this.obstacleSeg(r.weighted(list, list.map((a) => a.weight ?? 1))));
+          out.push(this.flat(r.range(3, 8)));
+        }
+        return out;
+      }
       case 'logs': {
         const n = r.int(1, 3);
         const spacing = r.range(5, 8);
@@ -673,6 +823,7 @@ export class Generator {
   // ---------------------------------------------------------------- content
 
   private maybePickup(x: number, h: number, seg: Segment, t: number): void {
+    if (this.mode === 'trial' || this.mode === 'course') return;
     const blocked = seg.noPickup?.some(([a, b]) => t >= a && t <= b) ?? false;
     if (blocked) return;
     const d = this.difficulty(x);
@@ -730,6 +881,60 @@ export class Generator {
         flip: r.chance(0.5),
       });
     }
+    this.spawnCatalog(start, x1, density);
     this.world.props.sort((a, b) => a.x - b.x);
+  }
+
+  /** Catalog groups that dress the current environment. */
+  private groups(): AssetGroup[] {
+    if (this.biome === Biome.Canyon) return ['canyon'];
+    if (this.biome === Biome.Desert) return ['desert'];
+    if (this.region.id === 'alpes') return ['green', 'alpes'];
+    if (this.region.id === 'foret') return ['green', 'foret'];
+    return ['green'];
+  }
+
+  /**
+   * Catalog decor. Every ~120 m a "palette" (a handful of species, rocks, buildings and
+   * animals) is drawn from the region's catalog, so each stretch has its own character
+   * and the scene never repeats exactly; mode decor (race paddock, enduro marking) is added.
+   */
+  private spawnCatalog(x0: number, x1: number, density: number): void {
+    const r = this.rng;
+    if (x0 >= this.paletteEnd) {
+      const g = this.groups();
+      const pick = (slot: Slot, n: number) => {
+        const list = assetsFor(g, slot);
+        const res: AssetDef[] = [];
+        for (let k = 0; k < n && list.length; k++) res.push(r.weighted(list, list.map((a) => a.weight ?? 1)));
+        return res;
+      };
+      this.palette = { tree: pick('tree', 6), bush: pick('bush', 5), ground: pick('ground', 6), structure: pick('structure', 2), animal: pick('animal', 2) };
+      if (this.mode === 'enduro') this.palette.trackside = assetsFor(['enduro'], 'trackside');
+      if (this.mode === 'course') this.palette.trackside = assetsFor(['course'], 'trackside');
+      this.paletteEnd = x0 + r.range(100, 150);
+    }
+    const P = this.palette;
+    const put = (slot: Slot, x: number, depth: number, scale = r.range(0.85, 1.15)) => {
+      const list = P[slot];
+      if (!list || !list.length) return;
+      const a = r.weighted(list, list.map((d) => d.weight ?? 1));
+      // signs, banners and buildings carry text or a lit side: never mirrored
+      const mirror = slot === 'tree' || slot === 'bush' || slot === 'ground' || slot === 'animal';
+      this.world.props.push({ x, kind: 'asset', asset: a.id, depth, scale, variant: 0, flip: mirror && r.chance(0.5) });
+    };
+    const k = Math.max(0.2, density);
+    for (let x = x0; x < x1; x += r.range(3, 7) / k) put(r.chance(0.55) ? 'tree' : 'bush', x, r.range(0.2, 1));
+    for (let x = x0; x < x1; x += r.range(2, 5) / k) put('ground', x, r.range(0.04, 0.6));
+    for (let x = x0 + r.range(0, 40); x < x1; x += r.range(45, 90)) put('structure', x, r.range(0.65, 1), 1);
+    for (let x = x0 + r.range(0, 50); x < x1; x += r.range(60, 120)) put('animal', x, r.range(0.3, 0.9), 1);
+    for (let x = x0; x < x1; x += r.range(5, 11)) put('ground', x, -r.range(0.2, 0.9), r.range(0.9, 1.3));
+    // mode decor along the track
+    if (this.mode === 'course' || this.mode === 'enduro') {
+      const dense = (x: number) => this.mode === 'course' && (x < 120 || Math.abs(x - (this.raceLen + 5)) < 80);
+      for (let x = x0; x < x1; x += dense(x) ? r.range(2.5, 5) : r.range(12, 24)) put('trackside', x, r.range(0.04, 0.4), 1);
+      if (this.mode === 'course' && x0 <= this.raceLen + 5 && x1 > this.raceLen + 5) this.decor(this.raceLen + 6, 'course', 'c.finish.' + r.int(0, 3), 0.02);
+      if (this.mode === 'course' && x0 < 10) this.decor(4, 'course', 'c.startgate.0', 0.02);
+    }
   }
 }

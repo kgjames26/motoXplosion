@@ -18,7 +18,7 @@ export interface Sprite {
 
 const PPM = 72; // sprite resolution, pixels per metre
 
-function make(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void, ppm = PPM): Sprite {
+export function make(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void, ppm = PPM): Sprite {
   const pad = 0.15;
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil((w + pad * 2) * ppm);
@@ -32,7 +32,7 @@ function make(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void,
   return { canvas, w: w + pad * 2, h: h + pad * 2, ax: pad + w / 2, ay: pad + h };
 }
 
-function outline(c: CanvasRenderingContext2D, width = 0.05): void {
+export function outline(c: CanvasRenderingContext2D, width = 0.05): void {
   c.strokeStyle = INK;
   c.lineWidth = width;
   c.stroke();

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fbm1, hash1, noise1 } from '../core/math';
 import { propSprite, Sprite } from '../render/sprites';
+import { assetSprite } from '../catalog';
 import { Biome, CHUNK_SAMPLES, DX, PropKind, Surface } from '../world/types';
 import type { World } from '../world/world';
 import { spriteGeometry, TextureBank } from './textures';
@@ -194,7 +195,7 @@ export class TerrainBuilder {
         2,
         (c, r) => {
           const i = i0 + a + c;
-          return [i * DX, w.sampleHeight(i), r === 0 ? Z_BACK : Z_FRONT];
+          return [i * DX, w.sampleVisual(i), r === 0 ? Z_BACK : Z_FRONT];
         },
         (x, _y, z) => [x, z],
         (c) => SURF_COLOR[w.sampleSurface(i0 + a + c)],
@@ -209,7 +210,7 @@ export class TerrainBuilder {
         (c, r) => {
           const i = i0 + a + c;
           const x = i * DX;
-          return r === 0 ? [x, w.sampleHeight(i), Z_FRONT] : [x, foreY(w, x, Z_FRONT + 0.05), Z_FRONT + 0.05];
+          return r === 0 ? [x, w.sampleVisual(i), Z_FRONT] : [x, foreY(w, x, Z_FRONT + 0.05), Z_FRONT + 0.05];
         },
         (x, y) => [x, y],
         () => [1, 1, 1],
@@ -308,15 +309,19 @@ export class TerrainBuilder {
     for (const p of w.props) {
       if (p.x < x0 || p.x >= x1) continue;
       const biome = w.biomeAt(p.x);
-      const s = propSprite(p.kind, p.variant, biome);
+      const isAsset = p.kind === 'asset';
+      const s = isAsset ? assetSprite(p.asset!) : propSprite(p.kind as PropKind, p.variant, biome);
       if (p.depth > 0) {
         const z = Z_BACK - 0.4 - p.depth * 9.5;
         // tall trees just behind the track are kept moderate so the far relief stays visible
-        const tall = p.kind === 'pine' || p.kind === 'pineDead' || p.kind === 'palm';
+        const tall = p.kind === 'pine' || p.kind === 'pineDead' || p.kind === 'palm' || (isAsset && s.h > 5.5 && p.depth < 0.5);
         add(s, p.x, backFieldY(w, p.x, z) - 0.05, z, p.scale * (tall ? 0.62 : 1), p.flip);
       } else if (p.depth < 0) {
         const z = Z_FRONT + 1 - p.depth * 6;
         add(s, p.x, foreY(w, p.x, z) - 0.05, z, p.scale * 0.9, p.flip);
+      } else if (isAsset) {
+        // physical obstacle: exact size, base on the ground it was built on, just behind the bike
+        add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5, 1, false);
       } else {
         add(s, p.x, w.heightAt(p.x) - 0.12, -0.3, 0.62, false);
       }
