@@ -1,7 +1,7 @@
 import { clamp } from '../core/math';
 
 /**
- * Touch (multi-pointer) and keyboard controls.
+ * Touch (multi-pointer) and keyboard controls (Space = gas, Ctrl / AltGr = brake, ← → = balance).
  *  - Throttle grip: drag down inside the grip track; release returns it to idle.
  *  - Balance slider: ARRIÈRE (left, -1) ↔ AVANT (right, +1); springs back to the centre.
  *  - Brake disc: hold to brake.
@@ -34,6 +34,8 @@ export class Controls {
       // typing in a text field (pseudo) never drives the bike
       if (e.repeat || (e.target as HTMLElement | null)?.tagName === 'INPUT') return;
       this.keys.add(e.code);
+      // Space would click the focused button / scroll, AltGr would open browser menus
+      if (e.code === 'Space' || e.code === 'AltRight' || e.code === 'AltLeft') e.preventDefault();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -116,8 +118,9 @@ export class Controls {
   /** Per-frame update: keyboard mixing, spring-back and visuals. */
   update(dt: number): void {
     const k = this.keys;
-    const up = k.has('ArrowUp') || k.has('KeyW');
-    const down = k.has('ArrowDown') || k.has('KeyS') || k.has('Space');
+    // keyboard: Space = throttle, Ctrl or AltGr = brake, arrows = rider balance
+    const up = k.has('Space') || k.has('ArrowUp');
+    const down = k.has('ControlLeft') || k.has('ControlRight') || k.has('AltRight') || k.has('ArrowDown');
     const left = k.has('ArrowLeft') || k.has('KeyA');
     const right = k.has('ArrowRight') || k.has('KeyD');
     // keyboard throttle ramps like a twist grip

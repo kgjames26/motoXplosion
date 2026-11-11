@@ -90,7 +90,7 @@ export type Levels = Record<string, number>;
 
 /** Price of the next level of a part on a bike (dearer on dearer bikes). */
 export function partPrice(m: BikeModel, level: number): number {
-  const base = Math.max(150, m.price * 0.07);
+  const base = Math.max(200, m.price * 0.07);
   return Math.round((base * [1, 1.8, 3][level - 1]) / 10) * 10;
 }
 

@@ -1,4 +1,5 @@
-import { BIKES, bikeById } from '../bikes';
+import { BIKES, MULTI_BIKE } from '../bikes';
+import { outfitById } from '../outfits';
 import { CIRCUITS, fmtTime } from '../circuits';
 import type { Game } from '../game';
 import { DIFFICULTIES, MODES, ModeId } from '../modes';
@@ -14,6 +15,7 @@ export interface MultiHost {
   show: (s: 'multi' | 'champ' | 'mpwait' | 'title' | 'none') => void;
   pseudo: () => string;
   bike: () => string;
+  outfit: () => string;
   /** Start a local run for this stage (spec, tyres… from the profile). */
   startStage: (stage: StageSettings, elapsed: number) => void;
   backToTitle: () => void;
@@ -43,6 +45,7 @@ export class MultiUI {
     $('champ-next').addEventListener('click', () => this.open());
     $('mpwait-end').addEventListener('click', () => this.multi?.forceEnd());
     $('mp-settings').addEventListener('click', (e) => this.onSettingsClick(e));
+    $('champ-next-panel').addEventListener('click', (e) => this.onSettingsClick(e));
     // ?salon=CODE in the address joins directly
     const code = new URLSearchParams(location.search).get('salon');
     if (code) ($('mp-code-input') as HTMLInputElement).value = code.toUpperCase();
@@ -64,6 +67,8 @@ export class MultiUI {
   private wire(m: Multi): void {
     m.onLobby = () => {
       this.render();
+      // the results screen keeps showing the next round as the host programs it
+      if (!$('screen-champ').classList.contains('hidden') && m.lobby) $('champ-next-panel').innerHTML = this.nextHtml(m.lobby, m.isHost);
       // somebody joined during the stage and races too: show them on the track
       if (this.inStage) this.syncRemotes();
     };
@@ -85,7 +90,7 @@ export class MultiUI {
 
   private async create(): Promise<void> {
     this.msg('Création du salon…');
-    const m = new Multi(this.h.pseudo(), this.h.bike());
+    const m = new Multi(this.h.pseudo(), MULTI_BIKE.id, this.h.outfit());
     this.wire(m);
     try {
       await m.host({ mode: 'course', region: 'alpes', circuit: 1, difficulty: 'facile' });
@@ -101,7 +106,7 @@ export class MultiUI {
     const code = ($('mp-code-input') as HTMLInputElement).value.trim().toUpperCase();
     if (code.length < 4) return this.msg('Entre le code du salon (5 lettres)');
     this.msg('Connexion au salon ' + code + '…');
-    const m = new Multi(this.h.pseudo(), this.h.bike());
+    const m = new Multi(this.h.pseudo(), MULTI_BIKE.id, this.h.outfit());
     this.wire(m);
     try {
       await m.join(code);
@@ -138,29 +143,34 @@ export class MultiUI {
         .map((p) => {
           const st = L.standings[p.id];
           const status = p.status === 'spectator' ? 'spectateur · entre à l’épreuve suivante' : p.status === 'racing' ? 'en course' : p.status === 'finished' ? 'arrivé' : 'prêt';
-          return `<div class="mp-p${p.id === me ? ' me' : ''}"><i style="background:${p.color}"></i><b>${esc(p.name)}${p.id === L.hostId ? ' <span class="crown">♛</span>' : ''}</b><small>${bikeById(p.bike).name} · ${status}</small>${st ? `<em>${'🏆'.repeat(st.wins)} ${st.points} pts</em>` : ''}</div>`;
+          return `<div class="mp-p${p.id === me ? ' me' : ''}"><i style="background:${p.color}"></i><b>${esc(p.name)}${p.id === L.hostId ? ' <span class="crown">♛</span>' : ''}</b><small>${MULTI_BIKE.name} · ${outfitById(p.outfit ?? 'moto').name} · ${status}</small>${st ? `<em>${'🏆'.repeat(st.wins)} ${st.points} pts</em>` : ''}</div>`;
         })
         .join('') +
       (L.running ? `<p class="mp-running">Épreuve ${L.stageNo} en cours…</p>${this.liveHtml()}` : '');
+    $('mp-settings').innerHTML = this.nextHtml(L, m.isHost) + `<p class="mp-share">Donne le code <b>${L.code}</b> à tes amis : Multijoueur → Rejoindre. Tout le monde roule en <b>${MULTI_BIKE.name}</b>, avec sa tenue.</p>`;
+  }
+
+  /** "Program the next round" panel (lobby before round 1, and the results screen after each). */
+  private nextHtml(L: Lobby, host: boolean): string {
     const S = L.next;
-    const host = m.isHost;
-    const opt = (key: string, val: string | number, label: string, on: boolean) => `<button class="mp-opt${on ? ' on' : ''}" data-k="${key}" data-v="${val}"${host ? '' : ' disabled'}>${label}</button>`;
-    $('mp-settings').innerHTML = `
-      <h3>${host ? 'Prochaine épreuve (tu choisis)' : 'Prochaine épreuve (choisie par l’hôte)'}</h3>
+    const n = L.final ? 1 : L.stageNo + 1;
+    const roundsOpen = L.stageNo === 0 || L.final;
+    const opt = (key: string, val: string | number, label: string, on: boolean, enabled = host) => `<button class="mp-opt${on ? ' on' : ''}" data-k="${key}" data-v="${val}"${enabled ? '' : ' disabled'}>${label}</button>`;
+    return `
+      <h3>${host ? `Programme la manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`}` : `Manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`} (programmée par l’hôte)`}</h3>
+      ${roundsOpen ? `<div class="mp-row"><span>Nombre de manches</span>${[1, 2, 3, 4, 5, 6, 8].map((k) => opt('rounds', k, String(k), (L.final ? 3 : L.rounds) === k)).join('')}</div>` : ''}
       <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
       <div class="mp-row"><span>Monde</span>${REGION_ORDER.map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
-      ${S.mode === 'cruising' ? '' : `<div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>`}
-      <div class="mp-row"><span>Difficulté</span>${DIFFICULTIES.map((d, i) => opt('difficulty', d.id, `${WEATHER_ICONS[i]}${d.name} <small>${WEATHER_NAMES[i]}</small>`, S.difficulty === d.id)).join('')}</div>
-      <div class="mp-row"><span>Victoires pour gagner</span>${[1, 2, 3, 4, 5].map((n) => opt('wins', n, String(n), L.winsNeeded === n)).join('')}</div>
-      ${host ? `<button class="neon-play" id="mp-start"${L.running ? ' disabled' : ''}>${L.champion ? 'NOUVEAU CHAMPIONNAT' : L.stageNo ? `ÉPREUVE ${L.stageNo + 1}` : 'LANCER LE CHAMPIONNAT'}</button>` : '<p class="mp-wait-host">L’hôte lance l’épreuve…</p>'}
-      <p class="mp-share">Donne le code <b>${L.code}</b> à tes amis : Multijoueur → Rejoindre.</p>`;
+      <div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>
+      <div class="mp-row"><span>Météo</span>${DIFFICULTIES.map((d, i) => opt('difficulty', d.id, `${WEATHER_ICONS[i]}${WEATHER_NAMES[i]}`, S.difficulty === d.id)).join('')}</div>
+      ${host ? `<button class="neon-play mp-start"${L.running ? ' disabled' : ''}>${L.final ? 'NOUVEAU CHAMPIONNAT' : `LANCER LA MANCHE ${n} / ${L.rounds}`}</button>` : '<p class="mp-wait-host">L’hôte lance la manche…</p>'}`;
   }
 
   private onSettingsClick(e: Event): void {
     const m = this.multi;
     if (!m?.isHost) return;
     const t = e.target as HTMLElement;
-    if (t.closest('#mp-start')) {
+    if (t.closest('.mp-start')) {
       m.startStage();
       return;
     }
@@ -168,7 +178,7 @@ export class MultiUI {
     if (!b) return;
     const k = b.dataset.k!;
     const v = b.dataset.v!;
-    if (k === 'wins') m.setNext({}, Number(v));
+    if (k === 'rounds') m.setNext({}, Number(v));
     else if (k === 'circuit') m.setNext({ circuit: Number(v) });
     else if (k === 'mode') m.setNext({ mode: v as ModeId });
     else if (k === 'region') m.setNext({ region: v as RegionId });
@@ -252,11 +262,13 @@ export class MultiUI {
     const g = this.h.game;
     const r = g.result;
     this.h.bank();
-    m.finish({ done: r?.reason === 'finish', time: g.chrono, prog: g.circuit ? g.progress : 0, falls: g.falls, dist: g.distance });
-    m.sendState(g.netState(m.myId), 1);
+    // waiting screen first: if I am the last one in (host), finishing ends the stage right
+    // away and the results screen must stay on top
     $('mp-panel').classList.add('hidden');
     $('mpwait-end').classList.toggle('hidden', !m.isHost);
     this.h.show('mpwait');
+    m.sendState(g.netState(m.myId), 1);
+    m.finish({ done: r?.reason === 'finish', time: g.chrono, prog: g.circuit ? g.progress : 0, falls: g.falls, dist: g.distance });
   }
 
   // ---------------------------------------------------------------- results
@@ -266,18 +278,36 @@ export class MultiUI {
     this.finished = false;
     this.h.backToTitle();
     const m = this.multi!;
-    $('champ-title').textContent = `ÉPREUVE ${L.stageNo} TERMINÉE`;
-    $('champ-stage').innerHTML = r.map((x) => `<li class="${x.id === m.myId ? 'me' : ''}"><i style="background:${x.color}"></i><b>${esc(x.name)}</b><span>${x.label}</span><em>${x.points ? '+' + x.points + ' pts' : ''}${x.win ? ' 🏆' : ''}</em></li>`).join('');
-    const gen = Object.entries(L.standings).sort((a, b) => b[1].wins - a[1].wins || b[1].points - a[1].points);
-    $('champ-general').innerHTML = gen.map(([id, s]) => `<li class="${id === m.myId ? 'me' : ''}"><i style="background:${s.color}"></i><b>${esc(s.name)}</b><span>${'🏆'.repeat(s.wins) || '—'}</span><em>${s.points} pts</em></li>`).join('');
-    $('champ-goal').textContent = `Premier à ${L.winsNeeded} victoire${L.winsNeeded > 1 ? 's' : ''} : champion !`;
-    const champ = L.champion ? L.standings[L.champion] : null;
-    $('champ-banner').classList.toggle('hidden', !champ);
-    if (champ) $('champ-banner').innerHTML = `🏆 <b>${esc(champ.name)}</b> remporte le championnat !`;
-    $('champ-next').classList.toggle('hidden', !m.isHost);
-    $('champ-next').textContent = L.champion ? 'NOUVEAU CHAMPIONNAT' : 'ÉPREUVE SUIVANTE';
-    $('champ-wait').classList.toggle('hidden', m.isHost);
+    $('champ-title').textContent = L.final ? 'CHAMPIONNAT TERMINÉ' : `MANCHE ${L.stageNo} / ${L.rounds} TERMINÉE`;
+    $('champ-stage').innerHTML = r.map((x) => `<li class="${x.id === m.myId ? 'me' : ''}"><i style="background:${x.color}"></i><b>${x.rank}. ${esc(x.name)}</b><span>${x.label}</span><em>${x.points ? '+' + x.points + ' pts' : ''}${x.win ? ' 🏆' : ''}</em></li>`).join('');
+    const gen = Object.entries(L.standings).sort((a, b) => b[1].points - a[1].points || b[1].wins - a[1].wins);
+    const arrow = (id: string) => {
+      const d = L.moves?.[id] ?? 0;
+      return d > 0 ? `<u class="up">▲${d}</u>` : d < 0 ? `<u class="down">▼${-d}</u>` : '<u class="same">=</u>';
+    };
+    $('champ-general').innerHTML = gen.map(([id, s], i) => `<li class="${id === m.myId ? 'me' : ''}"><i style="background:${s.color}"></i><b>${i + 1}. ${esc(s.name)}</b><span>${arrow(id)} ${'🏆'.repeat(s.wins)}</span><em>${s.points} pts</em></li>`).join('');
+    $('champ-goal').textContent = L.final ? 'Classement final' : `Encore ${L.rounds - L.stageNo} manche${L.rounds - L.stageNo > 1 ? 's' : ''}`;
+    $('champ-banner').classList.add('hidden');
+    $('champ-next').classList.add('hidden');
+    $('champ-wait').classList.add('hidden');
+    $('champ-next-panel').innerHTML = this.nextHtml(L, m.isHost);
     this.h.show('champ');
+    if (L.final) this.trophy(gen.findIndex(([id]) => id === m.myId) + 1, gen.map(([, s]) => s.name));
+  }
+
+  /** End of the championship: a cup (or medal) that fits my final place, confetti, podium. */
+  private trophy(place: number, names: string[]): void {
+    const el = $('champ-final');
+    const cup = place === 1 ? 'gold' : place === 2 ? 'silver' : place === 3 ? 'bronze' : 'wood';
+    const title = place === 1 ? 'CHAMPION !' : place === 2 ? '2e PLACE !' : place === 3 ? '3e PLACE !' : `${place}e PLACE — BRAVO !`;
+    const confetti = Array.from({ length: place <= 3 ? 46 : 18 }, (_, i) => `<i style="left:${(i * 37) % 100}%;animation-delay:${((i * 0.13) % 1.8).toFixed(2)}s;background:${['#ffd23f', '#ff6a12', '#3fe0ff', '#7ad84a', '#e84a8a'][i % 5]}"></i>`).join('');
+    el.innerHTML = `<div class="confetti">${confetti}</div>
+      <div class="cup ${cup}"><svg viewBox="0 0 64 64" aria-hidden="true"><path class="c-body" d="M18 6h28v14c0 10-6 17-14 17S18 30 18 20z"/><path class="c-handles" d="M18 10H9c0 9 4 14 10 15M46 10h9c0 9-4 14-10 15"/><path class="c-stem" d="M28 37h8v9h-8z"/><path class="c-base" d="M20 46h24v6H20zM16 52h32v6H16z"/><path class="c-shine" d="M24 10c0 8 1 14 5 19"/></svg><b>${place <= 3 ? place : ''}</b></div>
+      <h2>${title}</h2>
+      <ol class="podium">${names.slice(0, 4).map((n, i) => `<li class="p${i + 1}"><b>${i + 1}</b>${esc(n)}</li>`).join('')}</ol>
+      <button class="neon-play" id="champ-final-ok">VOIR LE CLASSEMENT</button>`;
+    el.classList.remove('hidden');
+    $('champ-final-ok').addEventListener('click', () => el.classList.add('hidden'));
   }
 }
 

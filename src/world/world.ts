@@ -2,7 +2,7 @@ import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
 import type { ModeId } from '../modes';
-import { Weather, weatherGrip } from '../weather';
+import { tyreBonus, Weather, weatherGrip } from '../weather';
 import {
   Biome,
   Bridge,
@@ -67,9 +67,82 @@ export class World {
     this.gen = new Generator(this, seed, this.region, mode, level, circuit, weather);
   }
 
-  /** Grip multiplier of the weather for a surface. */
-  gripK(s: Surface): number {
-    return this.weather ? weatherGrip(this.weather, s) : 1;
+  /** Cruising: the weather changes along the ride (every 2000 m). */
+  dynamic = false;
+  /** Tyre sets owned (dynamic weather picks the right one on the fly). */
+  tyres: string[] = [];
+
+  /** Grip multiplier of the weather (and fitted tyres) for a surface at x. */
+  gripK(s: Surface, x = 0): number {
+    if (!this.dynamic) return this.weather ? weatherGrip(this.weather, s) : 1;
+    const w = this.weatherAt(x);
+    let g = 1 + (weatherGrip(1, s) - 1) * w.wet;
+    g += (weatherGrip(2, s) - g) * w.snowGround;
+    return g * tyreBonus(this.tyres, (w.snowGround > 0.5 ? 2 : w.wet > 0.5 ? 1 : 0) as Weather);
+  }
+
+  /** Weather kind of the 2000 m stretch k (random, never the same twice in a row). */
+  private kindOf(k: number): Weather {
+    const h = (n: number) => {
+      let v = (this.seed ^ Math.imul(n + 7, 0x9e3779b1)) >>> 0;
+      v = Math.imul(v ^ (v >>> 15), 0x85ebca6b) >>> 0;
+      return ((v ^ (v >>> 13)) >>> 0) % 3;
+    };
+    let kind = h(k);
+    if (k > 0) {
+      const prev = this.kindOf(k - 1);
+      if (kind === prev) kind = (kind + 1 + (h(k + 99) % 2)) % 3;
+    }
+    return kind as Weather;
+  }
+  private kindCache = new Map<number, Weather>();
+  private kindAt(k: number): Weather {
+    let v = this.kindCache.get(k);
+    if (v === undefined) {
+      v = this.kindOf(k);
+      this.kindCache.set(k, v);
+    }
+    return v;
+  }
+
+  /**
+   * Weather at x: what falls from the sky (rain, snow: 0..1) and the state of the ground
+   * (wet, snow cover: 0..1). The sky changes first, the ground follows: rain then the ground
+   * gets wet, snow falls then covers the ground little by little, then melts (wet) and dries.
+   */
+  weatherAt(x: number): { rain: number; snow: number; wet: number; snowGround: number; kind: Weather } {
+    if (!this.dynamic) {
+      const k = this.weather;
+      return { rain: +(k === 1), snow: +(k === 2), wet: +(k === 1), snowGround: +(k === 2), kind: k };
+    }
+    const P = 2000;
+    const k = Math.max(0, Math.floor(x / P));
+    const t = x - k * P;
+    const cur = this.kindAt(k);
+    const prev = k > 0 ? this.kindAt(k - 1) : cur;
+    const ease = (u: number) => {
+      const c = Math.min(1, Math.max(0, u));
+      return c * c * (3 - 2 * c);
+    };
+    const sky = ease(t / 150); // the sky changes over 150 m
+    const rain = (prev === 1 ? 1 - sky : 0) + (cur === 1 ? sky : 0);
+    const snow = (prev === 2 ? 1 - sky : 0) + (cur === 2 ? sky : 0);
+    // ground lags behind the sky
+    const s0 = prev === 2 ? 1 : 0;
+    const w0 = prev === 1 ? 1 : 0;
+    let snowGround: number;
+    let wet: number;
+    if (cur === 2) {
+      snowGround = s0 + (1 - s0) * ease((t - 100) / 450); // flakes first, then a growing cover
+      wet = w0 * (1 - ease(t / 300));
+    } else {
+      const melt = ease(t / 550);
+      snowGround = s0 * (1 - melt);
+      const meltWater = s0 * Math.sin(Math.PI * Math.min(1, t / 900)) * 0.9; // melting snow wets the ground
+      wet = cur === 1 ? w0 + (1 - w0) * ease((t - 80) / 350) : w0 * (1 - ease(t / 450));
+      wet = Math.max(wet, meltWater);
+    }
+    return { rain, snow, wet: Math.min(1, wet), snowGround, kind: cur };
   }
 
   /** True when x is over a bridge deck (no ground band drawn there). */

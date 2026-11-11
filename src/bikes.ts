@@ -67,7 +67,7 @@ export const BIKES: BikeModel[] = [
     style: 'mx',
     tagline: 'Cross 2 temps léger',
     description: 'Légère et vive, elle tourne facilement en l’air. Le 2 temps boit un peu plus.',
-    price: 1200,
+    price: 1600,
     number: '12',
     colors: { frame: 0x2d4fb3, primary: 0xffd21f, secondary: 0x2d4fb3, seat: 0x1e2a55, rims: 0x22242a, forks: 0xe8b53a, plate: '#ffd21f', plateText: '#1e2a55' },
     spec: { power: 29000, torque: 500, maxSpeed: 28.5, mass: 152, suspK: 1.05, travel: 1.08, grip: 1.03, air: 1.25, consumption: 1.15, brakes: 1.05 },
@@ -78,7 +78,7 @@ export const BIKES: BikeModel[] = [
     style: 'trial',
     tagline: 'Spécialiste du trial',
     description: 'Ultra légère, énorme couple à bas régime et pneus collants : faite pour franchir les obstacles. Lente en vitesse de pointe.',
-    price: 2800,
+    price: 3800,
     number: '3',
     colors: { frame: 0xd8d8de, primary: 0xd8261f, secondary: 0xffffff, seat: 0x222222, rims: 0x222428, forks: 0xd8d8de, plate: '#ffffff', plateText: '#d8261f' },
     spec: { power: 24000, torque: 700, maxSpeed: 22, mass: 138, suspK: 0.85, travel: 0.95, grip: 1.25, air: 1.4, consumption: 0.75, brakes: 1.2 },
@@ -89,7 +89,7 @@ export const BIKES: BikeModel[] = [
     style: 'enduro',
     tagline: 'Enduro polyvalente',
     description: 'Phare, sabot et suspensions confortables : à l’aise partout, sobre, idéale pour l’enduro.',
-    price: 4500,
+    price: 6000,
     number: '25',
     colors: { frame: 0x1d2a3f, primary: 0x1f6fd6, secondary: 0xf2f4f8, seat: 0x1d2a3f, rims: 0x1d2a3f, forks: 0xe0a332, plate: '#f2f4f8', plateText: '#1f6fd6' },
     spec: { power: 33000, torque: 580, maxSpeed: 29.5, mass: 165, suspK: 1.15, travel: 1.15, grip: 1.1, air: 1.1, consumption: 0.85, brakes: 1.1 },
@@ -100,7 +100,7 @@ export const BIKES: BikeModel[] = [
     style: 'mx',
     tagline: 'Cross 4 temps de course',
     description: 'Puissance de course, suspensions de compétition et grande vitesse. Le choix des courses.',
-    price: 7000,
+    price: 9500,
     number: '45',
     colors: { frame: 0x2a2a2e, primary: 0xff6a12, secondary: 0x16161a, seat: 0x16161a, rims: 0x16161a, forks: 0xff8a2a, plate: '#16161a', plateText: '#ff6a12' },
     spec: { power: 41000, torque: 660, maxSpeed: 32, mass: 160, suspK: 1.3, travel: 1.2, grip: 1.12, air: 1.2, consumption: 1.1, brakes: 1.2 },
@@ -111,7 +111,7 @@ export const BIKES: BikeModel[] = [
     style: 'electric',
     tagline: 'Électrique',
     description: 'Couple instantané et silence presque total. Batterie à recharger avec les bidons « énergie ».',
-    price: 10000,
+    price: 13500,
     number: 'V',
     colors: { frame: 0x15181d, primary: 0x14d1c0, secondary: 0x15181d, seat: 0x15181d, rims: 0x14d1c0, forks: 0x6b7280, plate: '#15181d', plateText: '#14d1c0' },
     electric: true,
@@ -123,15 +123,32 @@ export const BIKES: BikeModel[] = [
     style: 'rally',
     tagline: 'Rallye-raid',
     description: 'La reine des grands espaces : la plus rapide, énorme autonomie et longues suspensions. Lourde en l’air.',
-    price: 15000,
+    price: 20000,
     number: '1',
     colors: { frame: 0x2a2f3a, primary: 0xf4f4f6, secondary: 0xd8261f, seat: 0x1d2a5a, rims: 0xe0a332, forks: 0xe0a332, plate: '#f4f4f6', plateText: '#1d2a5a' },
     spec: { power: 52000, torque: 740, maxSpeed: 36, mass: 192, suspK: 1.4, travel: 1.3, grip: 1.08, air: 0.9, consumption: 0.6, brakes: 1.3 },
   },
 ];
 
+/**
+ * The multiplayer bike: everybody rides the same one online, so races are about the rider.
+ * Mid-range performance (between the Trailblazer and the Fury), modern MX look: white
+ * plastics with violet and turquoise graphics, gold rims and gold fork tubes, black seat.
+ */
+export const MULTI_BIKE: BikeModel = {
+  id: 'arena',
+  name: 'Arena 300 R',
+  style: 'mx',
+  tagline: 'Moto officielle du multijoueur',
+  description: 'La même moto pour tous en ligne : c’est le pilotage qui fait la différence.',
+  price: 0,
+  number: '01',
+  colors: { frame: 0xd8dde4, primary: 0xf4f6fa, secondary: 0x7a3fd1, seat: 0x16161a, rims: 0xf6c23a, forks: 0xf0b030, plate: '#14d1c0', plateText: '#16161a' },
+  spec: { power: 36500, torque: 615, maxSpeed: 30.5, mass: 158, suspK: 1.2, travel: 1.16, grip: 1.1, air: 1.2, consumption: 1, brakes: 1.15 },
+};
+
 export function bikeById(id: string): BikeModel {
-  return BIKES.find((b) => b.id === id) ?? BIKES[0];
+  return BIKES.find((b) => b.id === id) ?? (id === MULTI_BIKE.id ? MULTI_BIKE : BIKES[0]);
 }
 
 /** Ratings 1..10 shown in the garage. */

@@ -29,6 +29,7 @@ export interface Opponent {
   /** Multiplayer: a real player whose bike is driven by the network. */
   remote?: boolean;
   netId?: string;
+  outfit?: string;
 }
 
 export interface RiderLook {

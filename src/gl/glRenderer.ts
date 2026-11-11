@@ -1,4 +1,4 @@
-import type { Outfit } from '../outfits';
+import { outfitById, type Outfit } from '../outfits';
 import { Backdrop, paintPanorama, panoramaAt } from './panoramas';
 import * as THREE from 'three';
 import type { Assets } from '../assets';
@@ -338,7 +338,8 @@ export class GLRenderer {
     for (const o of game.opponents) {
       let b3 = this.rivals.get(o);
       if (!b3) {
-        b3 = new Bike3D(o.model, o.look);
+        // other players wear the outfit they bought in solo
+        b3 = new Bike3D(o.model, o.look, o.outfit && o.outfit !== 'moto' ? outfitById(o.outfit) : undefined);
         b3.lane = -0.25 + o.lane;
         b3.setEnvironment(this.renderer);
         this.scene.add(b3.group);
@@ -499,9 +500,10 @@ export class GLRenderer {
     this.hemi.color.setRGB(0.84 + 0.14 * k, 0.92 - 0.2 * k, 1 - 0.3 * k);
     this.hemi.intensity = 1.35 - 0.35 * k;
     // weather: dimmer, greyer light under rain clouds; soft white light with snow
-    const wt = game.state === 'title' ? 0 : w.weather;
-    this.rainL = snap ? +(wt === 1) : approach(this.rainL, +(wt === 1), 1.5, dt);
-    this.snowL = snap ? +(wt === 2) : approach(this.snowL, +(wt === 2), 1.5, dt);
+    // sky: fixed weather, or (cruising) what is falling where the camera is
+    const sky = game.state === 'title' ? { rain: 0, snow: 0 } : w.weatherAt(this.camX);
+    this.rainL = snap ? sky.rain : approach(this.rainL, sky.rain, 1.5, dt);
+    this.snowL = snap ? sky.snow : approach(this.snowL, sky.snow, 1.5, dt);
     const ov = Math.max(this.rainL, this.snowL * 0.7);
     skyTint.copy(GREY_SKY).lerp(SNOW_SKY, this.snowL / Math.max(0.01, this.rainL + this.snowL));
     this.sun.intensity *= 1 - ov * 0.62;

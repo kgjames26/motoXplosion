@@ -328,7 +328,7 @@ export class Bike {
         const vt = wvx * tx + wvy * ty;
         const slipV = vt - w.spin * w.radius;
         w.slip = slipV;
-        const mu = surf.grip * this.grip * world.gripK(hit.surface);
+        const mu = surf.grip * this.grip * world.gripK(hit.surface, hit.px);
         let Ft = -mu * N * Math.tanh(slipV / 1.2);
         // rolling resistance
         Ft -= surf.rolling * N * Math.tanh(vt * 2);

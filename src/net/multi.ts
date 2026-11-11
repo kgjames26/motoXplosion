@@ -21,6 +21,8 @@ export interface NetPlayer {
   name: string;
   color: string;
   bike: string;
+  /** Outfit bought in solo (worn on the multiplayer bike). */
+  outfit: string;
   status: 'lobby' | 'racing' | 'finished' | 'spectator';
 }
 
@@ -86,6 +88,9 @@ export interface Lobby {
   code: string;
   hostId: string;
   players: NetPlayer[];
+  /** Rounds of the championship (chosen before the first one). */
+  rounds: number;
+  /** Kept for compatibility (old builds). */
   winsNeeded: number;
   next: StageSettings;
   stageNo: number;
@@ -93,10 +98,14 @@ export interface Lobby {
   standings: Record<string, Standing>;
   lastResults: StageResult[] | null;
   champion: string | null;
+  /** Places gained (+) or lost (−) in the general standings at the last round. */
+  moves: Record<string, number>;
+  /** The last round has been played: final standings. */
+  final: boolean;
 }
 
 type Msg =
-  | { t: 'hello'; name: string; color: string; bike: string }
+  | { t: 'hello'; name: string; color: string; bike: string; outfit?: string }
   | { t: 'full' }
   | { t: 'welcome'; id: string }
   | { t: 'lobby'; lobby: Lobby }
@@ -105,7 +114,7 @@ type Msg =
   | { t: 'states'; s: PlayerState[] }
   | { t: 'finish'; f: FinishInfo }
   | { t: 'results'; results: StageResult[]; lobby: Lobby }
-  | { t: 'profile'; name: string; color: string; bike: string };
+  | { t: 'profile'; name: string; color: string; bike: string; outfit?: string };
 
 const COLORS = ['#ff6a12', '#14b8ff', '#7ad84a', '#e84a8a'];
 
@@ -149,6 +158,7 @@ export class Multi {
   constructor(
     public name: string,
     public bike: string,
+    public outfit = 'moto',
   ) {}
 
   get me(): NetPlayer | undefined {
@@ -170,14 +180,17 @@ export class Multi {
           this.lobby = {
             code,
             hostId: id,
-            players: [{ id, name: this.name, color: COLORS[0], bike: this.bike, status: 'lobby' }],
-            winsNeeded: 2,
+            players: [{ id, name: this.name, color: COLORS[0], bike: this.bike, outfit: this.outfit, status: 'lobby' }],
+            rounds: 3,
+            winsNeeded: 99,
             next,
             stageNo: 0,
             running: null,
             standings: {},
             lastResults: null,
             champion: null,
+            moves: {},
+            final: false,
           };
           peer.on('connection', (c) => this.accept(c));
           this.onLobby(this.lobby);
@@ -212,7 +225,7 @@ export class Multi {
         this.myId = id;
         const c = peer.connect(PREFIX + code.trim().toUpperCase(), { reliable: true });
         this.hostConn = c;
-        c.on('open', () => c.send({ t: 'hello', name: this.name, color: '', bike: this.bike } satisfies Msg));
+        c.on('open', () => c.send({ t: 'hello', name: this.name, color: '', bike: this.bike, outfit: this.outfit } satisfies Msg));
         c.on('data', (d) => {
           const m = d as Msg;
           if (m.t === 'full') fail('Salon complet (4 pilotes)');
@@ -263,7 +276,7 @@ export class Multi {
         let status: NetPlayer['status'] = 'lobby';
         const fresh = L.running && Date.now() - L.running.startedAt < 8000;
         if (L.running) status = fresh ? 'racing' : 'spectator';
-        L.players.push({ id: c.peer, name: (m.name || 'Pilote').slice(0, 14), color, bike: m.bike, status });
+        L.players.push({ id: c.peer, name: (m.name || 'Pilote').slice(0, 14), color, bike: m.bike, outfit: m.outfit ?? 'moto', status });
         c.send({ t: 'welcome', id: c.peer } satisfies Msg);
         this.broadcastLobby();
         if (L.running && fresh) c.send({ t: 'start', stage: L.running.stage, stageNo: L.stageNo, elapsed: Date.now() - L.running.startedAt } satisfies Msg);
@@ -274,6 +287,7 @@ export class Multi {
         if (p) {
           p.name = m.name.slice(0, 14);
           p.bike = m.bike;
+          p.outfit = m.outfit ?? p.outfit;
           this.broadcastLobby();
         }
         return;
@@ -306,12 +320,12 @@ export class Multi {
     this.onLobby(this.lobby);
   }
 
-  /** Host: choose the next stage / the number of wins (before the championship starts). */
-  setNext(next: Partial<StageSettings>, winsNeeded?: number): void {
+  /** Host: program the next round; the number of rounds is set before the first one. */
+  setNext(next: Partial<StageSettings>, rounds?: number): void {
     if (!this.isHost) return;
     Object.assign(this.lobby.next, next);
+    if (rounds && (this.lobby.stageNo === 0 || this.lobby.final)) this.lobby.rounds = rounds;
     if (this.lobby.next.mode === 'cruising') this.lobby.next.mode = 'course'; // no cruising in multiplayer
-    if (winsNeeded) this.lobby.winsNeeded = winsNeeded;
     this.broadcastLobby();
   }
 
@@ -319,7 +333,7 @@ export class Multi {
   startStage(): void {
     if (!this.isHost || this.lobby.running) return;
     const L = this.lobby;
-    if (L.champion) this.resetChampionship();
+    if (L.final) this.resetChampionship();
     L.stageNo++;
     L.running = { stage: { ...L.next }, startedAt: Date.now() };
     L.lastResults = null;
@@ -337,6 +351,8 @@ export class Multi {
     L.champion = null;
     L.stageNo = 0;
     L.lastResults = null;
+    L.moves = {};
+    L.final = false;
   }
 
   /** Host: end the stage now (cruising, or a rider who never finishes). */
@@ -379,6 +395,8 @@ export class Multi {
         if (a.f.done) return a.f.time - b.f.time;
         return b.f.prog - a.f.prog;
       });
+    const order = () => Object.entries(L.standings).sort((a, b) => b[1].points - a[1].points || b[1].wins - a[1].wins).map(([id]) => id);
+    const before = order();
     const results: StageResult[] = sorted.map(({ p, f }, i) => {
       const scored = mode !== 'cruising' && f.done;
       const points = scored ? POINTS[i] ?? 0 : 0;
@@ -390,7 +408,15 @@ export class Multi {
       const label = mode === 'cruising' ? `${Math.round(f.dist).toLocaleString('fr-FR')} m` : f.done ? fmt(f.time) + (f.falls ? ` · ${f.falls} chute${f.falls > 1 ? 's' : ''}` : '') : 'Abandon';
       return { id: p.id, name: p.name, color: p.color, rank: i + 1, label, points, win };
     });
-    for (const [id, s] of Object.entries(L.standings)) if (s.wins >= L.winsNeeded) L.champion = id;
+    // standings movement and, after the last round, the champion
+    const after = order();
+    L.moves = {};
+    after.forEach((id, i) => {
+      const was = before.indexOf(id);
+      L.moves[id] = was < 0 ? 0 : was - i;
+    });
+    L.final = L.stageNo >= L.rounds;
+    L.champion = L.final ? after[0] ?? null : null;
     L.running = null;
     L.lastResults = results;
     for (const p of L.players) p.status = 'lobby';
@@ -442,17 +468,19 @@ export class Multi {
     else this.hostConn?.send({ t: 'finish', f } satisfies Msg);
   }
 
-  updateProfile(name: string, bike: string): void {
+  updateProfile(name: string, bike: string, outfit = this.outfit): void {
     this.name = name;
     this.bike = bike;
+    this.outfit = outfit;
     if (this.isHost) {
       const p = this.me;
       if (p) {
         p.name = name;
         p.bike = bike;
+        p.outfit = outfit;
         this.broadcastLobby();
       }
-    } else this.hostConn?.send({ t: 'profile', name, color: '', bike } satisfies Msg);
+    } else this.hostConn?.send({ t: 'profile', name, color: '', bike, outfit } satisfies Msg);
   }
 
   /** Host only: when a deadline after the first finisher passes, close the stage. */

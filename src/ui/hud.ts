@@ -44,9 +44,10 @@ export class Hud {
       this.last.clock = -1;
       this.last.mult = -1;
     }
-    if (game.circuit * 10 + game.weather !== this.last.circuit) {
-      this.last.circuit = game.circuit * 10 + game.weather;
-      this.level.innerHTML = `${WEATHER_ICONS[game.weather]}${game.circuit ? `Circuit ${game.circuit} · ` : ''}${WEATHER_NAMES[game.weather]}`;
+    const wx = game.weatherNow;
+    if (game.circuit * 10 + wx !== this.last.circuit) {
+      this.last.circuit = game.circuit * 10 + wx;
+      this.level.innerHTML = `${WEATHER_ICONS[wx]}${game.circuit ? `Circuit ${game.circuit} · ` : ''}${WEATHER_NAMES[wx]}`;
       this.riders.innerHTML = '';
       this.dots = [];
     }

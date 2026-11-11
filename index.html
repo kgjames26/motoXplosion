@@ -171,6 +171,7 @@
           <button class="btn-primary hidden" id="btn-stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg> J’ARRÊTE</button>
           <button class="btn-secondary" id="btn-restart">RECOMMENCER</button>
           <button class="btn-secondary" id="btn-home">ACCUEIL</button>
+          <button class="btn-secondary with-icon fs-toggle" id="btn-fs-pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fs-on" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /><path class="fs-off" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg><b>PLEIN ÉCRAN</b></button>
           <button class="btn-secondary with-icon" id="btn-settings-pause">
             <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
             PARAMÈTRES
@@ -196,6 +197,7 @@
         </div>
         <div class="row">
           <button class="btn-primary" id="btn-again"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" /></svg> REJOUER</button>
+          <span class="over-weather hidden" id="over-weather"></span>
           <button class="btn-primary hidden" id="btn-next">SUIVANT <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM16 5h3v14h-3z" /></svg></button>
           <button class="btn-secondary" id="btn-garage2">GARAGE</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
@@ -251,6 +253,8 @@
           <div class="panel champ-col"><h3>Cette épreuve</h3><ol id="champ-stage"></ol></div>
           <div class="panel champ-col"><h3>Classement général</h3><ol id="champ-general"></ol><small id="champ-goal"></small></div>
         </div>
+        <div class="panel champ-next" id="champ-next-panel"></div>
+        <div class="champ-final hidden" id="champ-final"></div>
         <div class="row">
           <button class="neon-play" id="champ-next">ÉPREUVE SUIVANTE</button>
           <span class="champ-wait" id="champ-wait">L’hôte prépare l’épreuve suivante…</span>

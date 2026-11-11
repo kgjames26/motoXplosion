@@ -9,7 +9,7 @@ import { Hud } from './ui/hud';
 import { Garage } from './ui/garage';
 import { MultiUI } from './ui/multiplayer';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
-import { bikeById, BIKES, rockClimb } from './bikes';
+import { bikeById, BIKES, MULTI_BIKE, rockClimb } from './bikes';
 import { Difficulty, DIFFICULTIES, MODES, ModeId } from './modes';
 import { bestKey, loadProfile, saveProfile } from './profile';
 import { outfitById } from './outfits';
@@ -23,7 +23,6 @@ import {
   circuitLength,
   CircuitRecord,
   circuitRaceLevel,
-  CRUISE_UNLOCK,
   trialRockRange,
   fmtTime,
   isCircuitMode,
@@ -47,7 +46,7 @@ const renderer = new GLRenderer($('app'), settings.quality);
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
 const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf() });
 const outfit = () => outfitById(profile.outfit);
-const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
 const garage = new Garage(profile, saveP);
 const controls = new Controls();
@@ -150,8 +149,9 @@ function updateBest(): void {
     $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
   }
   const cd = $('cruise-diffs');
-  cd.classList.toggle('hidden', mode !== 'cruising');
-  if (mode === 'cruising') {
+  // cruising: no weather to choose any more (it changes by itself during the ride)
+  cd.classList.add('hidden');
+  if (false as boolean) {
     if (diffIndex(profile.difficulty) > cruiseLevel()) profile.difficulty = DIFF_ORDER[cruiseLevel()];
     cd.innerHTML = diffButtons((d) => diffIndex(d) <= cruiseLevel());
   }
@@ -333,7 +333,7 @@ function buildRegions(): void {
       $('sel-world-name').textContent = r.name;
       $('sel-world-ico').innerHTML = WORLD_ICONS[id];
       closePickers();
-      game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+      game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
       game.state = 'title';
       updateBest();
       renderer.render(game, 0, true);
@@ -400,7 +400,7 @@ function bindSettings(): void {
   ($('set-pseudo') as HTMLInputElement).addEventListener('input', (e) => {
     settings.pseudo = (e.target as HTMLInputElement).value.slice(0, 14);
     saveSettings(settings);
-    mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', profile.bike);
+    mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', MULTI_BIKE.id, profile.outfit);
     updateBest();
   });
   ($('set-vibration') as HTMLInputElement).addEventListener('change', (e) => {
@@ -530,7 +530,7 @@ function home(): void {
     game.quit();
     finishRun(false);
   }
-  game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+  game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
   game.state = 'title';
   audio.setElectric(!!game.model.electric);
   refreshTitle();
@@ -582,7 +582,7 @@ function finishRun(display: boolean): void {
   } else {
     const key = bestKey(mode, game.region);
     const di = diffIndex(game.difficulty);
-    if (mode === 'cruising' && r.score >= CRUISE_UNLOCK && di === cruiseLevel() && di < 2) {
+    if (false as boolean) {
       profile.cruiseUnlock[game.region] = di + 1;
       unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
     }
@@ -616,6 +616,11 @@ function finishRun(display: boolean): void {
   $('over-total').textContent = `+${r.total}`;
   $('over-wallet').textContent = profile.coins.toLocaleString('fr-FR');
   const canNext = isCircuitMode(mode) && r.reason === 'finish' && !!r.circuit && r.circuit < CIRCUITS;
+  // same level again, under another weather (the ones already open)
+  const ow = $('over-weather');
+  const others = isCircuitMode(mode) && r.reason === 'finish' && r.circuit ? DIFF_ORDER.filter((d) => d !== game.difficulty && diffUnlocked(mode, r.circuit!, d)) : [];
+  ow.classList.toggle('hidden', !others.length);
+  ow.innerHTML = others.map((d) => `<button class="btn-secondary wx-retry" data-d="${d}">${WEATHER_ICONS[diffIndex(d)]} REJOUER · ${WEATHER_NAMES[diffIndex(d)].toUpperCase()}</button>`).join('');
   $('btn-next').classList.toggle('hidden', !canNext);
   show('over');
 }
@@ -627,10 +632,10 @@ function openGarage(from: ScreenName): void {
 }
 garage.onChange = () => {
   updateBest();
-  mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', profile.bike);
+  mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', MULTI_BIKE.id, profile.outfit);
   if (game.state === 'title') {
     renderer.setPlayerModel(bikeById(profile.bike), outfit());
-    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
     game.state = 'title';
     audio.setElectric(!!game.model.electric);
   }
@@ -639,6 +644,7 @@ garage.onChange = () => {
 $('btn-play').addEventListener('click', play);
 $('btn-fs-title').addEventListener('click', () => void toggleFullscreen());
 $('btn-fs-settings').addEventListener('click', () => void toggleFullscreen());
+$('btn-fs-pause').addEventListener('click', () => void toggleFullscreen());
 syncFullscreen();
 $('btn-circ-go').addEventListener('click', start);
 $('btn-circuits-back').addEventListener('click', () => {
@@ -648,6 +654,14 @@ $('btn-circuits-back').addEventListener('click', () => {
 $('btn-again').addEventListener('click', () => {
   // replay the same circuit (finishing moved the selection to the next one)
   if (game.circuit) profile.circuitSel[`${game.mode}:${game.region}`] = game.circuit;
+  start();
+});
+$('over-weather').addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLElement>('[data-d]');
+  if (!b) return;
+  profile.difficulty = b.dataset.d as Difficulty;
+  if (game.circuit) profile.circuitSel[`${game.mode}:${game.region}`] = game.circuit;
+  saveP();
   start();
 });
 $('btn-next').addEventListener('click', () => {
@@ -719,21 +733,23 @@ const mp = new MultiUI({
   game,
   show: (s) => show(s),
   pseudo: () => settings.pseudo.trim() || 'Pilote ' + (1 + Math.floor(Math.random() * 99)),
-  bike: () => profile.bike,
+  bike: () => MULTI_BIKE.id,
+  outfit: () => profile.outfit,
   startStage: (stage, elapsed) => {
     audio.unlock();
     controls.reset();
-    const model = bikeById(profile.bike);
+    // everybody rides the same multiplayer bike (no upgrades, no tyres), in his own outfit
+    const model = MULTI_BIKE;
     renderer.setPlayerModel(model, outfit());
-    audio.setElectric(!!model.electric);
+    audio.setElectric(false);
     game.pseudo = settings.pseudo.trim();
-    game.newRun({ region: stage.region, mode: stage.mode, model, spec: upgradedSpec(model, profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: stage.difficulty, circuit: stage.circuit, multi: true });
+    game.newRun({ region: stage.region, mode: stage.mode, model, spec: model.spec, tyres: [], difficulty: stage.difficulty, circuit: stage.circuit, multi: true });
     if (elapsed > 0) game.countdown = Math.max(0, game.countdown - elapsed / 1000);
     renderer.render(game, 0, true);
     show('none');
   },
   backToTitle: () => {
-    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
     game.state = 'title';
     refreshTitle();
     renderer.render(game, 0, true);
@@ -909,7 +925,10 @@ function frame(now: number): void {
     else finishRun(true);
   }
   mp.frame(dt);
-  audio.rain(game.state === 'playing' ? [0, 1, 0.12][game.weather] : 0);
+  if (game.state === 'playing') {
+    const sky = game.world.weatherAt(game.bike.x);
+    audio.rain(sky.rain + sky.snow * 0.12);
+  } else audio.rain(0);
   // engine: heard only while riding (silent on the home screen and every menu)
   const running = game.state === 'playing' && (!game.usesEnergy || game.fuel > 0);
   audio.engine(game.bike.rpm, running ? game.input.throttle : 0, game.state === 'playing' ? game.bike.speed : 0, running);

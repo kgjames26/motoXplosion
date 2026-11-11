@@ -30,9 +30,9 @@ const GRIP: Record<Surface, [number, number, number]> = {
 
 /** Tyres sold in the garage: each set adds grip in its own weather (mounted automatically). */
 export const TYRES = [
-  { id: 'sec', name: 'Pneus Sec', price: 900, bonus: 1.07, desc: 'Gomme tendre à crampons serrés : +7 % d’adhérence sur le sec.' },
-  { id: 'pluie', name: 'Pneus Pluie', price: 1600, bonus: 1.12, desc: 'Crampons espacés qui évacuent l’eau et la boue : +12 % d’adhérence sous la pluie.' },
-  { id: 'neige', name: 'Pneus Neige', price: 2400, bonus: 1.2, desc: 'Gomme hiver à lamelles et petits clous : +20 % d’adhérence dans la neige.' },
+  { id: 'sec', name: 'Pneus Sec', price: 1200, bonus: 1.07, desc: 'Gomme tendre à crampons serrés : +7 % d’adhérence sur le sec.' },
+  { id: 'pluie', name: 'Pneus Pluie', price: 2200, bonus: 1.12, desc: 'Crampons espacés qui évacuent l’eau et la boue : +12 % d’adhérence sous la pluie.' },
+  { id: 'neige', name: 'Pneus Neige', price: 3200, bonus: 1.2, desc: 'Gomme hiver à lamelles et petits clous : +20 % d’adhérence dans la neige.' },
 ];
 
 /** Grip multiplier given by the tyres owned for a weather. */

@@ -1,6 +1,6 @@
 import { aiInput, createOpponents, Opponent } from './ai';
 import type { PlayerState } from './net/multi';
-import { BikeModel, BIKES } from './bikes';
+import { bikeById, BikeModel, BIKES } from './bikes';
 import { clamp, Rng, wrapAngle } from './core/math';
 import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
@@ -83,6 +83,8 @@ export interface RunOptions {
   tyres?: string[];
   /** Multiplayer stage: no AI riders, start countdown in every race mode. */
   multi?: boolean;
+  /** Home screen demo ride: calm, dry weather. */
+  calm?: boolean;
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -93,6 +95,9 @@ export const TRIAL_PENALTY = 15;
 /** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
 export const CRUISE_STEP = 0.25;
 export const CRUISE_MAX = 4;
+/** Cruising pays more (v2.14): coins and stunts, and distance. */
+const CRUISE_PAY = 1.5;
+const CRUISE_DIST_PAY = 1.8;
 
 /**
  * Game rules for every mode: energies, pickups and coins, crashes and respawns, trial sections,
@@ -194,13 +199,18 @@ export class Game {
     this.raceLevel = this.circuit ? circuitRaceLevel(this.circuit) : 1;
     const seed = this.circuit ? circuitSeed(cm, this.region, this.circuit) : (Math.random() * 2 ** 31) | 0;
     this.weather = weatherFor(this.difficulty);
-    this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.weather);
+    this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.mode === 'cruising' ? 0 : this.weather);
+    // cruising: no weather to choose, it changes by itself along the ride
+    this.world.dynamic = this.mode === 'cruising' && !opts.calm && !this.multi;
+    if (this.mode === 'cruising') this.weather = 0;
+    if (opts.tyres) this.tyres = opts.tyres;
+    this.world.tyres = this.world.dynamic ? this.tyres : [];
     this.zoneRetries = 0;
     this.weakWarned = false;
     this.world.ensure(220);
     if (opts.spec || opts.model) this.spec = opts.spec ?? this.model.spec;
     if (opts.tyres) this.tyres = opts.tyres;
-    this.tyreK = tyreBonus(this.tyres, this.weather);
+    this.tyreK = this.world.dynamic ? 1 : tyreBonus(this.tyres, this.weather);
     this.bike = new Bike({ ...this.spec, grip: this.spec.grip * this.tyreK });
     this.bike.reset(this.world, this.startX);
     this.particles.clear();
@@ -393,6 +403,18 @@ export class Game {
     return false;
   }
 
+  /** Weather under the wheels at x (snow cover first, then wet ground). */
+  groundWeather(x: number): Weather {
+    if (!this.world.dynamic) return this.weather;
+    const w = this.world.weatherAt(x);
+    return w.snowGround > 0.4 ? 2 : w.wet > 0.4 ? 1 : 0;
+  }
+
+  /** Weather in the sky right now (cruising: changes along the ride). */
+  get weatherNow(): Weather {
+    return this.world.dynamic ? this.world.weatherAt(this.bike.x).kind : this.weather;
+  }
+
   /** Cruising distance multiplier (×1 → ×4). */
   get cruiseMult(): number {
     return Math.min(CRUISE_MAX, 1 + this.cruiseLevel * CRUISE_STEP);
@@ -512,11 +534,11 @@ export class Game {
   // ---------------------------------------------------------------- multiplayer
 
   /** Other players of the room, shown as riders on the track (no physics: network poses). */
-  setRemotes(list: { id: string; name: string; color: string; bike: string }[]): void {
+  setRemotes(list: { id: string; name: string; color: string; bike: string; outfit?: string }[]): void {
     this.opponents = this.opponents.filter((o) => !o.remote || list.some((p) => p.id === o.netId));
     list.forEach((p, i) => {
       if (this.opponents.some((o) => o.netId === p.id)) return;
-      const model = BIKES.find((b) => b.id === p.bike) ?? BIKES[0];
+      const model = bikeById(p.bike);
       const bike = new Bike(model.spec);
       bike.reset(this.world, this.startX);
       this.opponents.push({
@@ -532,6 +554,7 @@ export class Game {
         ai: { rng: new Rng(i + 1), noise: 0, delayed: 0, hesitate: 0, stuck: 0, lastX: 0 },
         remote: true,
         netId: p.id,
+        outfit: p.outfit,
       });
     });
   }
@@ -660,8 +683,10 @@ export class Game {
     let score = 0;
     let scoreLabel = '';
     const picked = this.coinsRun - this.stuntCoins;
-    if (picked > 0) lines.push({ label: 'Pièces ramassées', coins: picked });
-    if (this.stuntCoins > 0) lines.push({ label: 'Sauts et réceptions', coins: this.stuntCoins });
+    // cruising is where the money is made (long rides): coins and stunts count 1.5×, distance 1.8×
+    const cm = this.mode === 'cruising' ? CRUISE_PAY : 1;
+    if (picked > 0) lines.push({ label: 'Pièces ramassées', coins: Math.round(picked * cm) });
+    if (this.stuntCoins > 0) lines.push({ label: 'Sauts et réceptions', coins: Math.round(this.stuntCoins * cm) });
     let standings: RunResult['standings'];
     let place: number | undefined;
     let time: number | undefined;
@@ -673,7 +698,7 @@ export class Game {
       case 'cruising':
         score = Math.round(this.distance);
         scoreLabel = `${score.toLocaleString('fr-FR')} m`;
-        lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins * dm) });
+        lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins * CRUISE_DIST_PAY) });
         break;
       case 'enduro':
       case 'trial':
@@ -924,11 +949,12 @@ export class Game {
     const slip = Math.abs(rw.slip);
     const sp = Math.abs(b.forwardSpeed);
     // wet weather: little dust, more mud clods
-    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.35, 1.6][this.weather];
+    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.35, 1.6][this.groundWeather(rw.x)];
     while (this.dustAcc > 1) {
       this.dustAcc -= 1;
       const water = rw.surface === Surface.Water;
-      const snow = this.weather === 2 && !water;
+      const gw = this.groundWeather(rw.x);
+      const snow = gw === 2 && !water;
       const back = -1 - Math.random() * 2;
       this.particles.spawn({
         kind: water ? 'splash' : 'dust',
@@ -943,7 +969,7 @@ export class Game {
         g: snow ? 220 - Math.random() * 70 : s.dust[1] + (Math.random() - 0.5) * 20,
         b: snow ? 220 - Math.random() * 80 : s.dust[2] + (Math.random() - 0.5) * 20,
       });
-      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather === 2 ? 1 : this.weather === 1 ? 0.8 : 0.35)) {
+      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (gw === 2 ? 1 : gw === 1 ? 0.8 : 0.35)) {
         this.particles.spawn({
           kind: 'clod',
           x: rw.x - rw.radius,

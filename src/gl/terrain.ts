@@ -134,6 +134,59 @@ export class TerrainBuilder {
   };
   private spriteGeo = new Map<Sprite, THREE.PlaneGeometry>();
   private snow = false;
+  private snowOverlay: THREE.Material | null = null;
+  /**
+   * Cruising weather on this chunk: wet ground gets darker, and a snow layer fades in and out
+   * along the road (vertex alpha) as the snow cover grows or melts.
+   */
+  private dynamicWeather(w: World, group: THREE.Group): void {
+    const ground = new Set<THREE.Material>([this.mats.track, this.mats.ground, this.mats.hills, this.mats.lip, this.mats.rock, this.foreMat()]);
+    const overlays: THREE.Mesh[] = [];
+    let any = false;
+    group.children.forEach((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || (m as unknown as THREE.InstancedMesh).isInstancedMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      if (!mats.some((x) => ground.has(x))) return;
+      const g = m.geometry as THREE.BufferGeometry;
+      const pos = g.getAttribute('position');
+      const col = g.getAttribute('color');
+      if (!pos || !col || col.itemSize !== 3) return;
+      const alpha = new Float32Array(pos.count * 4);
+      let maxSnow = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const st = w.weatherAt(x);
+        const k = 1 - 0.24 * st.wet;
+        col.setXYZ(i, col.getX(i) * k, col.getY(i) * k, col.getZ(i) * k);
+        // the riding lane of the track stays half cleared
+        const z = pos.getZ(i);
+        const lane = m.material === this.mats.track && z > -0.55 && z < 0.05 ? 0.45 : 1;
+        const a = st.snowGround * lane;
+        alpha.set([1, 1, 1, a], i * 4);
+        maxSnow = Math.max(maxSnow, a);
+      }
+      col.needsUpdate = true;
+      if (maxSnow > 0.01) {
+        const og = new THREE.BufferGeometry();
+        og.setAttribute('position', pos);
+        og.setAttribute('uv', g.getAttribute('uv'));
+        og.setAttribute('normal', g.getAttribute('normal'));
+        og.setAttribute('color', new THREE.BufferAttribute(alpha, 4));
+        og.setIndex(g.getIndex());
+        const om = new THREE.Mesh(og, this.snowOverlayMat());
+        om.renderOrder = 2;
+        overlays.push(om);
+        any = true;
+      }
+    });
+    if (any) for (const o of overlays) group.add(o);
+  }
+  private snowOverlayMat(): THREE.Material {
+    if (!this.snowOverlay)
+      this.snowOverlay = new THREE.MeshLambertMaterial({ map: this.bank.groundTex('snow', 4), vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    return this.snowOverlay;
+  }
   private lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f0e6, side: THREE.DoubleSide });
   private shadowGeo = new THREE.PlaneGeometry(1, 1);
   private haloMats = new Map<Sprite, THREE.Material>();
@@ -302,6 +355,7 @@ export class TerrainBuilder {
     for (const m of Object.values(this.mats)) m.dispose();
     this.shadowMaterial?.dispose();
     this.detail?.dispose();
+    this.snowOverlay?.dispose();
     this.foreMaterial?.dispose();
     for (const m of this.blurMats.values()) m.dispose();
     this.tape?.dispose();
@@ -672,6 +726,7 @@ export class TerrainBuilder {
       im.computeBoundingSphere();
       group.add(im);
     }
+    if (w.dynamic) this.dynamicWeather(w, group);
     return { index: ci, group, anims };
   }
 }

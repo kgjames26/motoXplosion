@@ -508,25 +508,33 @@ export class Generator {
     const place: Place[] = [];
     let x = 0;
     let prevRun = 0;
+    let prevLvl = 0;
+    /** Where a ground block of height H and chamfer run rn starts so the envelope has no dip. */
+    const startFor = (H: number, rn: number) => Math.max(0, prevLvl <= 0 || prevRun <= 0 ? x - prevRun * 0.9 : H >= prevLvl ? x - prevRun - (rn * prevLvl) / H : x - (prevRun * H) / prevLvl - rn);
     /** A column reaching `v`: one block, or a narrower block stacked on a wide one. */
     const column = (v: number): void => {
-      const start = Math.max(0, x - prevRun * 0.9);
       if ([0.3, 0.45, 0.6, 0.9].some((h) => near(h, v))) {
         // each step is wide enough to settle the bike before the next one
         const a = box(v, small ? 0.8 : this.diff === 2 ? 1.6 : 1.2, small ? 1.6 : 2.4);
+        const rn = Math.min(a.obstacle!.w / 3, v * 0.52);
+        const start = startFor(v, rn);
         place.push({ a, x: start, y: 0 });
         x = start + a.obstacle!.w;
-        prevRun = Math.min(a.obstacle!.w / 3, v * 0.52);
+        prevRun = rn;
+        prevLvl = v;
         return;
       }
       const [b, t] = stackOf.get(Math.round(v * 100)) ?? [0.6, Math.round((v - 0.6) * 100) / 100];
       // wide base, at least ~0.7 m of ledge each side of the block on top
       const base = box(b, 2.6, 3.2);
       const topB = box(t, 0.8, Math.max(0.8, base.obstacle!.w - 1.4));
+      const rn = Math.min(base.obstacle!.w / 3, b * 0.52);
+      const start = startFor(b, rn);
       place.push({ a: base, x: start, y: 0 });
       place.push({ a: topB, x: start + (base.obstacle!.w - topB.obstacle!.w) / 2, y: b });
       x = start + base.obstacle!.w;
-      prevRun = Math.min(base.obstacle!.w / 3, b * 0.52);
+      prevRun = rn;
+      prevLvl = b;
     };
     const climb = (): number[] => {
       const out: number[] = [];
@@ -541,12 +549,15 @@ export class Generator {
       }
       return out.length ? out : [0.3];
     };
-    const pattern = small ? r.pick(['escalier', 'pyramide'] as const) : r.weighted(['escalier', 'pyramide', 'tour', 'table', 'double', 'touret'] as const, [3, 3, 0.8 + g, 1.5, 1 + g, 1]);
+    const pattern = small ? r.weighted(['escalier', 'pyramide', 'plateforme'] as const, [1, 1, 1]) : r.weighted(['escalier', 'pyramide', 'tour', 'table', 'double', 'touret', 'plateforme'] as const, [3, 3, 0.8 + g, 1.5, 1 + g, 1, 3.5]);
     const ramp = (h: number, dir: 'up' | 'down') => {
       const list = mods.filter((a) => a.obstacle!.module === 'rampe' && near(a.obstacle!.h, h) && a.id.endsWith(dir));
       return list.length ? r.pick(list) : null;
     };
-    if (pattern === 'table') {
+    if (pattern === 'plateforme') {
+      this.platform(place, mods, box, maxStep, top, small);
+      x = place.reduce((m, p) => Math.max(m, p.x + p.a.obstacle!.w), 0);
+    } else if (pattern === 'table') {
       const h = [0.45, 0.6, 0.9].filter((v) => v <= top + 1e-6).pop() ?? 0.45;
       const up = ramp(h, 'up');
       const deck = mods.filter((a) => a.obstacle!.module === 'plateau' && near(a.obstacle!.h, h));
@@ -565,6 +576,7 @@ export class Generator {
         climb().slice(0, 2).forEach(column);
         x += r.range(1, 1.6);
         prevRun = 0;
+        prevLvl = 0;
       }
     } else if (pattern === 'touret') {
       const spool = mods.filter((a) => a.obstacle!.module === 'touret' && a.obstacle!.h <= Math.min(top, maxStep * 1.6) + 1e-6);
@@ -574,6 +586,7 @@ export class Generator {
         place.push({ a: s0, x: x - 0.1, y: 0 });
         x += s0.obstacle!.w - 0.1;
         prevRun = 0.2;
+        prevLvl = 0;
       }
       column(Math.min(0.45, top));
     } else {
@@ -612,6 +625,102 @@ export class Generator {
       },
       props: 0.3,
     };
+  }
+
+  /**
+   * v2.14 "plateforme": a wide support (0.3 → 1.2 m) reached by module steps, with crates or a
+   * second, narrower support on top, sometimes a second support next to it for a bigger
+   * structure, then steps back down. Every rise and every drop is at most one step, and the
+   * blocks are chained so their chamfers never leave a dip between them.
+   */
+  private platform(place: { a: AssetDef; x: number; y: number }[], mods: AssetDef[], box: (h: number, minW?: number, maxW?: number) => AssetDef, maxStep: number, top: number, small: boolean): void {
+    const r = this.rng;
+    const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
+    const kinds = this.region.id === 'sf' ? ['beton', 'acier', 'palettes'] : this.region.id === 'foret' || this.region.id === 'alpes' ? ['bois', 'pierre', 'palettes'] : ['bois', 'beton', 'acier', 'pierre', 'palettes'];
+    const kind = r.pick(kinds);
+    const sups = mods.filter((a) => a.obstacle!.module === 'support');
+    const support = (h: number, minW: number, maxW: number) => {
+      const list = sups.filter((a) => near(a.obstacle!.h, h) && a.obstacle!.w >= minW && a.obstacle!.w <= maxW);
+      const own = list.filter((a) => a.id.startsWith(`ts.${kind}.`));
+      return own.length ? r.pick(own) : list.length ? r.pick(list) : null;
+    };
+    const runOf = (a: AssetDef) => Math.min(a.obstacle!.w / 3, a.obstacle!.h * 0.52);
+    // a 0.3 m module step is always allowed (the smallest module), even on early snowy circuits
+    maxStep = Math.max(maxStep, 0.3 + 1e-6);
+    // summit allowed a bit above the usual top: it is the size, not the steps, that grows
+    const cap = small ? Math.max(0.45, top) : Math.max(top, 0.9) + 0.35;
+    const heights = [0.3, 0.45, 0.6, 0.9, 1.2].filter((h) => h <= (small ? Math.min(0.6, cap) : cap - 0.25) + 1e-6);
+    let S = heights.length ? r.weighted(heights, heights.map((_h, i) => 1 + i * 0.6)) : 0.3;
+    const minW = small ? 3 : this.diff === 2 ? 4 : 3;
+    const base = support(S, minW, small ? 4 : 6)!;
+    // ground-based chain: each block starts where the envelope stays monotone
+    let xEnd = 0;
+    let lvl = 0;
+    let run = 0;
+    const chain = (a: AssetDef) => {
+      const H = a.obstacle!.h;
+      const rn = runOf(a);
+      const start = lvl <= 0 ? xEnd : H >= lvl ? xEnd - run - (rn * lvl) / H : xEnd - (run * H) / lvl - rn;
+      place.push({ a, x: Math.max(0, start), y: 0 });
+      xEnd = Math.max(0, start) + a.obstacle!.w;
+      lvl = H;
+      run = rn;
+    };
+    const singles = [0.3, 0.45, 0.6, 0.9];
+    const path = (from: number, to: number): number[] | null => {
+      const outL: number[] = [];
+      let v = from;
+      while (to - v > maxStep) {
+        const opts = singles.filter((h) => h > v + 0.01 && h - v <= maxStep && h < to - 0.01);
+        if (!opts.length) return null;
+        v = opts[opts.length - 1];
+        outL.push(v);
+      }
+      return outL;
+    };
+    // the support must be reachable one step at a time
+    while (S > 0.3 && !path(0, S)) S = heights.filter((h) => h < S - 0.01).pop() ?? 0.3;
+    const stepW = small ? 1.2 : this.diff === 2 ? 1.6 : 1.2;
+    const up = path(0, S) ?? [];
+    for (const v of up) chain(box(v, stepW, 2.4));
+    chain(base);
+    const sx = place[place.length - 1].x;
+    const sw = base.obstacle!.w;
+    const sr = runOf(base);
+    // on top: a block, two blocks, or a narrower support (one step up each time)
+    const tops = [0.3, 0.45].filter((t) => t <= maxStep && S + t <= cap + 1e-6);
+    if (tops.length && r.chance(small ? 0.5 : 0.85)) {
+      const t = r.pick(tops);
+      const flat = sw - 2 * sr;
+      const choice = r.weighted(['bloc', 'deux', 'socle'], [2, flat >= 4.6 ? 1.2 : 0, flat >= 3.6 ? 1.3 : 0]);
+      if (choice === 'socle') {
+        const s2 = support(t, 3, Math.min(4, flat - 1.6));
+        if (s2) place.push({ a: s2, x: sx + (sw - s2.obstacle!.w) / 2, y: S });
+      } else if (choice === 'deux') {
+        const b1 = box(t, 0.8, 1.2);
+        const b2 = box(t, 0.8, 1.2);
+        const gapX = flat - b1.obstacle!.w - b2.obstacle!.w;
+        place.push({ a: b1, x: sx + sr + gapX * 0.25, y: S });
+        place.push({ a: b2, x: sx + sw - sr - gapX * 0.25 - b2.obstacle!.w, y: S });
+      } else {
+        const b = box(t, 0.8, Math.max(0.8, Math.min(2.4, flat - 2.2)));
+        place.push({ a: b, x: sx + (sw - b.obstacle!.w) / 2, y: S });
+      }
+    }
+    let last = S;
+    // a second support next to it, one step higher or lower: a bigger structure
+    if (!small && r.chance(0.4)) {
+      const opts = heights.filter((h) => !near(h, S) && Math.abs(h - S) <= maxStep && path(0, h));
+      if (opts.length) {
+        const S2 = r.pick(opts);
+        const b2 = support(S2, minW, 5);
+        if (b2) {
+          chain(b2);
+          last = S2;
+        }
+      }
+    }
+    for (const v of (path(0, last) ?? []).reverse()) chain(box(v, stepW, 2.4));
   }
 
   /** Packed earth surface on a segment (trial zones keep their grip whatever the weather). */
@@ -703,8 +812,13 @@ export class Generator {
   private baseSurface(x: number): Surface {
     const s = this.dryBaseSurface(x);
     // rain: puddles of mud on the earth and the grass
-    // rain and snow: patches of mud on the earth and the grass
-    if (this.diff >= 1 && (s === Surface.Dirt || s === Surface.Grass) && noise1(x / 17, 33) > (this.diff === 1 ? 0.3 : 0.45)) return Surface.Mud;
+    // rain and snow: patches of mud on the earth and the grass (cruising: where it is wet now)
+    let wet = this.diff;
+    if (this.world.dynamic) {
+      const w = this.world.weatherAt(x);
+      wet = w.wet > 0.5 ? 1 : w.snowGround > 0.5 ? 2 : 0;
+    }
+    if (wet >= 1 && (s === Surface.Dirt || s === Surface.Grass) && noise1(x / 17, 33) > (wet === 1 ? 0.3 : 0.45)) return Surface.Mud;
     return s;
   }
 

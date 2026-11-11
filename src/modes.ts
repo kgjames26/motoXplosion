@@ -13,7 +13,7 @@ export const MODES: ModeDef[] = [
     id: 'cruising',
     name: 'Cruising',
     short: 'Balade infinie',
-    description: 'Roule le plus loin possible. Chaque kilomètre augmente le bonus de pièces : c’est en cruisant longtemps qu’on gagne le plus !',
+    description: 'Balade sans fin : la météo change toute seule en route. Plus tu roules longtemps, plus tu gagnes : c’est ici qu’on gagne le plus !',
   },
   {
     id: 'trial',

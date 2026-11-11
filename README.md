@@ -15,19 +15,20 @@ sept motos à gagner au garage.
 
 - Dans le choix du mode, la carte **Multijoueur** ouvre l'écran des salons : **Créer un salon** (un code de 5 lettres s'affiche) ou **Rejoindre** avec ce code (on peut aussi ouvrir le jeu avec `?salon=CODE`).
 - **Pair à pair** (WebRTC via PeerJS) : le serveur public gratuit de PeerJS ne sert qu'à se présenter, ensuite tout passe directement entre les navigateurs. Pas de serveur à payer, quel que soit le nombre de joueurs (chaque salon ne dépend que de ses 4 navigateurs). Le créateur du salon est **l'hôte** : il tient le salon et le championnat et relaie les positions de chacun (~12 fois par seconde).
-- **Salon** : liste des pilotes (couleur, moto, statut, couronne de l'hôte, victoires et points), et réglages de l'hôte : mode, monde, circuit, difficulté/météo, **nombre de victoires** pour remporter le championnat.
+- **Salon** : liste des pilotes (couleur, moto, statut, couronne de l'hôte, victoires et points), et le panneau **« Programme la manche 1 / N »** de l'hôte : il choisit d'abord le **nombre de manches** (1 à 8), puis le mode, le monde, le circuit et la météo de la première manche.
+- **Une seule moto en multijoueur** : l'**Arena 300 R**, créée pour ce mode (cross 4 temps de performance moyenne, blanc nacré, violet et touches dorées : jantes or, fourche dorée, plaque turquoise). Tout le monde roule avec elle, donc à armes égales ; chacun garde **la tenue achetée en solo**.
 - **Rejoindre à tout moment** : pendant une épreuve, un nouveau pilote entre directement s'il arrive dans les 8 premières secondes, sinon il regarde le classement en direct depuis le salon et court à l'épreuve suivante.
 - **Modes proposés en multijoueur** : trial, enduro et course (pas de cruising).
 - **Pendant l'épreuve**, tout le monde roule sur la même piste (même circuit, même graine) et voit les autres pilotes (avec leur nom). Panneau en direct à droite : en course et en enduro les **positions et écarts** (en secondes) ; en trial la **zone, les chutes et le chrono** de chacun ; en cruising la distance. Pas d'IA en multijoueur.
 - **Fin d'épreuve** : en course et enduro, les autres ont 45 s / 60 s après le premier arrivé ; en **trial tout le monde attend que tous aient fini** (écran d'attente avec les performances de chacun ; l'hôte peut clore l'étape) ; en cruising (balade libre, sans chrono) l'hôte termine l'étape quand il veut.
-- **Récapitulatif obligatoire après chaque épreuve** : classement de l'épreuve (temps, chutes, points 10 / 6 / 4 / 2, trophée au vainqueur) et classement général (victoires puis points). Le premier à atteindre le nombre de victoires choisi est **champion**. L'hôte prépare l'épreuve suivante (ou un nouveau championnat).
+- **Récapitulatif obligatoire après chaque épreuve** : classement de l'épreuve (temps, chutes, points 10 / 6 / 4 / 2, trophée au vainqueur) et classement général (victoires puis points). Des flèches ▲▼ montrent qui gagne ou perd des places au fil du championnat. Sur ce même écran, l'hôte **programme la manche suivante** (mode, monde, circuit, météo), une manche à la fois. Après la dernière manche : **animation de victoire** avec une **coupe d'or, d'argent ou de bronze** (ou une coupe en bois au-delà) selon la place finale de chacun, confettis et podium, puis le classement final ; l'hôte peut lancer un nouveau championnat.
 - Pour tester en local : `node` + le paquet `peer` en dépendance de dev (serveur de signalisation local), puis ouvrir le jeu avec `?peer=127.0.0.1:9000`.
 
 ## Modes de jeu
 
 | Mode | Règles | Gains |
 | --- | --- | --- |
-| **Cruising** | balade infinie et libre : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Dans la pause, **J'ARRÊTE** termine la balade et affiche le résumé (distance, bonus, gains) ; **Accueil** enregistre aussi les gains, sans résumé. Tous les **1 000 m**, le fond passe en **fondu lent (5 s)** à un autre panorama tiré au hasard parmi les 12 du monde. Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
+| **Cruising** | balade infinie et libre, **le mode qui rapporte le plus** (c'est ici qu'on débloque tout) : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Dans la pause, **J'ARRÊTE** termine la balade et affiche le résumé (distance, bonus, gains) ; **Accueil** enregistre aussi les gains, sans résumé. Tous les **1 000 m**, le fond passe en **fondu lent (5 s)** à un autre panorama tiré au hasard parmi les 12 du monde. Tracé **+5 %** plus relevé qu'avant. **Météo automatique** : on ne la choisit pas, elle démarre au hasard et change tous les **2 000 m** dans un ordre libre, mais avec des transitions logiques (il pleut d'abord, puis le sol devient humide ; la neige tombe, puis couvre le sol peu à peu ; elle fond en laissant le sol mouillé avant le soleil ou la pluie). L'adhérence suit l'état du sol et les pneus achetés se montent tout seuls | distance × **bonus de longue balade** + pièces ramassées + sauts |
 | **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
 | **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
@@ -41,7 +42,7 @@ Chaque niveau se joue en **Facile, Moyen ou Difficile**, et chaque difficulté a
 | Moyen | 🌧 Pluie | pluie qui tombe, bruit de pluie, ciel gris, sol sombre et mouillé, flaques de boue ; adhérence terre −12 %, herbe −20 %, rochers −12 %, bois −18 % (le sable se tasse : +5 %) |
 | Difficile | ❄ Neige | flocons qui tombent, fin manteau neigeux sur tout le décor mais obstacles bien visibles, piste **à moitié déneigée** avec deux traces de roues boueuses qui montrent la voie ; glissant et boueux (terre −20 %, herbe −26 %, rochers −20 %, bois −24 %) |
 
-- On débloque les difficultés une par une : sur chaque circuit, finir en Facile ouvre Moyen, finir en Moyen ouvre Difficile. En cruising, rouler 2 km dans une difficulté ouvre la suivante, monde par monde.
+- On débloque les difficultés une par une : sur chaque circuit, finir en Facile ouvre Moyen, finir en Moyen ouvre Difficile. Après un niveau terminé, l'écran de fin propose **REJOUER sous une autre météo** (celles déjà débloquées sur ce circuit).
 - **Personne ne reste bloqué à cause de la météo** : par mauvais temps les tracés sont adoucis (obstacles de trial −10 % sous la pluie et −18 % dans la neige, collines d'enduro −5 % / −12 %, cruising et course un peu moins relevés), les zones de trial gardent une terre tassée, et la hauteur des rochers ne dépasse jamais ce que grimpe la moto attendue à ce circuit dans cette météo. Vérifié avec un pilote automatique sur les circuits durs, sous la pluie et la neige.
 - Les gains sont multipliés par 1,25 en Moyen et 1,5 en Difficile ; les temps cibles sont un peu plus larges par mauvais temps. Records et médailles sont gardés par difficulté.
 
@@ -51,6 +52,7 @@ Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés
 ### Modules de trial (v2.12)
 - **200 modules** qui s'imbriquent comme dans un vrai parc de trial : caisses en bois, blocs béton, plateaux acier à bords jaunes et noirs, rampes montantes et descendantes, tourets, modules de pneus, de palettes, escaliers, pierres taillées, en hauteurs standard (0,3 / 0,45 / 0,6 / 0,9 m) pour s'emboîter.
 - Le générateur les assemble en **structures** dès les premiers circuits : escaliers, pyramides, tour (un bloc posé sur une large base, avec un palier de chaque côté), table (rampe, plateau, rampe), doubles, touret entre deux caisses. Chaque marche fait au plus une hauteur de module (0,3 m au début, jusqu'à 0,5 m), les blocs voisins se chevauchent pour ne laisser aucun piège entre eux.
+- **100 supports** (v2.14) : grands socles plats qui servent de base aux autres modules — socle bois, socle béton à bord jaune, châssis acier en treillis, base de palettes, socle en pierre taillée ; 0,3 / 0,45 / 0,6 / 0,9 / 1,2 m de haut et 3 / 4 / 5 / 6 m de large. Nouvelle structure **plateforme** : on monte sur le support marche par marche, on y trouve une caisse, deux blocs ou un second socle plus étroit, parfois un second support voisin plus haut ou plus bas (grande structure), puis on redescend marche par marche. Chaque marche reste franchissable (au moins 0,3 m permis, jamais plus que la marche du circuit), et les blocs s'enchaînent sans creux entre leurs chanfreins. Vérifié au bot sur les 375 circuits de trial (5 mondes × 25 × sec / pluie / neige).
 - **Peu de temps morts** : liaisons courtes entre les zones, avec une petite structure de modules au passage ; seules de courtes respirations restent (élan avant un obstacle, portes de zone).
 
 ### Rochers et obstacles de trial
@@ -79,25 +81,25 @@ Les temps à battre, la hauteur des rochers et la force des rivaux sont réglés
 Le **garage** (la boutique) est accessible depuis l'accueil et depuis l'écran de fin de partie. Quatre onglets :
 - **MOTOS** : vitrine 3D qui tourne (on la fait pivoter du doigt), caractéristiques **en chiffres** (puissance en ch, couple, vitesse max, poids, suspensions, adhérence, freins, agilité, autonomie, hauteur de rocher franchissable) avec les améliorations déjà montées, et un repère blanc qui montre la moto que tu as ; achat et choix.
 - **PIÈCES** : 7 améliorations par moto, 3 niveaux chacune, chacune dit exactement ce qu'elle apporte : préparation moteur (+5 % de puissance, +4 % de couple par niveau), échappement sport (+3 % de puissance, +2,5 % de vitesse), transmission courte (+6 % de couple), suspensions réglables (+7 % de fermeté, +5 % de débattement), freins gros disque (+10 %), allègement carbone (−4 % de poids, +4 % d'agilité), grand réservoir/batterie (−8 % de consommation). Toucher une pièce montre en **vert** ce que le niveau suivant change sur chaque barre (et sur la hauteur de rocher, recalculée avec la physique) ; un repère blanc montre la **moto suivante d'origine** pour comparer. Une moto bien améliorée dépasse la suivante d'origine ; la suivante a besoin de quelques améliorations pour reprendre l'avantage. Prix selon la moto (150 → 3 150 pièces par niveau).
-- **PNEUS** : Pneus Sec (+7 % d'adhérence sur le sec, 900), Pneus Pluie (+12 % sous la pluie, 1 600), Pneus Neige (+20 % dans la neige, 2 400), pour toutes les motos, montés tout seuls quand leur météo arrive.
+- **PNEUS** : Pneus Sec (+7 % d'adhérence sur le sec, 1 200), Pneus Pluie (+12 % sous la pluie, 2 200), Pneus Neige (+20 % dans la neige, 3 200), pour toutes les motos, montés tout seuls quand leur météo arrive.
 - La boutique de pièces est en **cartes colorées** (une couleur par pièce, grosse pastille, badge « +5 % PUISSANCE », étoiles de niveau, prix bien visible, petite animation à l'achat) et les chiffres sont écrits en grand.
-- **TENUES** : 10 tenues de pilote de couleurs différentes (300 à 3 000), plus la tenue offerte aux couleurs de la moto.
+- **TENUES** : 10 tenues de pilote de couleurs différentes (400 à 4 000), plus la tenue offerte aux couleurs de la moto.
 
 | Moto | Style | Prix | Points forts |
 | --- | --- | --- | --- |
 | Explorer 98 | scrambler vintage | offerte | douce et lourde, idéale en balade |
-| Sprint 125 | cross 2 temps (jaune/bleu) | 1 200 | légère, tourne vite en l'air, boit plus |
-| Ridge T300 | trial (rouge/blanc) | 2 800 | très légère, gros couple, pneus collants ; lente (77 km/h) |
-| Trailblazer 250 | enduro (bleu/blanc, phare) | 4 500 | confortable, sobre, polyvalente |
-| Fury 450 | cross 4 temps (orange/noir) | 7 000 | puissante, suspensions de course |
-| Volt X | électrique (turquoise/noir) | 10 000 | couple instantané, sifflement électrique, autonomie correcte |
-| Dakar 690 | rallye-raid (blanc/rouge/bleu, tête de fourche) | 15 000 | la plus rapide (125 km/h), énorme autonomie, lourde en l'air |
+| Sprint 125 | cross 2 temps (jaune/bleu) | 1 600 | légère, tourne vite en l'air, boit plus |
+| Ridge T300 | trial (rouge/blanc) | 3 800 | très légère, gros couple, pneus collants ; lente (77 km/h) |
+| Trailblazer 250 | enduro (bleu/blanc, phare) | 6 000 | confortable, sobre, polyvalente |
+| Fury 450 | cross 4 temps (orange/noir) | 9 500 | puissante, suspensions de course |
+| Volt X | électrique (turquoise/noir) | 13 500 | couple instantané, sifflement électrique, autonomie correcte |
+| Dakar 690 | rallye-raid (blanc/rouge/bleu, tête de fourche) | 20 000 | la plus rapide (125 km/h), énorme autonomie, lourde en l'air |
 
 Chaque moto change vraiment la physique (puissance, couple, rupteur, masse, raideur et débattement des suspensions, adhérence, contrôle aérien, consommation, freins).
 
 **Gagner des pièces** sans que ce soit rébarbatif : des pièces dorées sont posées en lignes et en arcs **au-dessus des sauts** (il faut sauter pour les attraper), les beaux sauts rapportent (« BIG AIR » +3 au-delà d'1,1 s de vol, réception « PARFAIT » +2), et chaque partie paie selon le mode.
 
-**L'astuce du cruising** : la distance paie de plus en plus. Chaque kilomètre fait monter le **bonus de longue balade** de ×0,25 (×1 au départ, jusqu'à ×4 au 12e km), affiché en haut à droite ; une chute fait redescendre d'un cran. Les circuits rapportent environ 90 à 120 pièces par minute, alors que le cruising démarre à ce niveau puis dépasse largement (environ 2 300 pièces pour 10 minutes de balade sans chute) : **c'est le mode qui rapporte le plus, à condition de cruiser longtemps**. Les gains d'une partie arrêtée depuis la pause sont gardés, ainsi que le record.
+**L'astuce du cruising** : la distance paie de plus en plus. Chaque kilomètre fait monter le **bonus de longue balade** de ×0,25 (×1 au départ, jusqu'à ×4 au 12e km), affiché en haut à droite ; une chute fait redescendre d'un cran. Les circuits rapportent environ 90 à 120 pièces par minute, alors que le cruising démarre à ce niveau puis dépasse largement (environ 2 300 pièces pour 10 minutes de balade sans chute) : **c'est le mode qui rapporte le plus, à condition de cruiser longtemps**. Depuis la v2.14 le cruising paie encore plus (pièces et sauts ×1,5, distance ×1,8 : environ 3 800 pièces pour 10 minutes sans chute) et tout coûte un peu plus cher au garage (motos, pièces, pneus, tenues) ; les gains des autres modes ne changent pas : ils servent d'appoint et de défi. Les gains d'une partie arrêtée depuis la pause sont gardés, ainsi que le record.
 
 Chaque partie (niveau) se déroule dans **une région**, dont on traverse les différents environnements :
 
@@ -138,12 +140,12 @@ Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record e
 
 - **Balance ARRIÈRE / AVANT** (en bas à gauche) : déplace le poids du pilote. Au sol, elle change le centre de gravité (balance à moitié en arrière = wheelie, tout en arrière plein gaz = on se retourne). En l'air, elle fait tourner la moto pour préparer l'atterrissage. Elle revient au centre quand on la lâche.
 - **Disque de frein** (juste à gauche de l'accélérateur) : freins avant + arrière.
-- **Poignée d'accélérateur** (à droite, deux fois plus large depuis la v2.12) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
+- **Poignée d'accélérateur** (à droite, 30 % plus étroite depuis la v2.14) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
 - **Marche arrière** : à l'arrêt, garder le frein appuyé 1 seconde : la moto recule et atteint 3 km/h en une seconde environ.
-- **Pause** en haut à droite. Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
+- **Pause** en haut à droite. Le menu pause a son propre bouton **PLEIN ÉCRAN** (pas besoin d'aller dans les paramètres). Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
 - **Options** (accueil et menu pause) : **pseudo** (affiché sur l'accueil, au-dessus de ta moto et dans le classement en course), volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
 - Le numéro de version est affiché en tout petit en bas à gauche de l'accueil (`public/version.json`, incrémenté automatiquement, voir CLAUDE.md).
-- Au clavier (pour tester sur ordinateur) : ↑/W gaz, ↓/S/Espace frein, ←/A arrière, →/D avant, P/Échap pause.
+- **Au clavier** : **Espace** pour accélérer, **Ctrl** ou **Alt Gr** pour freiner, **flèches ← →** pour la balance du pilote (arrière / avant) ; P/Échap pause.
 
 ## Développement
 
