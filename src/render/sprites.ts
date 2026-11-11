@@ -42,72 +42,103 @@ function outline(c: CanvasRenderingContext2D, width = 0.05): void {
 
 function pine(variant: number, dead = false): Sprite {
   const r = new Rng(100 + variant * 17 + (dead ? 999 : 0));
-  const H = 7 + variant * 1.4;
-  const W = 3.2 + variant * 0.4;
+  const H = 7 + variant * 1.5;
+  const W = 3.4 + variant * 0.45;
   return make(W, H, (c) => {
     // trunk
+    const tg = c.createLinearGradient(-0.2, 0, 0.2, 0);
+    tg.addColorStop(0, '#8a5a36');
+    tg.addColorStop(1, '#4a2e1c');
     c.beginPath();
-    c.moveTo(-0.18, 0);
-    c.lineTo(-0.1, -H * 0.9);
-    c.lineTo(0.1, -H * 0.9);
-    c.lineTo(0.18, 0);
+    c.moveTo(-0.2, 0);
+    c.lineTo(-0.08, -H * 0.94);
+    c.lineTo(0.08, -H * 0.94);
+    c.lineTo(0.2, 0);
     c.closePath();
-    c.fillStyle = '#6e4326';
+    c.fillStyle = tg;
     c.fill();
-    outline(c, 0.06);
+    c.strokeStyle = 'rgba(30,18,12,0.8)';
+    c.lineWidth = 0.04;
+    c.stroke();
     if (dead) {
       c.strokeStyle = '#5a3a24';
-      c.lineWidth = 0.09;
-      for (let i = 0; i < 7; i++) {
-        const y = -H * (0.3 + i * 0.09);
-        const len = (1 - i / 8) * W * 0.4;
-        const s = i % 2 ? 1 : -1;
+      c.lineWidth = 0.08;
+      for (let i = 0; i < 9; i++) {
+        const y = -H * (0.25 + i * 0.075);
+        const len = (1 - i / 10) * W * 0.42;
+        const sgn = i % 2 ? 1 : -1;
         c.beginPath();
         c.moveTo(0, y);
-        c.lineTo(s * len, y - len * 0.5);
+        c.quadraticCurveTo(sgn * len * 0.6, y - len * 0.1, sgn * len, y + len * 0.25);
         c.stroke();
       }
       return;
     }
-    const tiers = 6 + variant;
-    const dark = ['#1f5f2f', '#246a33', '#1b5629'][variant % 3];
-    const light = ['#3f9a45', '#4aa84b', '#3a8f40'][variant % 3];
-    const hi = '#7cc95a';
+    const greens = [
+      ['#163d2c', '#21573a', '#3d8247', '#7db554'],
+      ['#183f2a', '#255e37', '#46904b', '#8cc25a'],
+      ['#143a2e', '#1e523d', '#357a4c', '#6fae5c'],
+    ][variant % 3];
+    const tiers = 13 + variant * 2;
+    // painted drooping branch tiers, from the bottom up
     for (let i = 0; i < tiers; i++) {
       const t = i / (tiers - 1);
-      const y0 = -H * (0.16 + t * 0.74); // tier bottom
-      const w = W * 0.5 * (1 - t * 0.78) * r.range(0.9, 1.08);
-      const th = H * 0.24 * (1 - t * 0.3);
-      // jagged tier silhouette
-      c.beginPath();
-      c.moveTo(-w, y0);
-      const teeth = 5;
-      for (let k = 1; k <= teeth; k++) {
-        const x = -w + ((2 * w) / teeth) * k;
-        c.lineTo(x - w / teeth, y0 + 0.14 * r.range(0.5, 1.2));
-        c.lineTo(x, y0);
+      const y0 = -H * (0.14 + t * 0.82);
+      const w = W * 0.5 * Math.pow(1 - t, 0.9) * r.range(0.85, 1.1) + 0.12;
+      const droop = 0.35 + w * 0.25;
+      const thick = H * 0.075 * (1 - t * 0.4);
+      for (const side of [-1, 1]) {
+        // branch silhouette
+        c.beginPath();
+        c.moveTo(0, y0 - thick);
+        c.quadraticCurveTo(side * w * 0.6, y0 - thick * 0.6, side * w, y0 + droop);
+        const teeth = 4;
+        for (let k = teeth; k >= 0; k--) {
+          const u = k / teeth;
+          c.lineTo(side * w * u, y0 + droop * u + (k % 2 ? 0.16 : 0.02));
+        }
+        c.closePath();
+        c.fillStyle = greens[0];
+        c.fill();
+        c.strokeStyle = 'rgba(10,28,20,0.55)';
+        c.lineWidth = 0.035;
+        c.stroke();
+        // mid tone on the upper half of the branch
+        c.beginPath();
+        c.moveTo(0, y0 - thick * 0.9);
+        c.quadraticCurveTo(side * w * 0.55, y0 - thick * 0.5, side * w * 0.92, y0 + droop * 0.8);
+        c.quadraticCurveTo(side * w * 0.5, y0 + droop * 0.1, 0, y0 - thick * 0.2);
+        c.closePath();
+        c.fillStyle = greens[1];
+        c.fill();
+        // sunlit needle dabs (light from the upper left)
+        const lit = side < 0 ? 1 : 0.45;
+        const dabs = Math.round(3 + w * 3);
+        for (let k = 0; k < dabs; k++) {
+          const u = r.range(0.1, 0.9);
+          const dx = side * w * u;
+          const dy = y0 - thick * 0.6 + droop * u * 0.8 + r.range(-0.05, 0.08);
+          c.fillStyle = r.next() < lit ? greens[2] : greens[1];
+          c.beginPath();
+          c.ellipse(dx, dy, 0.16 + r.next() * 0.12, 0.06, side * 0.35, 0, Math.PI * 2);
+          c.fill();
+          if (side < 0 && r.next() < 0.5) {
+            c.fillStyle = greens[3];
+            c.beginPath();
+            c.ellipse(dx - 0.04, dy - 0.03, 0.08, 0.03, -0.35, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
       }
-      c.lineTo(0.05 * w, y0 - th);
-      c.closePath();
-      c.fillStyle = dark;
-      c.fill();
-      outline(c, 0.06);
-      // lit side (sun from upper left)
-      c.beginPath();
-      c.moveTo(-w * 0.92, y0 - 0.02);
-      c.lineTo(0.02 * w, y0 - th + 0.05);
-      c.lineTo(-w * 0.1, y0 - 0.02);
-      c.closePath();
-      c.fillStyle = light;
-      c.fill();
-      // highlight strokes
-      c.strokeStyle = hi;
-      c.lineWidth = 0.05;
-      c.beginPath();
-      c.moveTo(-w * 0.6, y0 - th * 0.25);
-      c.lineTo(-w * 0.25, y0 - th * 0.6);
-      c.stroke();
     }
+    // tip
+    c.beginPath();
+    c.moveTo(0, -H);
+    c.lineTo(-0.18, -H * 0.9);
+    c.lineTo(0.18, -H * 0.9);
+    c.closePath();
+    c.fillStyle = greens[1];
+    c.fill();
   });
 }
 

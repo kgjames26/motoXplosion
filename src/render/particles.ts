@@ -22,7 +22,7 @@ export interface Particle {
   vr: number;
 }
 
-const MAX = 420;
+const MAX = 260;
 
 export class Particles {
   readonly list: Particle[] = [];

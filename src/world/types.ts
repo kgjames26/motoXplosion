@@ -78,13 +78,17 @@ export interface Pickup {
 
 /** A wooden bridge spanning a ravine or a river. Physics uses the deck height stored in the heightfield. */
 export interface Bridge {
+  kind: 'wood' | 'stone' | 'iron' | 'viaduct';
   x0: number;
   x1: number;
   deckY0: number;
   deckY1: number;
   floorY: number;
   water: boolean;
+  /** Deck sag (rope bridge, > 0) or hump (stone arch, < 0) in metres. */
   sag: number;
+  /** Number of arches / truss spans. */
+  spans: number;
 }
 
 /** Special track decoration for berms / ramps drawn in 2.5D. */

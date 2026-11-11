@@ -53,14 +53,17 @@ export interface Wheel {
 }
 
 export interface BikeEvents {
-  landing: number; // impact strength of last landing (0 if none this frame)
+  /** Speed into the ground at the last touchdown (m/s, 0 if none this frame). */
+  landing: number;
+  /** Bike angle relative to the slope at that touchdown (rad). */
+  landingAngle: number;
   crashed: boolean;
 }
 
 const G = 9.81;
 
 /**
- * Geometry is expressed relative to the chassis centre of mass, which sits ~0.8 m above the
+ * Geometry is expressed relative to the chassis centre of mass, which sits ~0.9 m above the
  * ground at static sag. Wheelbase ~1.48 m, 46 % of the weight on the front.
  */
 function makeWheel(front: boolean): Wheel {
@@ -73,13 +76,13 @@ function makeWheel(front: boolean): Wheel {
     axisX: Math.sin(rake),
     axisY: -Math.cos(rake),
     travel,
-    k: front ? 9000 : 10500,
-    preload: front ? 150 : 150,
-    cComp: front ? 650 : 750,
-    cReb: front ? 1050 : 1200,
-    radius: front ? 0.36 : 0.34,
+    k: front ? 5600 : 6200,
+    preload: front ? 110 : 120,
+    cComp: front ? 520 : 600,
+    cReb: front ? 860 : 980,
+    radius: 0.43, // matches the (slightly cartoon) proportions of the rider sprites
     mass: 11,
-    inertia: 0.75,
+    inertia: 1.0,
     s: travel,
     sv: 0,
     spin: 0,
@@ -120,19 +123,21 @@ export class Bike {
   /** Peak vertical-ish impact recorded during the current landing window. */
   private landingPeak = 0;
   private landingTimer = 0;
-  events: BikeEvents = { landing: 0, crashed: false };
+  events: BikeEvents = { landing: 0, landingAngle: 0, crashed: false };
+  private landingAngle = 0;
+  private landingBase = 0;
 
   // tuning
-  readonly maxWheelTorque = 330; // N·m at the rear wheel
-  readonly power = 26000; // W at the wheel
+  readonly maxWheelTorque = 540; // N·m at the rear wheel
+  readonly power = 30000; // W at the wheel
   readonly maxSpeed = 33; // m/s rev limiter (~120 km/h)
-  readonly brakeTorque = 900;
+  readonly brakeTorque = 1100;
 
   reset(world: World, x: number): void {
     const slope = world.slopeAt(x);
     this.angle = slope;
     this.x = x;
-    this.y = world.heightAt(x) + 1.0;
+    this.y = world.heightAt(x) + 1.1;
     this.vx = this.vy = this.omega = 0;
     this.prevVx = this.prevVy = this.prevOmega = 0;
     this.lean = 0;
@@ -200,9 +205,10 @@ export class Bike {
     this.lean += (input.balance - this.lean) * (1 - Math.exp(-leanRate * dt));
 
     // Chassis acceleration of the previous step, used for the wheel-relative dynamics.
-    const ax = (this.vx - this.prevVx) / dt;
-    const ay = (this.vy - this.prevVy) / dt;
-    const alpha = (this.omega - this.prevOmega) / dt;
+    // (clamped: a hard impact or a teleport must not kick the wheels through the frame)
+    const ax = clamp((this.vx - this.prevVx) / dt, -80, 80);
+    const ay = clamp((this.vy - this.prevVy) / dt, -80, 80);
+    const alpha = clamp((this.omega - this.prevOmega) / dt, -60, 60);
     this.prevVx = this.vx;
     this.prevVy = this.vy;
     this.prevOmega = this.omega;
@@ -369,6 +375,19 @@ export class Bike {
     if (!this.crashed) {
       if (anyContact) {
         torque += -this.lean * 260;
+        // Rider instinct: on the ground a real rider stops a wheelie (or a stoppie) from
+        // looping by moving his body and feathering the controls. Pulling hard on the balance
+        // (ARRIÈRE / AVANT) overrides it, so wheelies and stoppies stay possible on purpose.
+        const rel = wrapAngle(this.angle - world.slopeAt(this.x));
+        const wantWheelie = clamp(-this.lean, 0, 1);
+        const wantStoppie = clamp(this.lean, 0, 1);
+        if (rel > 0.12) {
+          const k = 1 - wantWheelie * 0.7;
+          torque -= (rel - 0.12) * 2600 * k + Math.max(0, this.omega) * 60 * k;
+        } else if (rel < -0.1) {
+          const k = 1 - wantStoppie * 0.7;
+          torque += (-0.1 - rel) * 2600 * k - Math.min(0, this.omega) * 60 * k;
+        }
       } else {
         torque += -this.lean * 820;
         // pitch damping in the air keeps control precise
@@ -399,35 +418,44 @@ export class Bike {
     this.angle = wrapAngle(this.angle + this.omega * dt);
 
     // ---- air time & landing detection
+    // Landing strength = speed into the ground (along the slope normal) at touchdown, plus the
+    // extra hit of a suspension bottoming out. Landing on a down-slope is soft; flat is hard.
     this.grounded = this.rear.contact || this.front.contact;
     if (!this.grounded) {
       this.airTime += dt;
       this.wasAirborne = this.airTime;
     } else {
       if (this.wasAirborne > 0.25) {
+        const slope = world.slopeAt(this.x);
+        const nx = -Math.sin(slope);
+        const ny = Math.cos(slope);
+        this.landingBase = Math.max(0, -(this.vx * nx + this.vy * ny));
+        this.landingPeak = this.landingBase;
+        this.landingAngle = Math.abs(wrapAngle(this.angle - slope));
         this.landingTimer = 0.12;
-        this.landingPeak = 0;
       }
       this.airTime = 0;
       this.wasAirborne = 0;
     }
     if (this.landingTimer > 0) {
       this.landingTimer -= dt;
-      const impact = Math.max(this.rear.bottomed, this.front.bottomed) * 3 + (this.rear.normalForce + this.front.normalForce) / 9000;
-      this.landingPeak = Math.max(this.landingPeak, impact);
-      if (this.landingTimer <= 0) this.events.landing = Math.max(this.events.landing, this.landingPeak);
+      this.landingPeak = Math.max(this.landingPeak, this.landingBase + Math.min(4, Math.max(this.rear.bottomed, this.front.bottomed)) * 0.4);
+      if (this.landingTimer <= 0) {
+        this.events.landing = Math.max(this.events.landing, this.landingPeak);
+        this.events.landingAngle = this.landingAngle;
+      }
     }
   }
 
   /** Extra collision points on the chassis. Head contact means a crash. */
   private bodyContacts(world: World, apply: (px: number, py: number, fx: number, fy: number) => void): void {
     const pts: [number, number, number, boolean][] = [
-      [0.05, -0.45, 0.1, false], // skid plate
-      [-0.95, -0.05, 0.1, false], // rear fender
-      [-0.4, 0.1, 0.15, false], // seat / rider hip
-      [0.62, 0.2, 0.1, false], // number plate
-      [-0.02, 0.78, 0.17, true], // rider helmet
-      [-0.25, 0.45, 0.17, true], // rider back
+      [0.05, -0.58, 0.1, false], // skid plate
+      [-1.12, 0.12, 0.1, false], // rear fender
+      [-0.45, 0.15, 0.15, false], // seat / rider hip
+      [1.1, -0.02, 0.1, false], // front fender
+      [0.05, 1.05, 0.2, true], // rider helmet
+      [-0.25, 0.6, 0.2, true], // rider back
     ];
     for (const [lx, ly, r, fatal] of pts) {
       const [px, py] = this.pointWorld(lx, ly);
@@ -453,7 +481,7 @@ export class Bike {
 
   consumeEvents(): BikeEvents {
     const e = this.events;
-    this.events = { landing: 0, crashed: false };
+    this.events = { landing: 0, landingAngle: 0, crashed: false };
     return e;
   }
 }

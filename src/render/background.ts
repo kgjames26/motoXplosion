@@ -9,7 +9,7 @@ import { propSprite } from './sprites';
  * phones while allowing detailed cel-shaded art (snow caps, facets, tree lines).
  */
 
-type LayerKind = 'far' | 'mid' | 'near' | 'forest';
+export type LayerKind = 'far' | 'mid' | 'near' | 'forest';
 
 interface LayerDef {
   kind: LayerKind;
@@ -45,6 +45,7 @@ export class Background {
     W: number,
     H: number,
     alpha: number,
+    only?: LayerKind[],
   ): void {
     const sk = `${W}x${H}`;
     if (sk !== this.sizeKey) {
@@ -56,6 +57,7 @@ export class Background {
     ctx.globalAlpha = alpha;
     for (let li = 0; li < LAYERS.length; li++) {
       const L = LAYERS[li];
+      if (only && !only.includes(L.kind)) continue;
       const th = Math.ceil(L.height * H);
       const tw = TILE_W;
       const yShift = Math.max(-H * 0.12, Math.min(H * 0.12, camY * scale * L.py));

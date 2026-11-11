@@ -68,7 +68,7 @@
       </div>
 
       <!-- Touch controls -->
-      <div id="controls" class="hidden">
+      <div id="controls" class="hidden layout-gauche">
         <button class="brake" id="ctl-brake" aria-label="Frein">
           <svg viewBox="0 0 100 100" aria-hidden="true">
             <circle cx="50" cy="50" r="34" class="disc" />
@@ -113,19 +113,18 @@
 
       <!-- Screens -->
       <div id="screen-title" class="screen">
+        <button class="icon-btn btn-settings" id="btn-settings-title" aria-label="Paramètres">
+          <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
+        </button>
         <div class="logo">
           <span class="l1">MOTO</span><span class="l2">XPLOSION</span>
         </div>
-        <p class="tagline">Roule le plus loin possible. Garde de l'essence et de l'eau !</p>
+        <div class="regions" id="regions"></div>
         <button class="btn-primary" id="btn-play">
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> JOUER
         </button>
         <div class="best">Record : <b id="best-title">0</b> m</div>
-        <div class="howto">
-          <div><b>Poignée</b> glisser vers le bas = gaz</div>
-          <div><b>Balance</b> arrière / avant = équilibre et rotation en l'air</div>
-          <div><b>Disque</b> = frein</div>
-        </div>
+        <div class="loading" id="loading">Chargement…</div>
       </div>
 
       <div id="screen-pause" class="screen hidden">
@@ -134,7 +133,10 @@
         <div class="row">
           <button class="btn-secondary" id="btn-restart">RECOMMENCER</button>
           <button class="btn-secondary" id="btn-home">ACCUEIL</button>
-          <button class="btn-secondary" id="btn-sound">SON : OUI</button>
+          <button class="btn-secondary with-icon" id="btn-settings-pause">
+            <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
+            PARAMÈTRES
+          </button>
         </div>
       </div>
 
@@ -150,6 +152,44 @@
           <button class="btn-primary" id="btn-again"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" /></svg> REJOUER</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
         </div>
+      </div>
+
+      <div id="screen-settings" class="screen hidden">
+        <h2>PARAMÈTRES</h2>
+        <div class="settings panel">
+          <label class="set-row">
+            <span>🎵 Musique</span>
+            <input type="range" id="set-music" min="0" max="100" step="1" />
+            <output id="set-music-v">60</output>
+          </label>
+          <label class="set-row">
+            <span>🏍️ Moteur &amp; effets</span>
+            <input type="range" id="set-sfx" min="0" max="100" step="1" />
+            <output id="set-sfx-v">85</output>
+          </label>
+          <div class="set-row layout-row">
+            <span>Commandes</span>
+            <div class="layouts" id="set-layouts">
+              <button data-layout="gauche" class="layout-opt">
+                <i class="mini"><b class="m-bal" style="left:4%"></b><b class="m-brk" style="right:22%"></b><b class="m-thr" style="right:4%"></b></i>
+                Balance à gauche
+              </button>
+              <button data-layout="centre" class="layout-opt">
+                <i class="mini"><b class="m-brk" style="left:4%"></b><b class="m-bal" style="left:34%"></b><b class="m-thr" style="right:4%"></b></i>
+                Balance au centre
+              </button>
+              <button data-layout="inverse" class="layout-opt">
+                <i class="mini"><b class="m-thr" style="left:4%"></b><b class="m-brk" style="left:22%"></b><b class="m-bal" style="right:4%"></b></i>
+                Gaucher
+              </button>
+            </div>
+          </div>
+          <label class="set-row check">
+            <span>Vibrations</span>
+            <input type="checkbox" id="set-vibration" />
+          </label>
+        </div>
+        <button class="btn-primary" id="btn-settings-back">RETOUR</button>
       </div>
 
       <div id="rotate">

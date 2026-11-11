@@ -3,6 +3,7 @@ import { Bike, BikeInput } from './physics/bike';
 import { Particles } from './render/particles';
 import { Surface, SURFACES } from './world/types';
 import { World } from './world/world';
+import type { RegionId } from './world/regions';
 
 export type GameState = 'title' | 'playing' | 'paused' | 'over';
 export type OverReason = 'fuel' | 'stamina';
@@ -42,6 +43,7 @@ export const CHECKPOINT_EVERY = 1000;
  */
 export class Game {
   state: GameState = 'title';
+  region: RegionId = 'alpes';
   world!: World;
   bike = new Bike();
   particles = new Particles();
@@ -60,27 +62,40 @@ export class Game {
   lastCheckpoint = 0;
   private acc = 0;
   private stuckTimer = 0;
+  private progressX = 0;
+  private progressTimer = 0;
   private outTimer = 0;
   private dustAcc = 0;
   private events: GameEvents = {};
 
-  constructor() {
+  /** Set when the last run beat the region record. */
+  newRecord = false;
+
+  constructor(region: RegionId = 'alpes') {
+    this.region = region;
+    this.newRun(region);
+    this.state = 'title';
+  }
+
+  /** Records are kept per region (each region is a level). */
+  private loadBest(): void {
     try {
-      this.best = Number(localStorage.getItem('mx.best') ?? 0) || 0;
+      this.best = Number(localStorage.getItem('mx.best.' + this.region) ?? 0) || 0;
     } catch {
       this.best = 0;
     }
-    this.newRun();
-    this.state = 'title';
   }
 
   get distance(): number {
     return Math.max(0, this.bike.x - this.startX);
   }
 
-  newRun(): void {
+  newRun(region: RegionId = this.region): void {
+    this.region = region;
+    this.loadBest();
+    this.newRecord = false;
     const seed = (Math.random() * 2 ** 31) | 0;
-    this.world = new World(seed);
+    this.world = new World(seed, region);
     this.world.ensure(200);
     this.bike = new Bike();
     this.bike.reset(this.world, this.startX);
@@ -92,6 +107,8 @@ export class Game {
     this.crashTimer = 0;
     this.popups = [];
     this.stuckTimer = 0;
+    this.progressX = 0;
+    this.progressTimer = 0;
     this.outTimer = 0;
     this.lastCheckpoint = 0;
     this.acc = 0;
@@ -177,19 +194,20 @@ export class Game {
     // ---- landings & crashes
     const ev = bike.consumeEvents();
     if (ev.landing > 0 && this.crashTimer <= 0) {
+      // ev.landing = speed into the ground (m/s). Up to ~8.5 m/s the suspension absorbs it;
+      // beyond, the rider takes the hit. Landing crooked makes it worse.
       const hard = ev.landing;
-      // Imbalance at touchdown makes it worse.
-      const misalign = Math.abs(wrapAngle(bike.angle - this.world.slopeAt(bike.x)));
-      const loss = clamp((hard - 11) * 0.5 + Math.max(0, misalign - 0.6) * 8, 0, 14);
+      const misalign = ev.landingAngle;
+      const loss = clamp((hard - 8.5) * 1.5 + Math.max(0, misalign - 0.6) * 8, 0, 14);
       if (loss > 1) {
         this.stamina -= loss;
         this.shake = Math.min(1, this.shake + loss / 15);
         this.popup(bike.x, bike.y + 1.8, loss > 10 ? 'AÏE !' : 'OUF', loss > 10 ? '#ff6b5a' : '#ffd8a0');
-      } else if (hard > 1.5) {
-        this.shake = Math.min(1, this.shake + 0.15);
+      } else if (hard > 3) {
+        this.shake = Math.min(1, this.shake + 0.12);
       }
       this.events.landing = hard;
-      this.landingDust(Math.min(1, hard / 8));
+      this.landingDust(Math.min(1, hard / 7));
     }
     if (ev.crashed && this.crashTimer <= 0) this.crash();
 
@@ -202,7 +220,13 @@ export class Game {
       const upsideDown = Math.abs(wrapAngle(bike.angle - this.world.slopeAt(bike.x))) > 1.9 && bike.speed < 3;
       if ((Math.abs(bike.speed) < 0.7 && this.input.throttle > 0.4) || upsideDown) this.stuckTimer += dt;
       else this.stuckTimer = Math.max(0, this.stuckTimer - dt * 2);
-      if (this.stuckTimer > (upsideDown ? 1.2 : 3)) {
+      // no real progress for a while (rocking in the bottom of a pit): rescue as well
+      if (bike.x > this.progressX + 3) {
+        this.progressX = bike.x;
+        this.progressTimer = 0;
+      } else this.progressTimer += dt;
+      if (this.stuckTimer > (upsideDown ? 1.2 : 3) || (this.progressTimer > 6 && this.input.throttle > 0.3)) {
+        this.progressTimer = 0;
         this.stuckTimer = 0;
         this.stamina -= 4;
         this.respawn(bike.x + 6);
@@ -281,10 +305,11 @@ export class Game {
   private gameOver(): void {
     this.state = 'over';
     const d = Math.round(this.distance);
+    this.newRecord = d > this.best && d > 0;
     if (d > this.best) {
       this.best = d;
       try {
-        localStorage.setItem('mx.best', String(d));
+        localStorage.setItem('mx.best.' + this.region, String(d));
       } catch {
         /* storage unavailable */
       }

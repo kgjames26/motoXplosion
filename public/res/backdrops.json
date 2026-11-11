@@ -1,0 +1,9 @@
+{
+ "alps-forest": {
+  "w": 2000,
+  "h": 795,
+  "horizon": 0.7,
+  "skyTop": "#086be1",
+  "ground": "#3d837f"
+ }
+}

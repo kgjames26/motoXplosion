@@ -1,27 +1,104 @@
-/**
- * Procedural WebAudio sound: a two-oscillator engine whose pitch follows the rpm, wind noise
- * with speed, and short synthesized effects (pickups, landings, crashes). No audio files.
- */
-export class Audio {
-  private ctx: AudioContext | null = null;
-  private master!: GainNode;
-  private engGain!: GainNode;
-  private osc1!: OscillatorNode;
-  private osc2!: OscillatorNode;
-  private filter!: BiquadFilterNode;
-  private windGain!: GainNode;
-  private noiseBuf!: AudioBuffer;
-  enabled = true;
+import { ENGINE_WORKLET } from './engineWorklet';
 
-  constructor() {
-    try {
-      this.enabled = localStorage.getItem('mx.sound') !== '0';
-    } catch {
-      this.enabled = true;
+/**
+ * Sound: synthesized motocross engine (AudioWorklet), wind, effects, and the two music
+ * tracks (menu / in game) looped seamlessly with a cross-fade. Music and effects have their
+ * own volume (settings).
+ */
+
+type Track = 'menu' | 'game';
+
+/** Loop window (seconds) measured on the files: leading/trailing silence excluded. */
+const LOOP = { start: 0.24, end: 171.9, fade: 4 };
+
+class MusicTrack {
+  private els: HTMLAudioElement[] = [];
+  private gains: GainNode[] = [];
+  private active = 0;
+  private timer = 0;
+  readonly out: GainNode;
+  playing = false;
+
+  constructor(
+    private ctx: AudioContext,
+    src: string,
+  ) {
+    this.out = ctx.createGain();
+    this.out.gain.value = 0;
+    for (let i = 0; i < 2; i++) {
+      const el = new window.Audio(src);
+      el.preload = i === 0 ? 'auto' : 'none'; // the cross-fade twin reuses the HTTP cache
+      el.crossOrigin = 'anonymous';
+      const node = ctx.createMediaElementSource(el);
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      node.connect(g).connect(this.out);
+      this.els.push(el);
+      this.gains.push(g);
     }
   }
 
-  /** Must be called from a user gesture. */
+  play(): void {
+    if (this.playing) return;
+    this.playing = true;
+    const el = this.els[this.active];
+    if (el.currentTime < LOOP.start || el.currentTime > LOOP.end - LOOP.fade) el.currentTime = LOOP.start;
+    this.gains[this.active].gain.setValueAtTime(1, this.ctx.currentTime);
+    void el.play().catch(() => {});
+    this.tick();
+  }
+
+  pause(): void {
+    this.playing = false;
+    clearTimeout(this.timer);
+    for (const el of this.els) el.pause();
+  }
+
+  /** Watch the active element and start the other one for the cross-fade before the end. */
+  private tick = (): void => {
+    if (!this.playing) return;
+    const el = this.els[this.active];
+    const remaining = LOOP.end - el.currentTime;
+    if (remaining <= LOOP.fade) {
+      const next = 1 - this.active;
+      const nel = this.els[next];
+      nel.currentTime = LOOP.start;
+      void nel.play().catch(() => {});
+      const t = this.ctx.currentTime;
+      const f = Math.max(0.5, remaining);
+      this.gains[next].gain.cancelScheduledValues(t);
+      this.gains[next].gain.setValueAtTime(0, t);
+      this.gains[next].gain.linearRampToValueAtTime(1, t + f);
+      this.gains[this.active].gain.cancelScheduledValues(t);
+      this.gains[this.active].gain.setValueAtTime(1, t);
+      this.gains[this.active].gain.linearRampToValueAtTime(0, t + f);
+      const old = el;
+      setTimeout(() => old.pause(), f * 1000 + 200);
+      this.active = next;
+    }
+    this.timer = window.setTimeout(this.tick, 250);
+  };
+}
+
+export class Audio {
+  private ctx: AudioContext | null = null;
+  private master!: GainNode;
+  private sfxBus!: GainNode;
+  private musicBus!: GainNode;
+  private engineNode: AudioWorkletNode | null = null;
+  private engineFilter!: BiquadFilterNode;
+  private engineGain!: GainNode;
+  private fallback: { osc: OscillatorNode; osc2: OscillatorNode } | null = null;
+  private windGain!: GainNode;
+  private noiseBuf!: AudioBuffer;
+  private tracks: Partial<Record<Track, MusicTrack>> = {};
+  private current: Track | null = null;
+  private wanted: Track | null = null;
+  private duck = 1;
+  musicVolume = 0.6;
+  sfxVolume = 0.85;
+
+  /** Must be called from a user gesture (iOS/Android autoplay rules). */
   unlock(): void {
     if (this.ctx) {
       if (this.ctx.state === 'suspended') void this.ctx.resume();
@@ -29,39 +106,32 @@ export class Audio {
     }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC();
+    const ctx = new AC({ latencyHint: 'interactive' });
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = this.enabled ? 0.6 : 0;
     this.master.connect(ctx.destination);
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.gain.value = this.sfxVolume;
+    this.sfxBus.connect(this.master);
+    this.musicBus = ctx.createGain();
+    this.musicBus.gain.value = this.musicVolume;
+    this.musicBus.connect(this.master);
 
-    // engine
-    this.filter = ctx.createBiquadFilter();
-    this.filter.type = 'lowpass';
-    this.filter.frequency.value = 900;
-    this.filter.Q.value = 4;
-    this.engGain = ctx.createGain();
-    this.engGain.gain.value = 0;
-    const shaper = ctx.createWaveShaper();
-    const curve = new Float32Array(256);
-    for (let i = 0; i < 256; i++) {
-      const x = (i / 255) * 2 - 1;
-      curve[i] = Math.tanh(x * 2.5);
-    }
-    shaper.curve = curve;
-    this.osc1 = ctx.createOscillator();
-    this.osc1.type = 'sawtooth';
-    this.osc2 = ctx.createOscillator();
-    this.osc2.type = 'square';
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.45;
-    this.osc1.connect(shaper);
-    this.osc2.connect(g2).connect(shaper);
-    shaper.connect(this.filter).connect(this.engGain).connect(this.master);
-    this.osc1.start();
-    this.osc2.start();
+    // engine chain: worklet → muffling low-pass → gain
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass';
+    this.engineFilter.frequency.value = 900;
+    this.engineFilter.Q.value = 0.8;
+    const body = ctx.createBiquadFilter(); // a bit of chest: low shelf boost
+    body.type = 'lowshelf';
+    body.frequency.value = 160;
+    body.gain.value = 5;
+    this.engineGain = ctx.createGain();
+    this.engineGain.gain.value = 0;
+    this.engineFilter.connect(body).connect(this.engineGain).connect(this.sfxBus);
+    void this.initEngine(ctx);
 
-    // noise buffer (wind, crash)
+    // noise for wind and impacts
     const len = ctx.sampleRate;
     this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
@@ -71,34 +141,94 @@ export class Audio {
     wind.loop = true;
     const wf = ctx.createBiquadFilter();
     wf.type = 'bandpass';
-    wf.frequency.value = 600;
-    wf.Q.value = 0.6;
+    wf.frequency.value = 500;
+    wf.Q.value = 0.5;
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0;
-    wind.connect(wf).connect(this.windGain).connect(this.master);
+    wind.connect(wf).connect(this.windGain).connect(this.sfxBus);
     wind.start();
+
+    this.tracks.menu = new MusicTrack(ctx, '/audio/music-menu.mp3');
+    this.tracks.game = new MusicTrack(ctx, '/audio/music-game.mp3');
+    for (const t of Object.values(this.tracks)) t!.out.connect(this.musicBus);
+    if (this.wanted) this.music(this.wanted);
   }
 
-  setEnabled(on: boolean): void {
-    this.enabled = on;
+  private async initEngine(ctx: AudioContext): Promise<void> {
     try {
-      localStorage.setItem('mx.sound', on ? '1' : '0');
+      if (!ctx.audioWorklet) throw new Error('no worklet');
+      const url = URL.createObjectURL(new Blob([ENGINE_WORKLET], { type: 'application/javascript' }));
+      await ctx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      this.engineNode = new AudioWorkletNode(ctx, 'mx-engine', { outputChannelCount: [1] });
+      this.engineNode.connect(this.engineFilter);
     } catch {
-      /* ignore */
+      // Fallback: two detuned oscillators (older browsers).
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'square';
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.4;
+      osc.connect(this.engineFilter);
+      osc2.connect(g2).connect(this.engineFilter);
+      osc.start();
+      osc2.start();
+      this.fallback = { osc, osc2 };
     }
-    if (this.ctx) this.master.gain.setTargetAtTime(on ? 0.6 : 0, this.ctx.currentTime, 0.05);
+  }
+
+  setVolumes(music: number, sfx: number): void {
+    this.musicVolume = music;
+    this.sfxVolume = sfx;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.musicBus.gain.setTargetAtTime(music * this.duck, t, 0.05);
+    this.sfxBus.gain.setTargetAtTime(sfx, t, 0.05);
+  }
+
+  /** Select the music for the current screen (cross-fades between tracks). */
+  music(track: Track, duck = 1): void {
+    this.wanted = track;
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (duck !== this.duck) {
+      this.duck = duck;
+      this.musicBus.gain.setTargetAtTime(this.musicVolume * duck, t, 0.3);
+    }
+    if (this.current === track) return;
+    const prevName = this.current;
+    const prev = prevName ? this.tracks[prevName] : null;
+    const next = this.tracks[track]!;
+    if (prev) {
+      prev.out.gain.setTargetAtTime(0, t, 0.4);
+      setTimeout(() => {
+        if (this.current !== prevName) prev.pause();
+      }, 2500);
+    }
+    next.play();
+    next.out.gain.cancelScheduledValues(t);
+    next.out.gain.setTargetAtTime(1, t, 0.5);
+    this.current = track;
   }
 
   /** Continuous engine/wind parameters, call every frame. */
   engine(rpm: number, throttle: number, speed: number, running: boolean): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const f = 28 + (rpm / 60) * 0.85;
-    this.osc1.frequency.setTargetAtTime(f, t, 0.03);
-    this.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.03);
-    this.filter.frequency.setTargetAtTime(500 + throttle * 1800 + rpm * 0.08, t, 0.05);
-    this.engGain.gain.setTargetAtTime(running ? 0.1 + throttle * 0.12 : 0, t, 0.08);
-    this.windGain.gain.setTargetAtTime(Math.min(0.25, (speed / 30) ** 2 * 0.25), t, 0.2);
+    if (this.engineNode) {
+      const p = this.engineNode.parameters;
+      p.get('rpm')!.setTargetAtTime(rpm, t, 0.04);
+      p.get('throttle')!.setTargetAtTime(throttle, t, 0.03);
+    } else if (this.fallback) {
+      const f = 25 + (rpm / 60) * 0.5;
+      this.fallback.osc.frequency.setTargetAtTime(f, t, 0.03);
+      this.fallback.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.03);
+    }
+    // muffled: the filter opens with throttle and revs
+    this.engineFilter.frequency.setTargetAtTime(520 + throttle * 900 + rpm * 0.07, t, 0.06);
+    this.engineGain.gain.setTargetAtTime(running ? 0.55 + throttle * 0.25 : 0, t, 0.12);
+    this.windGain.gain.setTargetAtTime(Math.min(0.2, (speed / 30) ** 2 * 0.2), t, 0.25);
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, vol: number, delay = 0, slide = 1): void {
@@ -111,7 +241,7 @@ export class Audio {
     o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfxBus);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -127,35 +257,35 @@ export class Audio {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    s.connect(f).connect(g).connect(this.master);
+    s.connect(f).connect(g).connect(this.sfxBus);
     s.start(t);
     s.stop(t + dur);
   }
 
   pickup(kind: 'fuel' | 'water'): void {
     const base = kind === 'fuel' ? 523 : 659;
-    this.tone(base, 0.12, 'triangle', 0.25);
-    this.tone(base * 1.25, 0.12, 'triangle', 0.25, 0.08);
-    this.tone(base * 1.5, 0.22, 'triangle', 0.25, 0.16);
+    this.tone(base, 0.12, 'triangle', 0.22);
+    this.tone(base * 1.25, 0.12, 'triangle', 0.22, 0.08);
+    this.tone(base * 1.5, 0.22, 'triangle', 0.22, 0.16);
   }
 
   landing(strength: number): void {
-    const v = Math.min(0.5, strength / 12);
+    const v = Math.min(0.5, strength / 14);
     if (v < 0.05) return;
-    this.tone(120, 0.18, 'sine', v, 0, 0.4);
-    this.noise(0.15, v * 0.6, 500);
+    this.tone(95, 0.2, 'sine', v, 0, 0.45);
+    this.noise(0.18, v * 0.5, 420);
   }
 
   crash(): void {
-    this.noise(0.6, 0.5, 900);
-    this.tone(90, 0.4, 'sawtooth', 0.2, 0, 0.3);
+    this.noise(0.7, 0.5, 800);
+    this.tone(80, 0.45, 'sawtooth', 0.18, 0, 0.3);
   }
 
   checkpoint(): void {
-    [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, 'square', 0.12, i * 0.09));
+    [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.14, i * 0.09));
   }
 
   over(): void {
-    [392, 330, 262].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.2, i * 0.18));
+    [392, 330, 262].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.18, i * 0.18));
   }
 }

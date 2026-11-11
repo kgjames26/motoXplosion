@@ -734,3 +734,197 @@ button {
     display: flex;
   }
 }
+
+/* ------------------------------------------------------------------ control layouts */
+
+/* Default: balance far left, brake just left of the throttle. */
+#controls.layout-gauche .balance {
+  left: calc(var(--u) * 3.5 + var(--safe-l));
+  transform: none;
+  width: min(42vw, calc(var(--u) * 86));
+}
+#controls.layout-gauche .brake {
+  left: auto;
+  right: calc(var(--u) * 30 + var(--safe-r));
+  width: calc(var(--u) * 21);
+  height: calc(var(--u) * 21);
+}
+/* Mirrored for left-handed players. */
+#controls.layout-inverse .throttle {
+  right: auto;
+  left: calc(var(--u) * 3.5 + var(--safe-l));
+}
+#controls.layout-inverse .brake {
+  left: calc(var(--u) * 30 + var(--safe-l));
+  width: calc(var(--u) * 21);
+  height: calc(var(--u) * 21);
+}
+#controls.layout-inverse .balance {
+  left: auto;
+  right: calc(var(--u) * 3.5 + var(--safe-r));
+  transform: none;
+  width: min(42vw, calc(var(--u) * 86));
+}
+
+/* ------------------------------------------------------------------ title extras */
+
+.icon-btn {
+  position: absolute;
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+  border: max(1.5px, calc(var(--u) * 0.35)) solid var(--panel-edge);
+  border-radius: calc(var(--u) * 2.2);
+  box-shadow: 0 calc(var(--u) * 0.6) 0 rgba(0, 0, 0, 0.35);
+}
+.icon-btn svg {
+  width: 62%;
+  fill: #fff;
+}
+.btn-settings {
+  top: calc(var(--u) * 2.5);
+  right: calc(var(--u) * 3 + var(--safe-r));
+}
+.btn-secondary.with-icon svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: #fff;
+}
+.regions {
+  display: flex;
+  gap: calc(var(--u) * 2);
+}
+.region-card {
+  width: calc(var(--u) * 24);
+  padding: calc(var(--u) * 1.2);
+  border-radius: calc(var(--u) * 2.4);
+  background: var(--panel);
+  border: calc(var(--u) * 0.5) solid var(--panel-edge);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 0.6);
+  font-weight: 900;
+  font-style: italic;
+  font-size: calc(var(--u) * 3.2);
+  transition: transform 0.12s, border-color 0.12s;
+}
+.region-card small {
+  font-size: calc(var(--u) * 2);
+  font-weight: 600;
+  font-style: normal;
+  opacity: 0.85;
+  line-height: 1.15;
+}
+.region-card .thumb {
+  width: 100%;
+  height: calc(var(--u) * 9);
+  border-radius: calc(var(--u) * 1.4);
+  background-size: cover;
+  background-position: center 70%;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+.region-card.selected {
+  border-color: var(--gold);
+  transform: translateY(calc(var(--u) * -0.8));
+  box-shadow: 0 0 calc(var(--u) * 2.5) rgba(246, 182, 44, 0.55);
+}
+.loading {
+  font-weight: 700;
+  font-size: calc(var(--u) * 2.6);
+  opacity: 0.85;
+}
+
+/* ------------------------------------------------------------------ settings */
+
+.settings {
+  width: min(78vw, calc(var(--u) * 120));
+  padding: calc(var(--u) * 2.4) calc(var(--u) * 3.5);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 1.8);
+  text-align: left;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  font-weight: 800;
+  font-size: calc(var(--u) * 3.2);
+}
+.set-row > span {
+  width: calc(var(--u) * 30);
+  flex: none;
+}
+.set-row input[type='range'] {
+  flex: 1;
+  accent-color: var(--gold);
+  height: calc(var(--u) * 5);
+}
+.set-row output {
+  width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.set-row.check input {
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
+  accent-color: var(--gold);
+}
+.layouts {
+  display: flex;
+  gap: calc(var(--u) * 1.5);
+  flex: 1;
+}
+.layout-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 0.8);
+  padding: calc(var(--u) * 1) calc(var(--u) * 0.6);
+  border-radius: calc(var(--u) * 1.8);
+  border: calc(var(--u) * 0.45) solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 800;
+  font-size: calc(var(--u) * 2.2);
+}
+.layout-opt.selected {
+  border-color: var(--gold);
+  background: rgba(246, 182, 44, 0.18);
+}
+.mini {
+  position: relative;
+  width: 100%;
+  height: calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 1);
+  background: linear-gradient(180deg, #4b8ad6, #4f9a46 60%, #8a5a33);
+}
+.mini b {
+  position: absolute;
+  bottom: 12%;
+  display: block;
+}
+.mini .m-bal {
+  width: 34%;
+  height: 26%;
+  border-radius: 99px;
+  background: var(--gold);
+  border: 1px solid var(--ink);
+}
+.mini .m-brk {
+  width: calc(var(--u) * 2.6);
+  height: calc(var(--u) * 2.6);
+  border-radius: 50%;
+  background: #c7cbd3;
+  border: 1px solid var(--ink);
+}
+.mini .m-thr {
+  width: calc(var(--u) * 1.8);
+  height: 70%;
+  border-radius: 99px;
+  background: #ff7a1a;
+  border: 1px solid var(--ink);
+}

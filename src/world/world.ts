@@ -1,5 +1,6 @@
 import { clamp } from '../core/math';
 import { Generator } from './generator';
+import { REGIONS, RegionDef, RegionId } from './regions';
 import {
   Biome,
   Bridge,
@@ -43,8 +44,20 @@ export class World {
   marks: TrackMark[] = [];
   private gen: Generator;
 
-  constructor(readonly seed: number) {
-    this.gen = new Generator(this, seed);
+  readonly region: RegionDef;
+
+  constructor(
+    readonly seed: number,
+    regionId: RegionId = 'alpes',
+  ) {
+    this.region = REGIONS[regionId];
+    this.gen = new Generator(this, seed, this.region);
+  }
+
+  /** True when x is over a bridge deck (no ground band drawn there). */
+  bridgeAt(x: number): Bridge | null {
+    for (const b of this.bridges) if (x >= b.x0 && x <= b.x1) return b;
+    return null;
   }
 
   /** Make sure terrain exists up to x (m). */

@@ -1,6 +1,7 @@
 import { clamp, fbm1, noise1, Rng, smoothstep } from '../core/math';
 import { Biome, DX, PropKind, Surface } from './types';
 import type { World } from './world';
+import { BridgeKind, RegionDef } from './regions';
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -55,7 +56,7 @@ const BIOMES: Record<Biome, BiomeDef> = {
     baseWave: 45,
     trend: 0.06,
     surface: Surface.Dirt,
-    features: { tabletop: 3, double: 3, rollers: 3, whoops: 2, logs: 2, berm: 2, descent: 1, climb: 1, stepUp: 1 },
+    features: { tabletop: 3, double: 3, rollers: 3, whoops: 2, logs: 2, berm: 2, descent: 1, climb: 1, stepUp: 1, bridge: 1.5 },
     props: [
       { kind: 'pine', weight: 10 },
       { kind: 'pineDead', weight: 0.6 },
@@ -74,7 +75,7 @@ const BIOMES: Record<Biome, BiomeDef> = {
     baseWave: 70,
     trend: 0.05,
     surface: Surface.Dirt,
-    features: { tabletop: 4, double: 3, rollers: 3, whoops: 2, berm: 2, stepUp: 1, drop: 1 },
+    features: { tabletop: 4, double: 3, rollers: 3, whoops: 2, berm: 2, stepUp: 1, drop: 1, bridge: 1 },
     props: [
       { kind: 'pine', weight: 3 },
       { kind: 'bush', weight: 3 },
@@ -160,9 +161,13 @@ export class Generator {
   private nextCheckpoint = 1000;
   private propsCursor = 0; // x up to which props have been spawned
 
-  constructor(private world: World, seed: number) {
+  constructor(
+    private world: World,
+    seed: number,
+    private region: RegionDef,
+  ) {
     this.rng = new Rng(seed);
-    this.biome = Biome.Meadow;
+    this.biome = region.start;
     this.biomeEnd = 380;
     // A calm start straight.
     this.queue.push(this.flat(60, Surface.Dirt));
@@ -205,10 +210,10 @@ export class Generator {
   private plan(): void {
     const x = this.segX0;
     if (x >= this.biomeEnd) {
-      const options = [Biome.Forest, Biome.Meadow, Biome.Mountain, Biome.Canyon, Biome.River].filter(
-        (b) => b !== this.biome,
-      );
-      this.biome = this.rng.pick(options);
+      // stay in the region: pick another of its environments
+      const all = (Object.keys(this.region.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
+      const options = all.length > 1 ? all.filter((b) => b !== this.biome) : all;
+      this.biome = this.rng.weighted(options, options.map((b) => this.region.biomes[b]!));
       const def = BIOMES[this.biome];
       this.biomeEnd = x + this.rng.range(def.length[0], def.length[1]);
       // Smooth transition stretch.
@@ -275,14 +280,14 @@ export class Generator {
         const H = r.range(1.4, 2.4) + d * 1.4;
         const Lr = H * r.range(2.6, 3.4);
         const top = r.range(7, 13);
-        const Ld = H * r.range(3.5, 4.5);
+        const Ld = H * r.range(5, 6.5);
         const len = Lr + top + Ld;
         return [
           this.flat(4),
           {
             len,
             shape: (t) => {
-              if (t < Lr) return H * Math.pow(t / Lr, 1.7);
+              if (t < Lr) return H * Math.pow(t / Lr, 1.4);
               if (t < Lr + top) return H;
               return H * (1 - ease((t - Lr - top) / Ld));
             },
@@ -297,13 +302,13 @@ export class Generator {
         const gap = name === 'gap';
         const H = r.range(1.5, 2.3) + d * 1.2;
         const Lr = H * r.range(2.4, 3);
-        const down = gap ? r.range(4, 7) + d * 3 : 0;
+        const down = gap ? r.range(2, 3.5) + d * 2 : 0;
         const fall = (H + down) / 1.3;
         const G = gap ? r.range(2, 5) : r.range(3, 7) + d * 3;
         const H2 = H * r.range(0.8, 1.0);
         const rise = (H2 + down) / 1.3;
         const roundTop = 1.5;
-        const Ld = H2 * r.range(4, 5);
+        const Ld = H2 * r.range(5, 6.5);
         const a = Lr;
         const b = a + fall;
         const c = b + G;
@@ -315,7 +320,7 @@ export class Generator {
           {
             len,
             shape: (t) => {
-              if (t < a) return H * Math.pow(t / a, 1.7);
+              if (t < a) return H * Math.pow(t / a, 1.4);
               if (t < b) return H - (H + down) * ease((t - a) / fall);
               if (t < c) return -down;
               if (t < e) return -down + (H2 + down) * ease((t - c) / rise);
@@ -388,31 +393,70 @@ export class Generator {
         ];
       }
       case 'bridge': {
-        const water = this.biome === Biome.River || r.chance(0.5);
-        const L = r.range(16, 30);
-        const D = water ? r.range(3.5, 5) : r.range(5, 9);
-        const sag = Math.min(0.5, L / 60);
+        const kinds = Object.keys(this.region.bridges) as BridgeKind[];
+        const kind = r.weighted(kinds, kinds.map((k) => this.region.bridges[k]!));
+        const water = this.biome === Biome.River || r.chance(kind === 'viaduct' ? 0.4 : 0.5);
+        let L: number;
+        let D: number;
+        let sag: number;
+        let spans: number;
+        switch (kind) {
+          case 'wood':
+            L = r.range(16, 30);
+            D = water ? r.range(3.5, 5) : r.range(5, 9);
+            sag = Math.min(0.5, L / 60);
+            spans = 1;
+            break;
+          case 'stone':
+            spans = r.int(1, 3);
+            L = spans * r.range(9, 13);
+            D = water ? r.range(4, 6) : r.range(5, 9);
+            sag = -r.range(0.5, 0.9); // humpback deck
+            break;
+          case 'iron':
+            spans = r.int(1, 3);
+            L = spans * r.range(14, 18);
+            D = water ? r.range(5, 7) : r.range(7, 12);
+            sag = 0;
+            break;
+          case 'viaduct':
+          default:
+            spans = r.int(4, 7);
+            L = spans * r.range(10, 13);
+            D = r.range(15, 24);
+            sag = 0;
+            break;
+        }
         const approach = 4;
         const total = approach * 2 + L;
+        const cliff = kind === 'viaduct' ? 10 : 3;
         return [
           this.flat(6),
           {
             len: total,
             shape: (t) => {
               if (t < approach || t > approach + L) return 0;
-              return -sag * Math.sin((Math.PI * (t - approach)) / L);
+              const u = (t - approach) / L;
+              if (sag < 0) {
+                // stone humpback: smooth ramps on and off the arch
+                return -sag * Math.sin(Math.PI * u) ** 1.5;
+              }
+              return -sag * Math.sin(Math.PI * u);
             },
             visual: (t) => {
               const u = t - approach;
-              const cliff = 3;
               const wall = smoothstep(u / cliff) * smoothstep((L - u) / cliff);
+              // V-shaped valley for viaducts, steep gorge otherwise
+              const shape = kind === 'viaduct' ? Math.sin(Math.PI * clamp(u / L, 0, 1)) ** 0.6 : 1;
               const rough = noise1(t * 0.7, 9) * 0.6;
-              return -(D + rough) * wall;
+              return -(D * shape + rough) * wall;
             },
-            surface: (t) => (t > approach && t < approach + L ? Surface.Wood : Surface.Dirt),
+            surface: (t) =>
+              t > approach && t < approach + L ? (kind === 'stone' || kind === 'viaduct' ? Surface.Rock : Surface.Wood) : Surface.Dirt,
             noPickup: [[approach - 1, approach + L + 1]],
             onStart: (x0, h0) =>
               this.world.bridges.push({
+                kind,
                 x0: x0 + approach,
                 x1: x0 + approach + L,
                 deckY0: h0,
@@ -420,6 +464,7 @@ export class Generator {
                 floorY: h0 - D,
                 water,
                 sag,
+                spans,
               }),
             props: 0.3,
           },

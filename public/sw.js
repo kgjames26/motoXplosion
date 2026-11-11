@@ -2,10 +2,26 @@
  * MotoXplosion service worker.
  * - Navigations: network first, falling back to the cached app shell (offline play).
  * - Hashed build assets (/assets/*) and icons: cache first (immutable).
- * Bump CACHE when the caching strategy changes; hashed assets need no bump.
+ * Bump CACHE whenever files in public/assets change (their names are not hashed).
  */
-const CACHE = 'motoxplosion-v2';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'motoxplosion-v3';
+const SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icons/icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/res/rider-atlas.webp',
+  '/res/rider-atlas.json',
+  '/res/backdrops.json',
+  '/res/backdrop-alps-forest.webp',
+  '/res/tex-dirt.webp',
+  '/res/tex-grass.webp',
+  '/res/tex-rock.webp',
+  '/res/tex-rock-warm.webp',
+  '/res/tex-stone.webp',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -25,6 +41,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  // Music is streamed by <audio> with range requests: leave it to the network/HTTP cache.
+  if (url.pathname.startsWith('/audio/')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(
@@ -44,7 +62,7 @@ self.addEventListener('fetch', (event) => {
       (hit) =>
         hit ||
         fetch(req).then((res) => {
-          if (res.ok && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/'))) {
+          if (res.ok && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/res/') || url.pathname.startsWith('/icons/'))) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
           }

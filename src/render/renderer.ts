@@ -1,9 +1,14 @@
 import { approach, clamp, hash1 } from '../core/math';
 import type { Game } from '../game';
-import { Biome, DX, Surface } from '../world/types';
+import { Biome } from '../world/types';
 import { Background } from './background';
+import type { Assets } from '../assets';
 import { BikeRenderer, tumblePose } from './bikeRenderer';
+import { BikeSprite } from './bikeSprite';
 import { BiomePalette, INK, mixPalette, PALETTES } from './palette';
+import { drawBridges } from './bridges';
+import { drawBackField, drawGround, drawTrack } from './terrain';
+import { Textures, View } from './view';
 import { cloudSprite, pickupSprite, propSprite, Sprite } from './sprites';
 
 /**
@@ -11,11 +16,13 @@ import { cloudSprite, pickupSprite, propSprite, Sprite } from './sprites';
  * Draw order: sky → clouds → parallax layers → back field + props → track (with depth band)
  * → bridges → pickups → bike shadow / bike → particles → foreground props → popups.
  */
-export class Renderer {
+export class Renderer implements View {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private bg = new Background();
   private bikeR = new BikeRenderer();
+  private bikeSprite: BikeSprite | null = null;
+  assets: Assets | null = null;
   W = 0;
   H = 0;
   dpr = 1;
@@ -24,11 +31,16 @@ export class Renderer {
   camY = 0;
   scale = 40; // px per metre
   private zoom = 1;
+  private dip = 0;
   // biome crossfade
   private biome: Biome = Biome.Meadow;
   private prevBiome: Biome = Biome.Meadow;
   private fade = 1;
-  private time = 0;
+  time = 0;
+  private tex: Textures | null = null;
+  private backdropKey = '';
+  private prevBackdropKey = '';
+  private backdropFade = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -36,9 +48,40 @@ export class Renderer {
     this.resize();
   }
 
+  setAssets(a: Assets): void {
+    this.assets = a;
+    this.bikeSprite = new BikeSprite(a);
+    this.tex = new Textures(this.ctx, a);
+  }
+
+  /** Resolution multiplier set by the adaptive quality controller (0.5..1). */
+  resScale = 1;
+
+  /** Called every frame with the real frame time: lowers the resolution when the device struggles. */
+  private slowAcc = 0;
+  private fastAcc = 0;
+  adapt(frameDt: number): void {
+    if (frameDt > 1 / 48) {
+      this.slowAcc += frameDt;
+      this.fastAcc = 0;
+    } else if (frameDt < 1 / 58) {
+      this.fastAcc += frameDt;
+      this.slowAcc = Math.max(0, this.slowAcc - frameDt * 0.5);
+    }
+    if (this.slowAcc > 1.5 && this.resScale > 0.55) {
+      this.resScale = Math.max(0.55, this.resScale - 0.15);
+      this.slowAcc = 0;
+      this.resize();
+    } else if (this.fastAcc > 8 && this.resScale < 1) {
+      this.resScale = Math.min(1, this.resScale + 0.1);
+      this.fastAcc = 0;
+      this.resize();
+    }
+  }
+
   resize(): void {
     // Cap the backing resolution for performance on high-DPI phones.
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.resScale;
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const area = w * h * dpr * dpr;
@@ -51,27 +94,31 @@ export class Renderer {
     this.canvas.style.height = h + 'px';
   }
 
-  private sx(x: number): number {
+  sx(x: number): number {
     return (x - this.camX) * this.scale + this.W * 0.5;
   }
-  private sy(y: number): number {
+  sy(y: number): number {
     return this.H * 0.5 - (y - this.camY) * this.scale;
   }
 
   /** Camera follows the bike with speed-dependent look-ahead and zoom. */
   private updateCamera(game: Game, dt: number, snap: boolean): void {
     const b = game.bike;
-    const target = game.ragdoll && game.crashTimer > 0 ? game.ragdoll : b;
-    // Visible height ~11 m (a bit wider than the references), more when fast or flying.
+    const target = game.ragdoll && game.crashTimer > 0 && !this.bikeSprite ? game.ragdoll : b;
+    // Visible height ~10 m (a bit wider than the references), more when fast or flying.
     const speedZoom = clamp(b.speed / 30, 0, 1) * 0.15 + clamp(b.airTime / 1.2, 0, 1) * 0.15;
     this.zoom = snap ? 1 + speedZoom : approach(this.zoom, 1 + speedZoom, 1.5, dt);
-    const visibleH = 11 * this.zoom;
+    const visibleH = 10 * this.zoom;
     this.scale = this.H / visibleH;
     const visibleW = this.W / this.scale;
     const lookAhead = clamp(b.vx * 0.35, -2, 8) + visibleW * 0.12;
     const tx = target.x + lookAhead;
     const ground = game.world.heightAt(b.x + lookAhead * 0.8);
-    const ty = Math.max(target.y, ground + 0.8) + visibleH * 0.08 + clamp(b.vy * 0.12, -1.5, 1.5);
+    // Over a bridge the camera dips a little to show the gorge, the river or the valley.
+    const br = game.world.bridgeAt(b.x + lookAhead * 0.5);
+    const dipTarget = br ? Math.min(3.2, (br.deckY0 - br.floorY) * 0.25) : 0;
+    this.dip = snap ? dipTarget : approach(this.dip, dipTarget, 1.2, dt);
+    const ty = Math.max(target.y, ground + 0.8) + visibleH * 0.08 + clamp(b.vy * 0.12, -1.5, 1.5) - this.dip;
     if (snap) {
       this.camX = tx;
       this.camY = ty;
@@ -81,8 +128,11 @@ export class Renderer {
     }
   }
 
+  private lastDt = 0;
+
   render(game: Game, dt: number, snap = false): void {
     this.time += dt;
+    this.lastDt = dt;
     this.updateCamera(game, dt, snap);
     const c = this.ctx;
     const W = this.W;
@@ -108,7 +158,9 @@ export class Renderer {
       this.fade = 0;
     }
     this.fade = Math.min(1, this.fade + dt / 2.5);
-    const pal = mixPalette(PALETTES[this.prevBiome], PALETTES[this.biome], this.fade);
+    const warm = world.region.id === 'canyon';
+    const palOf = (bb: Biome) => (warm ? PALETTES[Biome.Canyon] : PALETTES[bb]);
+    const pal = mixPalette(palOf(this.prevBiome), palOf(this.biome), this.fade);
 
     // ---- sky
     const sky = c.createLinearGradient(0, 0, 0, H * 0.7);
@@ -123,22 +175,43 @@ export class Renderer {
     c.fillStyle = sg;
     c.fillRect(0, 0, W, H);
 
-    this.drawClouds(c);
-
-    // ---- parallax layers (crossfaded)
-    if (this.fade < 1) this.bg.draw(c, this.prevBiome, this.camX, this.camY, this.scale, W, H, 1);
-    this.bg.draw(c, this.biome, this.camX, this.camY, this.scale, W, H, this.fade < 1 ? this.fade : 1);
+    // ---- backdrop: painted panorama for the region when available, procedural otherwise
+    const bgBiome = warm ? Biome.Canyon : this.biome;
+    const bgPrev = warm ? Biome.Canyon : this.prevBiome;
+    const key = (this.assets && world.region.backdrop[this.biome]) || '';
+    if (key !== this.backdropKey) {
+      this.prevBackdropKey = this.backdropKey;
+      this.backdropKey = key;
+      this.backdropFade = 0;
+    }
+    if (snap) {
+      this.prevBackdropKey = key;
+      this.backdropFade = 1;
+    }
+    this.backdropFade = Math.min(1, this.backdropFade + dt / 3);
+    if (this.backdropKey || this.prevBackdropKey) {
+      if (this.backdropFade < 1 && this.prevBackdropKey) this.drawBackdrop(c, this.prevBackdropKey, 1);
+      if (this.backdropKey) this.drawBackdrop(c, this.backdropKey, this.prevBackdropKey ? this.backdropFade : 1);
+      else this.drawProceduralBg(c, bgBiome, bgPrev, this.backdropFade);
+      this.bg.draw(c, bgBiome, this.camX, this.camY, this.scale, W, H, 1, ['forest']);
+    } else {
+      this.drawProceduralBg(c, bgBiome, bgPrev, 1);
+      if (this.fade < 1) this.bg.draw(c, bgPrev, this.camX, this.camY, this.scale, W, H, 1, ['forest']);
+      this.bg.draw(c, bgBiome, this.camX, this.camY, this.scale, W, H, this.fade < 1 ? this.fade : 1, ['forest']);
+    }
 
     // ---- visible world range
     const x0 = this.camX - W / 2 / this.scale - 4;
     const x1 = this.camX + W / 2 / this.scale + 4;
     world.ensure(x1 + 10);
 
-    this.drawBackField(c, game, x0, x1, pal);
+    drawBackField(c, this, world, x0, x1, pal, this.tex, warm);
     this.drawProps(c, game, x0, x1, true);
     this.drawMarksBack(c, game, x0, x1);
-    this.drawTrack(c, game, x0, x1, pal);
-    this.drawBridges(c, game, x0, x1);
+    drawGround(c, this, world, x0, x1, pal, this.tex, warm);
+    drawBridges(c, this, world, x0, x1, this.tex, true);
+    drawTrack(c, this, world, x0, x1, pal, this.tex, warm, (x) => world.biomeAt(x));
+    drawBridges(c, this, world, x0, x1, this.tex, false);
     this.drawMarksFront(c, game, x0, x1, pal);
     this.drawProps(c, game, x0, x1, false, true);
     this.drawPickups(c, game, x0, x1);
@@ -159,6 +232,49 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------------- sky
+
+  /** Procedural sky, clouds and distant layers (used where no painted backdrop exists). */
+  private drawProceduralBg(c: CanvasRenderingContext2D, biome: Biome, prev: Biome, alpha: number): void {
+    if (alpha <= 0) return;
+    c.globalAlpha = alpha;
+    this.drawClouds(c);
+    if (this.fade < 1) this.bg.draw(c, prev, this.camX, this.camY, this.scale, this.W, this.H, alpha, ['far', 'mid', 'near']);
+    this.bg.draw(c, biome, this.camX, this.camY, this.scale, this.W, this.H, alpha * (this.fade < 1 ? this.fade : 1), ['far', 'mid', 'near']);
+    c.globalAlpha = 1;
+  }
+
+  /** Painted panorama, mirrored-seamless, very slow parallax. */
+  private drawBackdrop(c: CanvasRenderingContext2D, key: string, alpha: number): void {
+    const bd = this.assets?.backdrops[key];
+    if (!bd) return;
+    const H = this.H;
+    // Fit the painting so its far hills (below `horizon`) fill the band above the track.
+    const hz = bd.meta.horizon;
+    const k = (0.34 * H) / ((1 - hz) * bd.meta.h);
+    const tw = bd.meta.w * k;
+    const th = bd.meta.h * k;
+    const yShift = Math.max(-H * 0.05, Math.min(H * 0.05, this.camY * this.scale * 0.012));
+    const top = 0.27 * H - hz * th + yShift;
+    const offset = this.camX * this.scale * 0.035;
+    c.globalAlpha = alpha;
+    c.fillStyle = bd.meta.skyTop;
+    if (top > 0) c.fillRect(0, 0, this.W, top + 2);
+    const first = Math.floor(offset / tw);
+    for (let x = first * tw - offset; x < this.W; x += tw) c.drawImage(bd.img, Math.round(x), Math.round(top), Math.ceil(tw) + 1, Math.ceil(th));
+    // below the painting: continue with its far-forest colour (visible when the camera is high)
+    const bottom = Math.round(top + th) - 1;
+    if (bottom < this.H) {
+      const fadeH = H * 0.07;
+      const g = c.createLinearGradient(0, bottom - fadeH, 0, bottom);
+      g.addColorStop(0, bd.meta.ground + '00');
+      g.addColorStop(1, bd.meta.ground);
+      c.fillStyle = g;
+      c.fillRect(0, bottom - fadeH, this.W, fadeH);
+      c.fillStyle = bd.meta.ground;
+      c.fillRect(0, bottom, this.W, this.H - bottom);
+    }
+    c.globalAlpha = 1;
+  }
 
   private drawClouds(c: CanvasRenderingContext2D): void {
     const W = this.W;
@@ -182,310 +298,6 @@ export class Renderer {
       }
     }
     c.globalAlpha = 1;
-  }
-
-  // ---------------------------------------------------------------- ground
-
-  /** Grass field behind the track, rising a bit (fake depth). */
-  private drawBackField(c: CanvasRenderingContext2D, game: Game, x0: number, x1: number, pal: BiomePalette): void {
-    const w = game.world;
-    const step = DX * 2;
-    const lift = 1.6; // metres of back field above the track line
-    c.beginPath();
-    c.moveTo(this.sx(x0), this.H);
-    for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) {
-      const y = w.visualAt(x) + lift + Math.sin(x * 0.21) * 0.25;
-      c.lineTo(this.sx(x), this.sy(y));
-    }
-    c.lineTo(this.sx(x1), this.H);
-    c.closePath();
-    const g = c.createLinearGradient(0, this.sy(this.camY + 4), 0, this.sy(this.camY - 4));
-    g.addColorStop(0, pal.grassDark);
-    g.addColorStop(1, pal.grass);
-    c.fillStyle = g;
-    c.fill();
-    c.strokeStyle = 'rgba(28,26,43,0.35)';
-    c.lineWidth = Math.max(1, this.scale * 0.03);
-    c.stroke();
-  }
-
-  private drawTrack(c: CanvasRenderingContext2D, game: Game, x0: number, x1: number, pal: BiomePalette): void {
-    const w = game.world;
-    const i0 = Math.floor(x0 / DX);
-    const i1 = Math.ceil(x1 / DX);
-    const band = 0.75; // track surface depth (m) seen from slightly above
-    const lw = Math.max(1.5, this.scale * 0.05);
-
-    // 1. Ground body (front face) using the visual profile (ravines under bridges).
-    c.beginPath();
-    c.moveTo(this.sx(i0 * DX), this.H + 10);
-    for (let i = i0; i <= i1; i++) c.lineTo(this.sx(i * DX), this.sy(w.sampleVisual(i)));
-    c.lineTo(this.sx(i1 * DX), this.H + 10);
-    c.closePath();
-    const body = c.createLinearGradient(0, this.sy(this.camY), 0, this.H);
-    body.addColorStop(0, pal.grass);
-    body.addColorStop(0.5, pal.grassDark);
-    body.addColorStop(1, pal.mesas ? pal.soil : pal.forestShade);
-    c.fillStyle = body;
-    c.fill();
-
-    // ravine / cliff walls under bridges and deep pits: rock faces
-    c.save();
-    c.clip();
-    for (const br of w.bridges) {
-      if (br.x1 < x0 || br.x0 > x1) continue;
-      const left = this.sx(br.x0 - 0.5);
-      const right = this.sx(br.x1 + 0.5);
-      const top = this.sy(br.deckY0 + 0.2);
-      const bottom = this.sy(br.floorY - 2);
-      const g = c.createLinearGradient(0, top, 0, bottom);
-      g.addColorStop(0, pal.rock);
-      g.addColorStop(1, pal.rockShade);
-      c.fillStyle = g;
-      c.fillRect(left, top, right - left, bottom - top + this.H);
-      // rock strata
-      c.strokeStyle = 'rgba(28,26,43,0.25)';
-      c.lineWidth = lw * 0.6;
-      for (let k = 1; k < 8; k++) {
-        const y = top + ((bottom - top) * k) / 8;
-        c.beginPath();
-        c.moveTo(left, y);
-        c.lineTo(right, y + Math.sin(k) * this.scale * 0.3);
-        c.stroke();
-      }
-      if (br.water) {
-        // river with highlights
-        const wy = this.sy(br.floorY + 0.8);
-        c.fillStyle = pal.water;
-        c.fillRect(left, wy, right - left, this.H);
-        c.fillStyle = pal.waterLight;
-        for (let k = 0; k < 12; k++) {
-          const fx = left + ((k * 97 + this.time * 60 * this.dpr) % Math.max(1, right - left));
-          c.fillRect(fx, wy + this.scale * (0.2 + (k % 3) * 0.35), this.scale * 0.8, Math.max(2, this.scale * 0.06));
-        }
-        c.fillStyle = 'rgba(255,255,255,0.8)';
-        c.fillRect(left, wy - 1, right - left, Math.max(2, this.scale * 0.08));
-      }
-    }
-    c.restore();
-
-    // 2. Track band: physical surface with a depth band (2.5D top face)
-    const topPts: [number, number][] = [];
-    for (let i = i0; i <= i1; i++) {
-      const surf = w.sampleSurface(i);
-      const h = w.sampleHeight(i);
-      if (surf === Surface.Wood) {
-        topPts.push([NaN, NaN]);
-        continue;
-      }
-      topPts.push([this.sx(i * DX), this.sy(h)]);
-    }
-    const bandPx = band * this.scale;
-    // draw contiguous runs (bridges break the band)
-    let run: [number, number][] = [];
-    const flush = () => {
-      if (run.length < 2) {
-        run = [];
-        return;
-      }
-      // dirt top face
-      c.beginPath();
-      c.moveTo(run[0][0], run[0][1] - bandPx);
-      for (const [x, y] of run) c.lineTo(x, y - bandPx);
-      for (let k = run.length - 1; k >= 0; k--) c.lineTo(run[k][0], run[k][1] + bandPx * 0.25);
-      c.closePath();
-      c.fillStyle = pal.dirt;
-      c.fill();
-      // front lip (darker soil strip)
-      c.beginPath();
-      c.moveTo(run[0][0], run[0][1] + bandPx * 0.25);
-      for (const [x, y] of run) c.lineTo(x, y + bandPx * 0.25);
-      for (let k = run.length - 1; k >= 0; k--) c.lineTo(run[k][0], run[k][1] + bandPx * 0.6);
-      c.closePath();
-      c.fillStyle = pal.dirtDark;
-      c.fill();
-      // ruts (follow the curve)
-      c.lineWidth = Math.max(1, this.scale * 0.035);
-      for (const [off, col] of [
-        [-0.75, pal.dirtLight],
-        [-0.45, pal.dirtDark],
-        [-0.15, pal.dirtLight],
-      ] as [number, string][]) {
-        c.beginPath();
-        for (let k = 0; k < run.length; k++) {
-          const [x, y] = run[k];
-          if (k === 0) c.moveTo(x, y + off * bandPx);
-          else c.lineTo(x, y + off * bandPx);
-        }
-        c.strokeStyle = col;
-        c.globalAlpha = 0.55;
-        c.stroke();
-      }
-      c.globalAlpha = 1;
-      // grass fringe on the back edge
-      c.beginPath();
-      c.moveTo(run[0][0], run[0][1] - bandPx);
-      for (const [x, y] of run) c.lineTo(x, y - bandPx);
-      c.strokeStyle = pal.grassDark;
-      c.lineWidth = Math.max(2, this.scale * 0.12);
-      c.stroke();
-      c.strokeStyle = INK;
-      c.lineWidth = lw * 0.6;
-      c.stroke();
-      // contour on the front edge
-      c.beginPath();
-      c.moveTo(run[0][0], run[0][1] + bandPx * 0.6);
-      for (const [x, y] of run) c.lineTo(x, y + bandPx * 0.6);
-      c.strokeStyle = INK;
-      c.lineWidth = lw;
-      c.stroke();
-      run = [];
-    };
-    for (const p of topPts) {
-      if (isNaN(p[0])) flush();
-      else run.push(p);
-    }
-    flush();
-
-    // 3. Surface patches: water fords, rock, grass, mud tints along the band
-    for (let i = i0; i < i1; i++) {
-      const s = w.sampleSurface(i);
-      if (s === Surface.Dirt || s === Surface.Wood) continue;
-      const xa = this.sx(i * DX);
-      const xb = this.sx((i + 1) * DX);
-      const ya = this.sy(w.sampleHeight(i));
-      const yb = this.sy(w.sampleHeight(i + 1));
-      let col = '';
-      let alpha = 0.55;
-      switch (s) {
-        case Surface.Water:
-          col = pal.water;
-          alpha = 0.85;
-          break;
-        case Surface.Mud:
-          col = '#6a4527';
-          break;
-        case Surface.Rock:
-          col = pal.rock;
-          alpha = 0.6;
-          break;
-        case Surface.Grass:
-          col = pal.grass;
-          break;
-        case Surface.Sand:
-          col = '#f0c48a';
-          alpha = 0.35;
-          break;
-      }
-      c.globalAlpha = alpha;
-      c.fillStyle = col;
-      c.beginPath();
-      c.moveTo(xa, ya - bandPx);
-      c.lineTo(xb + 0.5, yb - bandPx);
-      c.lineTo(xb + 0.5, yb + bandPx * 0.25);
-      c.lineTo(xa, ya + bandPx * 0.25);
-      c.fill();
-      if (s === Surface.Water && hash1(i, 5) > 0.6) {
-        c.globalAlpha = 0.9;
-        c.fillStyle = pal.waterLight;
-        c.fillRect(xa, ya - bandPx * (0.2 + hash1(i, 6) * 0.6), (xb - xa) * 1.5, Math.max(1.5, this.scale * 0.04));
-      }
-    }
-    c.globalAlpha = 1;
-  }
-
-  private drawBridges(c: CanvasRenderingContext2D, game: Game, x0: number, x1: number): void {
-    const w = game.world;
-    const lw = Math.max(1.5, this.scale * 0.045);
-    for (const br of w.bridges) {
-      if (br.x1 < x0 - 2 || br.x0 > x1 + 2) continue;
-      const deck = (x: number) => w.heightAt(x);
-      // support beams (diagonal struts into the cliffs)
-      for (const [bx, dir] of [
-        [br.x0, 1],
-        [br.x1, -1],
-      ] as [number, number][]) {
-        c.beginPath();
-        c.moveTo(this.sx(bx - dir * 1.5), this.sy(deck(bx) - 3.5));
-        c.lineTo(this.sx(bx + dir * 3), this.sy(deck(bx + dir * 3) - 0.3));
-        c.strokeStyle = INK;
-        c.lineWidth = this.scale * 0.28 + lw * 2;
-        c.stroke();
-        c.strokeStyle = '#8a5a33';
-        c.lineWidth = this.scale * 0.28;
-        c.stroke();
-      }
-      // planks
-      const plank = 0.55;
-      const bandPx = 0.75 * this.scale;
-      for (let x = br.x0; x < br.x1; x += plank) {
-        const xa = this.sx(x);
-        const xb = this.sx(x + plank * 0.92);
-        const ya = this.sy(deck(x));
-        const yb = this.sy(deck(x + plank));
-        const shade = hash1(Math.round(x * 10), 3);
-        c.beginPath();
-        c.moveTo(xa, ya - bandPx);
-        c.lineTo(xb, yb - bandPx);
-        c.lineTo(xb, yb + bandPx * 0.45);
-        c.lineTo(xa, ya + bandPx * 0.45);
-        c.closePath();
-        c.fillStyle = shade > 0.5 ? '#b07a45' : '#c28a52';
-        c.fill();
-        c.strokeStyle = INK;
-        c.lineWidth = lw * 0.7;
-        c.stroke();
-        c.fillStyle = 'rgba(255,230,190,0.35)';
-        c.fillRect(xa + 1, ya - bandPx + 1, (xb - xa) * 0.3, bandPx * 0.9);
-      }
-      // stringer beam under the deck
-      c.beginPath();
-      for (let x = br.x0; x <= br.x1; x += 0.5) {
-        const X = this.sx(x);
-        const Y = this.sy(deck(x)) + bandPx * 0.45;
-        if (x === br.x0) c.moveTo(X, Y);
-        else c.lineTo(X, Y);
-      }
-      c.strokeStyle = INK;
-      c.lineWidth = this.scale * 0.16 + lw * 2;
-      c.stroke();
-      c.strokeStyle = '#7a4c2a';
-      c.lineWidth = this.scale * 0.16;
-      c.stroke();
-      // posts and ropes (front side)
-      const postH = 1.3;
-      const posts: number[] = [];
-      for (let x = br.x0; x <= br.x1 + 0.01; x += (br.x1 - br.x0) / Math.max(2, Math.round((br.x1 - br.x0) / 3))) posts.push(x);
-      for (const px of posts) {
-        const big = px === posts[0] || px === posts[posts.length - 1];
-        const ph = big ? postH + 0.6 : postH;
-        const X = this.sx(px);
-        const Y = this.sy(deck(px));
-        const pw = this.scale * (big ? 0.22 : 0.08);
-        c.fillStyle = big ? '#8a5a33' : '#c8a070';
-        c.fillRect(X - pw / 2, Y - ph * this.scale, pw, ph * this.scale + bandPx * 0.4);
-        c.strokeStyle = INK;
-        c.lineWidth = lw * 0.7;
-        c.strokeRect(X - pw / 2, Y - ph * this.scale, pw, ph * this.scale + bandPx * 0.4);
-      }
-      for (const rh of [postH, postH * 0.55]) {
-        c.beginPath();
-        for (let x = br.x0; x <= br.x1; x += 0.4) {
-          const u = (x - br.x0) / (br.x1 - br.x0);
-          const sag = Math.sin(Math.PI * u) * 0.35;
-          const X = this.sx(x);
-          const Y = this.sy(deck(x) + rh + 0.3 - sag);
-          if (x === br.x0) c.moveTo(X, Y);
-          else c.lineTo(X, Y);
-        }
-        c.strokeStyle = INK;
-        c.lineWidth = this.scale * 0.07 + lw;
-        c.stroke();
-        c.strokeStyle = '#d9b27a';
-        c.lineWidth = this.scale * 0.07;
-        c.stroke();
-      }
-    }
   }
 
   // ---------------------------------------------------------------- marks
@@ -684,10 +496,13 @@ export class Renderer {
     const riderOn = !(game.ragdoll && game.crashTimer > 0);
     c.save();
     c.translate(this.sx(ox), this.sy(oy));
-    this.bikeR.draw(c, b, this.scale, riderOn);
+    if (this.bikeSprite) {
+      this.bikeSprite.update(b, this.lastDt);
+      this.bikeSprite.draw(c, b, this.scale);
+    } else this.bikeR.draw(c, b, this.scale, riderOn);
     c.restore();
 
-    if (!riderOn && game.ragdoll) {
+    if (!riderOn && game.ragdoll && !this.bikeSprite) {
       const r = game.ragdoll;
       c.save();
       c.translate(this.sx(r.x), this.sy(r.y));
@@ -706,16 +521,11 @@ export class Renderer {
       const r = Math.max(1, p.size * this.scale);
       switch (p.kind) {
         case 'dust': {
-          const a = Math.min(1, t * 1.4) * 0.42;
-          c.fillStyle = `rgba(${p.r | 0},${p.g | 0},${p.b | 0},${a})`;
-          c.beginPath();
-          c.arc(X, Y, r, 0, Math.PI * 2);
-          c.fill();
-          // lit top (cel two-tone)
-          c.fillStyle = `rgba(255,240,215,${a * 0.45})`;
-          c.beginPath();
-          c.arc(X - r * 0.25, Y - r * 0.3, r * 0.55, 0, Math.PI * 2);
-          c.fill();
+          // pre-rendered soft puff, tinted per surface colour
+          c.globalAlpha = Math.min(1, t * 1.4) * 0.55;
+          const spr = this.puff(p.r, p.g, p.b);
+          c.drawImage(spr, X - r * 1.25, Y - r * 1.25, r * 2.5, r * 2.5);
+          c.globalAlpha = 1;
           break;
         }
         case 'clod':
@@ -744,6 +554,30 @@ export class Renderer {
           break;
       }
     }
+  }
+
+  private puffs = new Map<number, HTMLCanvasElement>();
+
+  /** Soft painterly dust puff (lit from the upper left), cached per quantised colour. */
+  private puff(r: number, g: number, b: number): HTMLCanvasElement {
+    const q = (v: number) => Math.max(0, Math.min(15, Math.round(v / 17)));
+    const key = (q(r) << 8) | (q(g) << 4) | q(b);
+    let cv = this.puffs.get(key);
+    if (cv) return cv;
+    cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const c = cv.getContext('2d')!;
+    const R = q(r) * 17;
+    const G = q(g) * 17;
+    const B = q(b) * 17;
+    const grad = c.createRadialGradient(26, 26, 2, 32, 32, 31);
+    grad.addColorStop(0, `rgba(${Math.min(255, R + 50)},${Math.min(255, G + 45)},${Math.min(255, B + 40)},0.95)`);
+    grad.addColorStop(0.55, `rgba(${R},${G},${B},0.8)`);
+    grad.addColorStop(1, `rgba(${R},${G},${B},0)`);
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+    this.puffs.set(key, cv);
+    return cv;
   }
 
   private drawPopups(c: CanvasRenderingContext2D, game: Game): void {
