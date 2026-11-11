@@ -26,8 +26,6 @@ const OLIVE = 0x6f6236;
 const GREEN = 0x2f4d33;
 const LEATHER = 0x6b3a22;
 const RUBBER = 0x2a2420;
-const JACKET = 0x5c3a24;
-const PANTS = 0x4d3322;
 
 // key points of the chassis (shared by the model and the rider)
 const PEG: V2 = [-0.1, -0.4];
@@ -134,17 +132,112 @@ function buildWheel(radius: number, mats: Record<string, THREE.Material>, front:
 
 // ---------------------------------------------------------------- rider
 
-interface Segment {
-  mesh: THREE.Mesh;
-  thick: number;
+/** Canvas texture helper. */
+function canvasTex(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void): THREE.Texture {
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  draw(cv.getContext('2d')!);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+/**
+ * Jersey wrapped around the lathe torso: u goes around the body starting on the right side
+ * (u = 0, facing the camera), front at u = 0.25, left side 0.5, back 0.75. v = bottom → top.
+ */
+function jerseyTexture(): THREE.Texture {
+  return canvasTex(512, 256, (c) => {
+    c.fillStyle = '#6a4127'; // brown base
+    c.fillRect(0, 0, 512, 256);
+    // green side panels and yoke
+    c.fillStyle = '#35553a';
+    for (const u of [0, 0.5, 1]) c.fillRect(u * 512 - 40, 0, 80, 256);
+    c.fillRect(0, 0, 512, 46);
+    // orange-gold piping
+    c.fillStyle = '#d99a3a';
+    for (const u of [0, 0.5, 1]) {
+      c.fillRect(u * 512 - 42, 0, 5, 256);
+      c.fillRect(u * 512 + 37, 0, 5, 256);
+    }
+    c.fillRect(0, 46, 512, 5);
+    // waist band
+    c.fillStyle = '#2a2420';
+    c.fillRect(0, 232, 512, 24);
+    // back number and name plate
+    c.font = 'italic 900 92px Arial Black, system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 8;
+    c.strokeStyle = '#1f2f22';
+    c.strokeText('98', 384, 140);
+    c.fillStyle = '#e6d8b0';
+    c.fillText('98', 384, 140);
+    c.font = 'italic 800 26px Arial, system-ui, sans-serif';
+    c.fillStyle = '#e6d8b0';
+    c.fillText('EXPLORER', 384, 78);
+    // front logo
+    c.fillStyle = '#e6d8b0';
+    c.font = 'italic 900 30px Arial Black, system-ui, sans-serif';
+    c.fillText('X', 128, 110);
+    // fabric shading
+    const g = c.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, 'rgba(255,255,255,0.08)');
+    g.addColorStop(1, 'rgba(0,0,0,0.18)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 512, 256);
+  });
+}
+
+function pantsTexture(): THREE.Texture {
+  return canvasTex(256, 256, (c) => {
+    c.fillStyle = '#4d3322';
+    c.fillRect(0, 0, 256, 256);
+    c.fillStyle = '#35553a';
+    c.fillRect(0, 0, 64, 256); // side panel (u = 0 faces the camera)
+    c.fillRect(224, 0, 32, 256);
+    c.fillStyle = '#d99a3a';
+    c.fillRect(62, 0, 4, 256);
+    c.fillRect(222, 0, 4, 256);
+    c.fillStyle = 'rgba(0,0,0,0.25)';
+    for (let y = 30; y < 256; y += 60) c.fillRect(0, y, 256, 3); // stitching
+  });
+}
+
+function helmetTexture(): THREE.Texture {
+  return canvasTex(512, 256, (c) => {
+    c.fillStyle = '#3d5d3f';
+    c.fillRect(0, 0, 512, 256);
+    // brown racing stripes over the top, front to back
+    c.fillStyle = '#7a4a2a';
+    c.fillRect(0, 96, 512, 26);
+    c.fillStyle = '#d99a3a';
+    c.fillRect(0, 90, 512, 5);
+    c.fillRect(0, 123, 512, 5);
+    c.font = 'italic 900 60px Arial Black, system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.fillStyle = '#e6d8b0';
+    c.fillText('98', 128, 210);
+    c.fillText('98', 384, 210);
+  });
+}
+
+/** Tapered limb segment: unit height along +y from 0 to 1, radius rA at the base, rB at the top. */
+function limbGeo(rA: number, rB: number): THREE.CylinderGeometry {
+  const g = new THREE.CylinderGeometry(rB, rA, 1, 14, 1);
+  g.translate(0, 0.5, 0);
+  return g;
 }
 
 class Rider {
   readonly group = new THREE.Group();
-  private segs: Record<string, Segment> = {};
+  private limbs: Record<string, THREE.Object3D> = {};
+  private joints: Record<string, THREE.Object3D> = {};
   private torso: THREE.Group;
   private head: THREE.Group;
-  private pelvisMesh: THREE.Mesh;
+  private hips: THREE.Mesh;
   // mass-spring state of the pelvis and chest (chassis frame)
   private pelvis: V2 = [-0.2, 0.3];
   private pelvisV: V2 = [0, 0];
@@ -152,82 +245,197 @@ class Rider {
   private leanV = 0;
 
   constructor(mats: Record<string, THREE.Material>) {
-    const cap = (r: number, mat: THREE.Material, name: string) => {
-      const m = new THREE.Mesh(new THREE.CapsuleGeometry(1, 1, 4, 10), mat);
-      m.castShadow = true;
-      this.group.add(m);
-      this.segs[name] = { mesh: m, thick: r };
+    const jersey = std(0xffffff, 0.02, 0.85, { map: jerseyTexture() });
+    const pants = std(0xffffff, 0.02, 0.85, { map: pantsTexture() });
+    const sleeve = std(0x6a4127, 0.02, 0.85);
+    const plastic = std(0x2e3b2f, 0.1, 0.45); // knee guards, protector shells
+    const plasticHi = std(0x4f6b4f, 0.15, 0.4);
+    const boot = std(0x5a3a22, 0.05, 0.6);
+    const bootPlate = std(0x3d5d3f, 0.2, 0.4);
+    const metal = mats.chrome;
+    const glove = std(0x3d5c3e, 0.02, 0.8);
+    const helmet = std(0xffffff, 0.25, 0.32, { map: helmetTexture() });
+    const helmetPlain = std(0x3d5d3f, 0.25, 0.32);
+    const lens = std(0xff8a2a, 0.6, 0.15, { emissive: 0x3a1a00 });
+    const strap = std(0x2a2420, 0.05, 0.8);
+
+    const add = (o: THREE.Object3D, name?: string) => {
+      o.traverse((m) => ((m as THREE.Mesh).isMesh ? ((m as THREE.Mesh).castShadow = true) : null));
+      this.group.add(o);
+      if (name) this.limbs[name] = o;
+      return o;
     };
+    const joint = (r: number, mat: THREE.Material, name: string) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
+      add(m);
+      this.joints[name] = m;
+    };
+
     for (const side of ['L', 'R']) {
-      cap(0.095, mats.pants, 'thigh' + side);
-      cap(0.075, mats.pants, 'shin' + side);
-      cap(0.07, mats.jacket, 'upper' + side);
-      cap(0.06, mats.jacket, 'fore' + side);
+      // thigh (baggy MX pants), shin with tall boot
+      add(new THREE.Mesh(limbGeo(0.105, 0.082), pants), 'thigh' + side);
+      const shin = new THREE.Group();
+      const leg = new THREE.Mesh(limbGeo(0.07, 0.074), pants);
+      shin.add(leg);
+      // boot shaft over the lower 70 % with three buckles and a front plate
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.084, 0.09, 0.33, 14).translate(0, 0.165, 0), boot);
+      shin.add(shaft);
+      for (const y of [0.07, 0.17, 0.27]) {
+        const buckle = new THREE.Mesh(new THREE.TorusGeometry(0.088, 0.011, 6, 18).rotateX(Math.PI / 2), strap);
+        buckle.position.y = y;
+        shin.add(buckle);
+        const clip = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.025, 0.02), metal);
+        clip.position.set(0, y, 0.09);
+        shin.add(clip);
+      }
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.3, 0.1).translate(0, 0.16, 0), bootPlate);
+      plate.position.x = 0.075;
+      shin.add(plate);
+      add(shin, 'shin' + side);
+      // knee guard
+      const knee = new THREE.Group();
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), plastic);
+      cup.rotation.z = -Math.PI / 2;
+      cup.scale.set(1, 0.8, 1);
+      const hi = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), plasticHi);
+      hi.position.x = 0.05;
+      hi.scale.set(0.5, 1, 1);
+      knee.add(cup, hi);
+      add(knee, 'knee' + side);
+      joint(0.082, pants, 'kneeJ' + side);
+      // foot: boot toe and heel with sole
+      const foot = new THREE.Group();
+      const toe = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.16, 4, 10).rotateZ(Math.PI / 2), boot);
+      toe.position.set(0.06, 0, 0);
+      toe.scale.set(1, 0.85, 1.1);
+      const sole = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.12), strap);
+      sole.position.set(0.05, -0.05, 0);
+      const toeCap = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), bootPlate);
+      toeCap.position.set(0.16, 0.0, 0);
+      toeCap.scale.set(1, 0.8, 1.05);
+      foot.add(toe, sole, toeCap);
+      add(foot, 'foot' + side);
+      // arms: jersey sleeves, elbow guards, gloves with cuffs
+      add(new THREE.Mesh(limbGeo(0.074, 0.064), sleeve), 'upper' + side);
+      add(new THREE.Mesh(limbGeo(0.063, 0.05), sleeve), 'fore' + side);
+      joint(0.066, sleeve, 'elbowJ' + side);
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), plastic);
+      add(pad, 'elbowPad' + side);
+      const hand = new THREE.Group();
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), glove);
+      palm.scale.set(1.25, 0.9, 1);
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.054, 0.07, 12), glove);
+      cuff.rotation.z = Math.PI / 2;
+      cuff.position.x = -0.06;
+      const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.08), plasticHi);
+      knuckle.position.set(0.02, 0.04, 0);
+      hand.add(palm, cuff, knuckle);
+      add(hand, 'hand' + side);
+      joint(0.07, sleeve, 'shoulderJ' + side);
     }
-    // boots and gloves
-    for (const side of ['L', 'R']) {
-      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.12, 0.12), mats.boot);
-      boot.castShadow = true;
-      boot.name = 'boot' + side;
-      this.group.add(boot);
-      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), mats.glove);
-      glove.name = 'glove' + side;
-      this.group.add(glove);
-    }
-    this.pelvisMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), mats.pants);
-    this.pelvisMesh.scale.set(1, 0.75, 1.05);
-    this.pelvisMesh.castShadow = true;
-    this.group.add(this.pelvisMesh);
-    // torso: jacket + green chest protector with "98" on the back
+
+    // hips (pants) with belt
+    this.hips = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), pants);
+    this.hips.scale.set(1.05, 0.8, 1.15);
+    add(this.hips);
+    // torso group (origin = pelvis, +y = spine)
     this.torso = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.26, 4, 12), mats.jacket);
-    body.scale.set(0.9, 1, 1.15);
-    body.position.y = 0.24;
-    body.castShadow = true;
-    const protector = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.16, 4, 10), mats.protector);
-    protector.scale.set(1.05, 1, 1.25);
-    protector.position.set(0.01, 0.32, 0);
-    protector.castShadow = true;
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.15), new THREE.MeshStandardMaterial({ map: plateTexture('98', '#2f4d33', '#c9b98a'), transparent: true, roughness: 0.7 }));
-    back.position.set(-0.185, 0.33, 0);
-    back.rotation.y = -Math.PI / 2;
-    const shoulders = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.32, 4, 8).rotateX(Math.PI / 2), mats.protector);
-    shoulders.position.set(0, 0.46, 0);
-    this.torso.add(body, protector, back, shoulders);
-    this.group.add(this.torso);
-    // helmet: green shell, peak, goggles, chin guard
+    const profile = [
+      new THREE.Vector2(0.0, 0.0),
+      new THREE.Vector2(0.15, 0.0),
+      new THREE.Vector2(0.155, 0.08),
+      new THREE.Vector2(0.15, 0.2),
+      new THREE.Vector2(0.175, 0.34),
+      new THREE.Vector2(0.19, 0.45),
+      new THREE.Vector2(0.17, 0.52),
+      new THREE.Vector2(0.09, 0.58),
+      new THREE.Vector2(0.0, 0.59),
+    ];
+    const body = new THREE.Mesh(new THREE.LatheGeometry(profile, 28), jersey);
+    body.scale.set(0.85, 1, 1.22);
+    this.torso.add(body);
+    // chest protector (roost guard) worn under the jersey on the front: shell + shoulder cups
+    const chest = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12, -Math.PI / 2, Math.PI, 0, Math.PI * 0.6), plastic);
+    chest.position.set(0.02, 0.27, 0);
+    chest.scale.set(0.62, 0.9, 1.15);
+    chest.rotation.z = 0.1;
+    this.torso.add(chest);
+    for (const z of [-0.2, 0.2]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 10), plasticHi);
+      cap.position.set(0, 0.47, z);
+      cap.scale.set(1, 0.75, 0.9);
+      this.torso.add(cap);
+    }
+    // neck brace
+    const brace = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.035, 8, 22).rotateX(Math.PI / 2), plastic);
+    brace.position.y = 0.58;
+    brace.scale.set(1.1, 1, 1.2);
+    this.torso.add(brace);
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.018, 6, 24).rotateX(Math.PI / 2), strap);
+    belt.scale.set(0.85, 1, 1.22);
+    belt.position.y = 0.03;
+    this.torso.add(belt);
+    add(this.torso);
+
+    // helmet: textured shell, peak, chin bar, goggles with orange lens and strap
     this.head = new THREE.Group();
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 14), mats.helmet);
-    shell.scale.set(1.08, 1, 0.95);
-    shell.castShadow = true;
-    const peak = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.2), mats.helmet);
-    peak.position.set(0.12, 0.08, 0);
-    peak.rotation.z = -0.25;
-    const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.2), mats.goggles);
-    goggles.position.set(0.13, 0.01, 0);
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.145, 0.015, 6, 20).rotateY(Math.PI / 2), mats.leather);
-    strap.position.set(0.0, 0.01, 0);
-    strap.scale.set(1, 1, 1);
-    const chin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.16), mats.helmet);
-    chin.position.set(0.12, -0.09, 0);
-    chin.rotation.z = 0.35;
-    this.head.add(shell, peak, goggles, strap, chin);
-    this.group.add(this.head);
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.155, 24, 18), helmet);
+    shell.scale.set(1.12, 1.02, 0.98);
+    shell.rotation.y = Math.PI / 2; // stripes front→back
+    const chinBar = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.12, 4, 10).rotateX(Math.PI / 2), helmetPlain);
+    chinBar.position.set(0.15, -0.085, 0);
+    chinBar.scale.set(1.2, 1, 1);
+    const vent = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.08), strap);
+    vent.position.set(0.22, -0.085, 0);
+    const peakShape = new THREE.Shape();
+    peakShape.moveTo(-0.02, 0);
+    peakShape.lineTo(0.2, -0.03);
+    peakShape.quadraticCurveTo(0.24, 0.0, 0.2, 0.025);
+    peakShape.lineTo(-0.02, 0.04);
+    const peak = new THREE.Mesh(new THREE.ExtrudeGeometry(peakShape, { depth: 0.22, bevelEnabled: false }), helmetPlain);
+    peak.position.set(0.07, 0.1, -0.11);
+    peak.rotation.z = -0.15;
+    const goggleFrame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.22), strap);
+    goggleFrame.position.set(0.15, 0.015, 0);
+    const lensM = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.19), lens);
+    lensM.position.set(0.176, 0.015, 0);
+    const gStrap = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.014, 6, 28).rotateY(Math.PI / 2).rotateX(Math.PI / 2), strap);
+    gStrap.rotation.set(0, 0, 0);
+    gStrap.scale.set(1.08, 1, 1);
+    gStrap.position.y = 0.015;
+    const gStrapRing = new THREE.Mesh(new THREE.TorusGeometry(0.152, 0.016, 6, 28).rotateX(Math.PI / 2), strap);
+    gStrapRing.position.y = 0.015;
+    gStrapRing.scale.set(1.12, 1, 1.0);
+    this.head.add(shell, chinBar, vent, peak, goggleFrame, lensM, gStrapRing);
+    void gStrap;
+    add(this.head);
   }
 
-  private place(name: string, a: THREE.Vector3, b: THREE.Vector3): void {
-    const s = this.segs[name];
+  /** Orient a unit (+y, height 1) object between a and b. */
+  private span(name: string, a: THREE.Vector3, b: THREE.Vector3): void {
+    const o = this.limbs[name];
     const d = new THREE.Vector3().subVectors(b, a);
     const len = d.length();
-    s.mesh.position.copy(a).addScaledVector(d, 0.5);
-    s.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-    // unit capsule (radius 1, length 1) is 3 units tall
-    s.mesh.scale.set(s.thick, len / 3, s.thick);
+    o.position.copy(a);
+    o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+    o.scale.set(1, len, 1);
+  }
+
+  /** Same, keeping the object's own proportions (boot shafts are modelled in metres). */
+  private spanRigid(name: string, a: THREE.Vector3, b: THREE.Vector3): void {
+    const o = this.limbs[name];
+    const d = new THREE.Vector3().subVectors(b, a);
+    const len = d.length();
+    o.position.copy(a);
+    o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+    // the leg tube is unit length, the boot parts are absolute: scale only the first child
+    o.children[0].scale.set(1, len, 1);
+    o.scale.set(1, 1, 1);
   }
 
   /**
    * Update the skeleton. `acc` = chassis acceleration in the chassis frame (m/s²),
-   * `lean` = balance input, `comp` = mean suspension compression, `air` = airborne.
+   * `balance` = balance input, `comp` = mean suspension compression, `air` = airborne.
    */
   update(dt: number, acc: V2, balance: number, comp: number, air: boolean, pitch: number, tuck = false): void {
     if (tuck) {
@@ -255,32 +463,49 @@ class Rider {
     }
     const P = this.pelvis;
     const pelvis = new THREE.Vector3(P[0], P[1], 0);
-    this.pelvisMesh.position.copy(pelvis);
-    // spine
+    this.hips.position.copy(pelvis);
+    this.hips.rotation.z = -this.lean * 0.5;
     this.torso.position.copy(pelvis);
     this.torso.rotation.z = -this.lean;
     const up = new THREE.Vector3(Math.sin(this.lean), Math.cos(this.lean), 0);
     const neck = pelvis.clone().addScaledVector(up, 0.6);
     // head keeps the gaze towards the horizon (counters part of the bike's pitch)
-    this.head.position.copy(neck).addScaledVector(up, 0.12).add(new THREE.Vector3(0.03, 0, 0));
-    this.head.rotation.z = clamp(-pitch * 0.6, -0.5, 0.5) - this.lean * 0.15;
-    // legs: hip → knee → ankle on the pegs, knees forward and slightly out
+    this.head.position.copy(neck).addScaledVector(up, 0.1).add(new THREE.Vector3(0.03, 0, 0));
+    this.head.rotation.z = clamp(-pitch * 0.6, -0.5, 0.5) - this.lean * 0.25 + 0.1;
     for (const side of [-1, 1]) {
-      const sname = side < 0 ? 'L' : 'R';
+      const n = side < 0 ? 'L' : 'R';
+      // legs: hip → knee → ankle on the pegs, knees forward and slightly out (gripping the bike)
       const hip = new THREE.Vector3(P[0], P[1] - 0.04, side * 0.12);
-      const ankle = new THREE.Vector3(PEG[0] - 0.02, PEG[1] + 0.08, side * 0.19);
+      const ankle = new THREE.Vector3(PEG[0] - 0.03, PEG[1] + 0.08, side * 0.19);
       const knee = ik(hip, ankle, 0.46, 0.46, new THREE.Vector3(1, 0.2, side * 0.25));
-      this.place('thigh' + sname, hip, knee);
-      this.place('shin' + sname, knee, ankle);
-      const boot = this.group.getObjectByName('boot' + sname)!;
-      boot.position.set(PEG[0] + 0.04, PEG[1] + 0.03, side * 0.19);
+      this.span('thigh' + n, hip, knee);
+      this.spanRigid('shin' + n, ankle, knee);
+      this.joints['kneeJ' + n].position.copy(knee);
+      // knee guard on the front of the knee, facing along the shin's forward normal
+      const shinDir = new THREE.Vector3().subVectors(knee, ankle).normalize();
+      const thighDir = new THREE.Vector3().subVectors(knee, hip).normalize();
+      const front = thighDir.clone().sub(shinDir).normalize();
+      const kg = this.limbs['knee' + n];
+      kg.position.copy(knee).addScaledVector(front, 0.035);
+      kg.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), front);
+      const foot = this.limbs['foot' + n];
+      foot.position.set(PEG[0] - 0.02, PEG[1] + 0.05, side * 0.19);
       // arms: shoulder → elbow → grip, elbows up and out ("attack position")
-      const shoulder = pelvis.clone().addScaledVector(up, 0.5).add(new THREE.Vector3(0, 0, side * 0.21));
+      const shoulder = pelvis.clone().addScaledVector(up, 0.47).add(new THREE.Vector3(0, 0, side * 0.2));
       const hand = new THREE.Vector3(GRIP[0], GRIP[1], side * 0.3);
       const elbow = ik(shoulder, hand, 0.33, 0.32, new THREE.Vector3(-0.3, 0.2, side * 1));
-      this.place('upper' + sname, shoulder, elbow);
-      this.place('fore' + sname, elbow, hand);
-      this.group.getObjectByName('glove' + sname)!.position.copy(hand);
+      this.span('upper' + n, shoulder, elbow);
+      this.span('fore' + n, elbow, hand);
+      this.joints['shoulderJ' + n].position.copy(shoulder);
+      this.joints['elbowJ' + n].position.copy(elbow);
+      const out = new THREE.Vector3().subVectors(elbow, shoulder).normalize().add(new THREE.Vector3().subVectors(elbow, hand).normalize()).normalize();
+      const pad = this.limbs['elbowPad' + n];
+      pad.position.copy(elbow);
+      pad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), out);
+      const hg = this.limbs['hand' + n];
+      hg.position.copy(hand);
+      const fdir = new THREE.Vector3().subVectors(hand, elbow).normalize();
+      hg.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), fdir);
     }
   }
 }
@@ -323,13 +548,6 @@ export class Bike3D {
       chrome: std(0xe6e9ef, 1, 0.18),
       dark: std(0x2b2722, 0.6, 0.5),
       gold: std(0xe0a332, 0.9, 0.3),
-      jacket: std(JACKET, 0.05, 0.8),
-      pants: std(PANTS, 0.05, 0.85),
-      protector: std(GREEN, 0.15, 0.55),
-      helmet: std(0x3a5a3c, 0.25, 0.35),
-      goggles: std(0x6a4a2a, 0.4, 0.3),
-      boot: std(0x5a3a22, 0.1, 0.7),
-      glove: std(0x3d5c3e, 0.05, 0.8),
     });
     this.group.add(this.chassis);
     this.buildFrame();

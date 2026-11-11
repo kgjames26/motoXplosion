@@ -58,7 +58,9 @@ function buildRegions(): void {
     b.className = 'region-card' + (id === settings.region ? ' selected' : '');
     b.dataset.region = id;
     const thumb =
-      id === 'canyon'
+      id === 'desert'
+        ? 'linear-gradient(180deg,#5d9be6 0%,#fbe3b8 48%,#f6d39a 49%,#e8b676 70%,#cf9152 100%)'
+        : id === 'canyon'
         ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
         : `url(/res/backdrop-alps-forest.webp)`;
     // (cards are compact on the home screen: name only, subtitle as tooltip)

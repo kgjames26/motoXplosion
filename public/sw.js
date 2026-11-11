@@ -4,7 +4,7 @@
  * - Hashed build assets (/assets/*) and icons: cache first (immutable).
  * Bump CACHE whenever files in public/assets change (their names are not hashed).
  */
-const CACHE = 'motoxplosion-v3';
+const CACHE = 'motoxplosion-v4';
 const SHELL = [
   '/',
   '/index.html',
@@ -19,6 +19,7 @@ const SHELL = [
   '/res/tex-rock.webp',
   '/res/tex-rock-warm.webp',
   '/res/tex-stone.webp',
+  '/res/tex-sand.webp',
 ];
 
 self.addEventListener('install', (event) => {

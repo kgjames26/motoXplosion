@@ -293,29 +293,252 @@ function flower(variant: number, biome: Biome): Sprite {
   });
 }
 
+/** Saguaro: ribbed trunk and arms, lit from the upper left. */
 function cactus(variant: number): Sprite {
-  const H = 2.2 + variant * 0.5;
-  return make(1.6, H, (c) => {
-    const limb = (x: number, y0: number, y1: number, w: number) => {
-      c.beginPath();
-      c.moveTo(x - w, y0);
-      c.lineTo(x - w, y1 + w);
-      c.arc(x, y1 + w, w, Math.PI, 0);
-      c.lineTo(x + w, y0);
-      c.closePath();
-      c.fillStyle = '#4f9a48';
-      c.fill();
-      outline(c, 0.05);
-      c.fillStyle = '#7cc565';
-      c.fillRect(x - w * 0.6, y1 + w, w * 0.4, y0 - y1 - w);
+  const H = 2.6 + variant * 0.6;
+  return make(1.8, H, (c) => {
+    const limb = (pts: [number, number][], w: number) => {
+      // thick rounded stroke = body, then a lighter inner stroke = lit side, then ribs
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      const path = () => {
+        c.beginPath();
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+      };
+      path();
+      c.strokeStyle = INK;
+      c.lineWidth = w * 2 + 0.07;
+      c.stroke();
+      path();
+      c.strokeStyle = '#3f7d3c';
+      c.lineWidth = w * 2;
+      c.stroke();
+      c.save();
+      c.translate(-w * 0.3, 0);
+      path();
+      c.strokeStyle = '#6aa94f';
+      c.lineWidth = w * 1.1;
+      c.stroke();
+      c.restore();
+      c.save();
+      c.translate(-w * 0.45, 0);
+      path();
+      c.strokeStyle = 'rgba(200,235,150,0.55)';
+      c.lineWidth = w * 0.28;
+      c.stroke();
+      c.restore();
+      c.save();
+      c.translate(w * 0.45, 0);
+      path();
+      c.strokeStyle = 'rgba(30,70,40,0.6)';
+      c.lineWidth = w * 0.18;
+      c.stroke();
+      c.restore();
     };
-    limb(0, 0, -H, 0.2);
-    limb(-0.5, -H * 0.35, -H * 0.7, 0.13);
-    c.fillStyle = '#4f9a48';
-    c.fillRect(-0.5, -H * 0.42, 0.4, 0.2);
-    limb(0.45, -H * 0.5, -H * 0.85, 0.12);
-    c.fillStyle = '#4f9a48';
-    c.fillRect(0.1, -H * 0.56, 0.35, 0.18);
+    const w = 0.2 + variant * 0.02;
+    limb([[0.0, -0.02], [0.0, -H + w]], w);
+    const ay = -H * (0.38 + variant * 0.04);
+    limb([[0, ay], [-0.5, ay], [-0.52, ay - H * 0.32]], w * 0.72);
+    if (variant !== 1) limb([[0, ay - H * 0.15], [0.48, ay - H * 0.15], [0.5, ay - H * 0.42]], w * 0.68);
+    // flowers on top
+    c.fillStyle = '#ffdf6b';
+    for (const [x, y] of [[0, -H + 0.05], [-0.52, ay - H * 0.32 - 0.1]] as [number, number][]) {
+      c.beginPath();
+      c.arc(x, y, 0.06, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+}
+
+function palm(variant: number): Sprite {
+  const r = new Rng(1500 + variant);
+  const H = 6 + variant * 1.2;
+  return make(4.6, H + 0.6, (c) => {
+    // curved, ringed trunk
+    const lean = (variant - 1) * 0.5 + 0.35;
+    const pts: [number, number][] = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12;
+      pts.push([lean * t * t, -t * H]);
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i];
+      const [x1, y1] = pts[i + 1];
+      const w0 = 0.22 - i * 0.008;
+      c.beginPath();
+      c.moveTo(x0 - w0, y0);
+      c.lineTo(x1 - w0 + 0.01, y1);
+      c.lineTo(x1 + w0 - 0.01, y1);
+      c.lineTo(x0 + w0, y0);
+      c.closePath();
+      c.fillStyle = i % 2 ? '#9a7048' : '#b0845a';
+      c.fill();
+      c.strokeStyle = 'rgba(40,25,15,0.7)';
+      c.lineWidth = 0.035;
+      c.stroke();
+    }
+    const [tx, ty] = pts[pts.length - 1];
+    // coconuts
+    c.fillStyle = '#5a3a1f';
+    for (const dx of [-0.12, 0.1, 0]) {
+      c.beginPath();
+      c.arc(tx + dx, ty + 0.18 + Math.abs(dx), 0.11, 0, Math.PI * 2);
+      c.fill();
+    }
+    // fronds: drooping leaves with leaflets
+    const fronds = 9;
+    for (let k = 0; k < fronds; k++) {
+      const ang = -Math.PI / 2 + (k / (fronds - 1) - 0.5) * Math.PI * 1.5 + r.range(-0.1, 0.1);
+      const len = r.range(1.7, 2.3);
+      const ex = tx + Math.cos(ang) * len;
+      const ey = ty + Math.sin(ang) * len * 0.55 + len * 0.45;
+      const cx = tx + Math.cos(ang) * len * 0.5;
+      const cy = ty + Math.sin(ang) * len * 0.6 - 0.2;
+      const dark = k % 2 === 0;
+      // leaflets along the quadratic rib
+      for (let i = 1; i <= 14; i++) {
+        const t = i / 15;
+        const x = (1 - t) * (1 - t) * tx + 2 * (1 - t) * t * cx + t * t * ex;
+        const y = (1 - t) * (1 - t) * ty + 2 * (1 - t) * t * cy + t * t * ey;
+        const l = 0.42 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+        c.strokeStyle = dark ? '#2f6b34' : '#4f9a45';
+        c.lineWidth = 0.07;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x - l * 0.4, y + l);
+        c.moveTo(x, y);
+        c.lineTo(x + l * 0.4, y + l);
+        c.stroke();
+      }
+      c.beginPath();
+      c.moveTo(tx, ty);
+      c.quadraticCurveTo(cx, cy, ex, ey);
+      c.strokeStyle = '#6d8f3a';
+      c.lineWidth = 0.05;
+      c.stroke();
+    }
+  });
+}
+
+/** Dry desert shrub (creosote / sagebrush). */
+function shrub(variant: number): Sprite {
+  const r = new Rng(1600 + variant);
+  const W = 1.3 + variant * 0.3;
+  const H = 0.75 + variant * 0.15;
+  return make(W, H, (c) => {
+    c.strokeStyle = '#6b4a2e';
+    c.lineWidth = 0.035;
+    for (let i = 0; i < 9; i++) {
+      c.beginPath();
+      c.moveTo(r.range(-0.1, 0.1), 0);
+      c.lineTo(r.range(-W * 0.45, W * 0.45), -r.range(H * 0.4, H * 0.95));
+      c.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      const x = r.range(-W * 0.45, W * 0.45);
+      const y = -r.range(H * 0.3, H * 0.95) * (1 - Math.abs(x) / W);
+      c.fillStyle = ['#8f8a45', '#a9a456', '#c2bd70', '#77733a'][i % 4];
+      c.beginPath();
+      c.ellipse(x, y, r.range(0.07, 0.14), r.range(0.05, 0.09), 0, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+}
+
+/** Bare, twisted dead tree. */
+function deadTree(variant: number): Sprite {
+  const r = new Rng(1700 + variant);
+  const H = 3.2 + variant * 0.6;
+  return make(3, H, (c) => {
+    const branch = (x: number, y: number, ang: number, len: number, w: number, depth: number) => {
+      const ex = x + Math.cos(ang) * len;
+      const ey = y + Math.sin(ang) * len;
+      c.strokeStyle = INK;
+      c.lineWidth = w + 0.05;
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(ex, ey);
+      c.stroke();
+      c.strokeStyle = depth % 2 ? '#8e7056' : '#a3866a';
+      c.lineWidth = w;
+      c.stroke();
+      if (depth < 4)
+        for (let k = 0; k < 2; k++) branch(ex, ey, ang + (k ? 1 : -1) * r.range(0.3, 0.7), len * r.range(0.55, 0.75), w * 0.62, depth + 1);
+    };
+    c.lineCap = 'round';
+    branch(0, 0, -Math.PI / 2 + r.range(-0.15, 0.15), H * 0.42, 0.22, 0);
+  });
+}
+
+function tumbleweed(variant: number): Sprite {
+  const r = new Rng(1800 + variant);
+  return make(1, 0.9, (c) => {
+    // dense tangle: a filled ball first, then many twig arcs
+    const g = c.createRadialGradient(-0.1, -0.54, 0.05, 0, -0.44, 0.44);
+    g.addColorStop(0, 'rgba(214,180,120,0.95)');
+    g.addColorStop(1, 'rgba(140,105,60,0.9)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(0, -0.44, 0.4, 0, Math.PI * 2);
+    c.fill();
+    c.lineWidth = 0.025;
+    for (let i = 0; i < 120; i++) {
+      const a0 = r.range(0, Math.PI * 2);
+      const a1 = a0 + r.range(0.8, 2.2);
+      const rad = r.range(0.08, 0.44);
+      c.strokeStyle = ['#a8834f', '#c49d62', '#8a6a3c'][i % 3];
+      c.beginPath();
+      c.arc(0, -0.44, rad, a0, a1);
+      c.stroke();
+    }
+  });
+}
+
+/** Wind-carved sandstone block with horizontal strata. */
+function sandstone(variant: number): Sprite {
+  const r = new Rng(1900 + variant);
+  const W = 2.4 + variant * 0.8;
+  const H = W * r.range(0.6, 0.9);
+  return make(W, H, (c) => {
+    const pts: [number, number][] = [[-W / 2, 0]];
+    const n = 7;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = -W / 2 + W * t;
+      const top = Math.sin(Math.PI * t) ** 0.4;
+      pts.push([x + r.range(-0.08, 0.08), -H * (0.55 + 0.45 * top) * r.range(0.9, 1.02)]);
+    }
+    pts.push([W / 2, 0]);
+    const path = () => {
+      c.beginPath();
+      c.moveTo(pts[0][0], pts[0][1]);
+      for (const p of pts) c.lineTo(p[0], p[1]);
+      c.closePath();
+    };
+    path();
+    c.fillStyle = '#c8784a';
+    c.fill();
+    c.save();
+    path();
+    c.clip();
+    // strata bands
+    for (let k = 0; k < 7; k++) {
+      c.fillStyle = k % 2 ? 'rgba(255,214,160,0.28)' : 'rgba(150,70,40,0.25)';
+      c.fillRect(-W, -H + (k * H) / 7 + r.range(-0.05, 0.05), W * 2, H / 14);
+    }
+    // lit left face, shadowed right face, undercut at the base
+    c.fillStyle = 'rgba(255,225,180,0.3)';
+    c.fillRect(-W / 2, -H, W * 0.35, H);
+    c.fillStyle = 'rgba(80,30,20,0.3)';
+    c.fillRect(W * 0.15, -H, W, H);
+    c.fillStyle = 'rgba(60,25,15,0.45)';
+    c.beginPath();
+    c.ellipse(0, -0.05, W * 0.42, H * 0.12, 0, Math.PI, 0);
+    c.fill();
+    c.restore();
+    path();
+    outline(c, 0.06);
   });
 }
 
@@ -532,6 +755,21 @@ export function propSprite(kind: PropKind, variant: number, biome: Biome): Sprit
         break;
       case 'flag':
         s = flag();
+        break;
+      case 'palm':
+        s = palm(v);
+        break;
+      case 'shrub':
+        s = shrub(v);
+        break;
+      case 'deadTree':
+        s = deadTree(v);
+        break;
+      case 'tumbleweed':
+        s = tumbleweed(v);
+        break;
+      case 'sandstone':
+        s = sandstone(v);
         break;
     }
     cache.set(key, s);

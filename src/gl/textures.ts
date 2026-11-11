@@ -6,7 +6,7 @@ import type { Sprite } from '../render/sprites';
  * GPU texture helpers: the seamless ground textures (from /public/res) and the painted
  * billboard sprites (trees, rocks, grass, pickups) generated on 2D canvases at start-up.
  */
-export type GroundTex = 'dirt' | 'grass' | 'rock' | 'rockWarm' | 'stone';
+export type GroundTex = 'dirt' | 'grass' | 'rock' | 'rockWarm' | 'stone' | 'sand';
 
 export class TextureBank {
   private ground = new Map<string, THREE.Texture>();

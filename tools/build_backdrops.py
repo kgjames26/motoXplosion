@@ -212,6 +212,29 @@ def tex_stone(size=512) -> Image.Image:
     return img
 
 
+def tex_sand(size=512) -> Image.Image:
+    """Wind-rippled desert sand: wavy ripple bands lit on one side, fine grain and sparse pebbles."""
+    n = fbm(size, 61)
+    warp = periodic_noise(size, 4, 63)
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32) / size
+    # ripples: periodic in both axes (integer frequencies), bent by the warp field
+    phase = (yy * 22 + np.sin(xx * 2 * math.pi * 2 + warp * 6) * 0.9 + n * 2.0) * 2 * math.pi
+    rip = np.sin(phase)
+    lit = np.clip(np.cos(phase - 0.8), 0, 1) ** 3  # sharp lit crest
+    v = np.clip(0.55 + rip * 0.12 + (n - 0.5) * 0.5 + lit * 0.18, 0, 1)
+    col = colorize(v, [(0.0, (196, 140, 84)), (0.4, (226, 176, 112)), (0.7, (240, 200, 136)), (1.0, (252, 228, 176))])
+    grain = np.random.default_rng(5).random((size, size, 1)).astype(np.float32)
+    col = col * (0.93 + grain * 0.12)
+    img = Image.fromarray(np.clip(col, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    d = ImageDraw.Draw(img, "RGBA")
+    rnd = random.Random(17)
+    for _ in range(60):
+        x, y = rnd.uniform(0, size), rnd.uniform(0, size)
+        r = rnd.uniform(1.2, 3.2)
+        wrap_draw(lambda px, py, r=r: (d.ellipse((px - r + 1, py - r * 0.4 + 1.5, px + r + 1, py + r * 0.7 + 1.5), fill=(120, 80, 40, 90)), d.ellipse((px - r, py - r * 0.6, px + r, py + r * 0.6), fill=(176, 130, 90, 255), outline=(110, 72, 44, 200))), size, x, y, r)
+    return img
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     meta: dict = {}
@@ -220,6 +243,7 @@ def main():
     tex_grass().convert("RGB").save(os.path.join(OUT, "tex-grass.webp"), "WEBP", quality=86, method=6)
     tex_rock().convert("RGB").save(os.path.join(OUT, "tex-rock.webp"), "WEBP", quality=86, method=6)
     tex_rock(warm=True).convert("RGB").save(os.path.join(OUT, "tex-rock-warm.webp"), "WEBP", quality=86, method=6)
+    tex_sand().convert("RGB").save(os.path.join(OUT, "tex-sand.webp"), "WEBP", quality=86, method=6)
     tex_stone().convert("RGB").save(os.path.join(OUT, "tex-stone.webp"), "WEBP", quality=86, method=6)
     with open(os.path.join(OUT, "backdrops.json"), "w") as fh:
         json.dump(meta, fh, indent=1)

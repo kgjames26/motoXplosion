@@ -198,6 +198,7 @@ export class GLRenderer {
       this.backdropTex[key] = { tex: t, aspect: bd.meta.w / bd.meta.h, horizon: bd.meta.horizon, sky: bd.meta.skyTop, ground: bd.meta.ground };
     }
     this.backdropTex.canyon = canyonBackdrop();
+    this.backdropTex.desert = desertBackdrop();
     if (this.world) this.setWorld(this.world, true);
   }
 
@@ -214,7 +215,7 @@ export class GLRenderer {
     if (!this.bank) return;
     this.terrain?.dispose();
     this.bridgeBuilder?.dispose();
-    this.terrain = new TerrainBuilder(this.bank, { warm: w.region.id === 'canyon', treeDensity: PRESETS[this.quality].trees });
+    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : 'green', treeDensity: PRESETS[this.quality].trees });
     this.bridgeBuilder = new BridgeBuilder(this.bank, this.terrain.waterMaterial);
   }
 
@@ -373,7 +374,7 @@ export class GLRenderer {
   }
 
   private updateBackdrop(w: World, D: number, visH: number): void {
-    const key = w.region.id === 'canyon' ? 'canyon' : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
+    const key = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
     const bd = this.backdropTex[key];
     if (!bd) {
       this.backdrop.visible = this.lower.visible = false;
@@ -385,8 +386,9 @@ export class GLRenderer {
       this.backdrop.material.map = bd.tex;
       this.backdrop.material.needsUpdate = true;
       (this.scene.background as THREE.Color).set(bd.sky);
-      this.lower.material.color.set(bd.ground);
-      (this.scene.fog as THREE.Fog).color.set(key === 'canyon' ? 0xe8b88c : new THREE.Color(bd.ground).lerp(new THREE.Color(0xbfdcf5), 0.45));
+      // band under the painting: halfway between its foot and the hills, so no seam shows
+      this.lower.material.color.set(new THREE.Color(bd.ground).lerp(new THREE.Color(key === 'alps-forest' ? 0x86b45a : bd.ground), 0.55));
+      (this.scene.fog as THREE.Fog).color.set(key === 'canyon' ? 0xe8b88c : key === 'desert' ? 0xf3d9b0 : new THREE.Color(bd.ground).lerp(new THREE.Color(0xbfdcf5), 0.45));
     }
     // place a plane far behind, sized in screen terms: the painting's lower band (below its
     // horizon) covers the band just above the hills.
@@ -399,7 +401,7 @@ export class GLRenderer {
     const imgW = imgH * bd.aspect;
     const planeW = screenH * aspect * 1.25;
     const centerY = this.camera.position.y + (this.camY - this.camera.position.y) * scale; // line of sight
-    const bottomY = centerY + screenH * (0.5 - 0.42);
+    const bottomY = centerY + screenH * (0.5 - 0.37);
     this.backdrop.scale.set(planeW, imgH, 1);
     this.backdrop.position.set(this.camX, bottomY + imgH / 2, -dist);
     bd.tex.repeat.set(planeW / imgW, 1);
@@ -581,4 +583,118 @@ function canyonBackdrop(): { tex: THREE.Texture; aspect: number; horizon: number
   t.wrapS = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   return { tex: t, aspect: (W * 2) / H, horizon: 0.55, sky: '#2a78e4', ground: '#bb6f3a' };
+}
+
+/**
+ * Procedural painted desert panorama: pale hot sky, veiled sun, faint mesas in the heat haze,
+ * then layers of wind-sculpted dunes (sharp lit crest, shaded lee side), mirrored to tile.
+ */
+function desertBackdrop(): { tex: THREE.Texture; aspect: number; horizon: number; sky: string; ground: string } {
+  const W = 1024;
+  const H = 640;
+  const cv = document.createElement('canvas');
+  cv.width = W * 2;
+  cv.height = H;
+  const c = cv.getContext('2d')!;
+  const sky = c.createLinearGradient(0, 0, 0, H * 0.62);
+  sky.addColorStop(0, '#3d86e0');
+  sky.addColorStop(0.55, '#9cc8ee');
+  sky.addColorStop(1, '#fbe6c2');
+  c.fillStyle = sky;
+  c.fillRect(0, 0, W, H);
+  const sun = c.createRadialGradient(W * 0.7, H * 0.3, 0, W * 0.7, H * 0.3, H * 0.45);
+  sun.addColorStop(0, 'rgba(255,252,235,0.95)');
+  sun.addColorStop(0.08, 'rgba(255,245,210,0.7)');
+  sun.addColorStop(1, 'rgba(255,240,200,0)');
+  c.fillStyle = sun;
+  c.fillRect(0, 0, W, H);
+  // thin high clouds
+  c.fillStyle = 'rgba(255,255,255,0.55)';
+  for (let i = 0; i < 9; i++) {
+    const x = (i * 157) % W;
+    const y = H * (0.08 + ((i * 37) % 23) / 100);
+    c.beginPath();
+    c.ellipse(x, y, 90 + (i % 3) * 40, 6 + (i % 2) * 4, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  // distant mesas in the haze
+  const ridge = (y0: number, amp: number, freq: number, seed: number, flat: boolean) => {
+    const pts: number[] = [];
+    for (let x = 0; x <= W; x += 4) {
+      let v = Math.sin(x * freq + seed) * 0.5 + Math.sin(x * freq * 2.3 + seed * 3) * 0.3 + Math.sin(x * freq * 5.1 + seed * 7) * 0.2;
+      if (flat) v = Math.round(v * 2.2) / 2.2;
+      pts.push(y0 - v * amp);
+    }
+    return pts;
+  };
+  const fillRidge = (pts: number[], fill: string | CanvasGradient) => {
+    c.beginPath();
+    c.moveTo(0, H);
+    pts.forEach((y, i) => c.lineTo(i * 4, y));
+    c.lineTo(W, H);
+    c.closePath();
+    c.fillStyle = fill;
+    c.fill();
+  };
+  fillRidge(ridge(H * 0.6, 40, 0.006, 1, true), 'rgba(214,170,140,0.65)');
+  fillRidge(ridge(H * 0.64, 28, 0.009, 4, true), 'rgba(222,168,124,0.8)');
+  // dune layers, far → near
+  const layers = [
+    { y: 0.68, amp: 22, f: 0.011, lit: '#f6d6a2', shade: '#dcae78', s: 2 },
+    { y: 0.74, amp: 30, f: 0.008, lit: '#f9d9a0', shade: '#d9a46a', s: 5 },
+    { y: 0.82, amp: 38, f: 0.006, lit: '#fbdc9e', shade: '#d39a5c', s: 9 },
+    { y: 0.92, amp: 44, f: 0.005, lit: '#fcdd9a', shade: '#cc8f52', s: 13 },
+  ];
+  for (const L of layers) {
+    // dune crest: sawtooth-like (gentle windward, steep lee) using a skewed sine
+    const pts: number[] = [];
+    for (let x = 0; x <= W; x += 4) {
+      const ph = x * L.f + L.s;
+      const saw = Math.sin(ph + 0.6 * Math.sin(ph));
+      pts.push(H * L.y - (saw * 0.5 + 0.5) * L.amp - Math.sin(x * L.f * 0.37 + L.s) * L.amp * 0.4);
+    }
+    fillRidge(pts, L.lit);
+    // lee shadows: where the crest goes down to the right
+    c.save();
+    c.beginPath();
+    c.moveTo(0, H);
+    pts.forEach((y, i) => c.lineTo(i * 4, y));
+    c.lineTo(W, H);
+    c.closePath();
+    c.clip();
+    c.fillStyle = L.shade;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i] > pts[i - 1] + 0.25) {
+        const x = i * 4;
+        c.beginPath();
+        c.moveTo(x - 4, pts[i - 1]);
+        c.lineTo(x, pts[i]);
+        c.lineTo(x + 10, H);
+        c.lineTo(x - 30, H);
+        c.closePath();
+        c.fill();
+      }
+    }
+    // ripples
+    c.strokeStyle = 'rgba(160,100,50,0.18)';
+    c.lineWidth = 1.2;
+    for (let k = 0; k < 6; k++) {
+      c.beginPath();
+      pts.forEach((y, i) => (i === 0 ? c.moveTo(0, y + 6 + k * 7) : c.lineTo(i * 4, y + 6 + k * 7 + Math.sin(i * 0.3 + k) * 1.5)));
+      c.stroke();
+    }
+    c.restore();
+    // haze between layers
+    c.fillStyle = 'rgba(255,236,205,0.18)';
+    c.fillRect(0, 0, W, H);
+  }
+  c.save();
+  c.translate(W * 2, 0);
+  c.scale(-1, 1);
+  c.drawImage(cv, 0, 0, W, H, 0, 0, W, H);
+  c.restore();
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return { tex: t, aspect: (W * 2) / H, horizon: 0.6, sky: '#3d86e0', ground: '#d9a868' };
 }

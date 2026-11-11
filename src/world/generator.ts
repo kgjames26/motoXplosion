@@ -36,7 +36,12 @@ type FeatureName =
   | 'climb'
   | 'descent'
   | 'logs'
-  | 'rocks';
+  | 'rocks'
+  // desert
+  | 'dunes'
+  | 'wadi'
+  | 'oasis'
+  | 'ledges';
 
 interface BiomeDef {
   length: [number, number];
@@ -133,6 +138,24 @@ const BIOMES: Record<Biome, BiomeDef> = {
       { kind: 'flower', weight: 3 },
     ],
     treeDensity: 0.8,
+  },
+  [Biome.Desert]: {
+    length: [450, 750],
+    baseAmp: 1.4,
+    baseWave: 80,
+    trend: 0.03,
+    surface: Surface.Sand,
+    features: { dunes: 5, rollers: 2, whoops: 2, tabletop: 2, wadi: 2, oasis: 1.2, ledges: 1.5, bridge: 1, berm: 1 },
+    props: [
+      { kind: 'shrub', weight: 6 },
+      { kind: 'cactus', weight: 3 },
+      { kind: 'deadTree', weight: 1 },
+      { kind: 'sandstone', weight: 2.5 },
+      { kind: 'rock', weight: 2 },
+      { kind: 'tumbleweed', weight: 1 },
+      { kind: 'grass', weight: 2 },
+    ],
+    treeDensity: 0,
   },
 };
 
@@ -238,6 +261,9 @@ export class Generator {
     switch (this.biome) {
       case Biome.Canyon:
         return n > 0.45 ? Surface.Rock : Surface.Sand;
+      case Biome.Desert:
+        // mostly sand, packed-earth tracks (better grip) and the odd rock slab
+        return n > 0.6 ? Surface.Rock : n < -0.25 ? Surface.Dirt : Surface.Sand;
       case Biome.Mountain:
         return n > 0.4 ? Surface.Rock : n < -0.6 ? Surface.Grass : Surface.Dirt;
       case Biome.River:
@@ -395,7 +421,7 @@ export class Generator {
       case 'bridge': {
         const kinds = Object.keys(this.region.bridges) as BridgeKind[];
         const kind = r.weighted(kinds, kinds.map((k) => this.region.bridges[k]!));
-        const water = this.biome === Biome.River || r.chance(kind === 'viaduct' ? 0.4 : 0.5);
+        const water = this.biome === Biome.River || (this.biome !== Biome.Desert && r.chance(kind === 'viaduct' ? 0.4 : 0.5));
         let L: number;
         let D: number;
         let sag: number;
@@ -481,6 +507,107 @@ export class Generator {
             shape: (t) => -depth * sin2(t / L),
             surface: (t) => (t > 1.5 && t < L - 1.5 ? Surface.Water : Surface.Mud),
             onStart: (x0) => this.world.marks.push({ x0, x1: x0 + L, kind: 'ford' }),
+            props: 0.5,
+          },
+        ];
+      }
+      // ------------------------------------------------ desert set
+      // Rules (keep the ride fair): no pit deeper than 1.6 m, every face ≤ ~0.3 slope on the
+      // side you ride up, lee sides ≤ ~0.35, crests rounded so they never launch hard.
+      case 'dunes': {
+        // asymmetric dunes: long gentle windward rise, rounded crest, steeper (but safe) lee
+        const n = r.int(2, 4);
+        const out: Segment[] = [];
+        for (let k = 0; k < n; k++) {
+          const H = r.range(1.2, 2.6) + d * 0.5;
+          const up = H / r.range(0.12, 0.17);
+          const down = H / r.range(0.24, 0.32);
+          const crest = r.range(3, 6);
+          const L = up + crest + down;
+          out.push({
+            len: L,
+            shape: (t) => {
+              if (t < up) return H * ease(t / up);
+              if (t < up + crest) return H;
+              return H * (1 - ease((t - up - crest) / down));
+            },
+            surface: (t) => (t > up * 0.2 && t < up + crest + down * 0.8 ? Surface.Sand : Surface.Dirt),
+            props: 0.6,
+          });
+          out.push(this.flat(r.range(4, 12), Surface.Sand));
+        }
+        return out;
+      }
+      case 'wadi': {
+        // dry riverbed: gentle banks down to a stony bed, then back up (never a trap)
+        const D = r.range(0.9, 1.5);
+        const bank = D / r.range(0.2, 0.28);
+        const bed = r.range(8, 16);
+        const L = bank * 2 + bed;
+        return [
+          this.flat(3),
+          {
+            len: L,
+            shape: (t) => {
+              if (t < bank) return -D * ease(t / bank);
+              if (t < bank + bed) return -D + 0.12 * Math.sin(t * 1.7) * Math.sin(t * 0.6);
+              return -D * (1 - ease((t - bank - bed) / bank));
+            },
+            surface: (t) => (t > bank * 0.7 && t < bank + bed + bank * 0.3 ? Surface.Rock : Surface.Sand),
+            onStart: (x0) => this.world.marks.push({ x0: x0 + bank, x1: x0 + bank + bed, kind: 'wadi' }),
+            props: 0.5,
+          },
+        ];
+      }
+      case 'oasis': {
+        // shallow pool between palm trees: a ford with packed earth around
+        const L = r.range(10, 15);
+        const depth = r.range(0.35, 0.55);
+        return [
+          this.flat(5, Surface.Dirt),
+          {
+            len: L,
+            shape: (t) => -depth * sin2(t / L),
+            surface: (t) => (t > 1.5 && t < L - 1.5 ? Surface.Water : Surface.Mud),
+            onStart: (x0) => {
+              this.world.marks.push({ x0, x1: x0 + L, kind: 'ford' });
+              this.world.marks.push({ x0: x0 - 5, x1: x0 + L + 5, kind: 'oasis' });
+              // palms close behind the pool and one in front
+              for (const [dx, depth2] of [[-3, 0.25], [2, 0.5], [L * 0.6, 0.3], [L + 3, 0.7]] as [number, number][])
+                this.world.props.push({ x: x0 + dx, kind: 'palm', depth: depth2, scale: r.range(0.9, 1.25), variant: r.int(0, 2), flip: r.chance(0.5) });
+            },
+            props: 0.3,
+          },
+          this.flat(5, Surface.Dirt),
+        ];
+      }
+      case 'ledges': {
+        // sandstone steps: up two or three low rock shelves with ramps, then a long ramp down
+        const steps = r.int(2, 3);
+        const hs: number[] = [];
+        for (let k = 0; k < steps; k++) hs.push(r.range(0.35, 0.6));
+        const ramp = 1.6;
+        const shelf = r.range(4, 7);
+        const total = hs.reduce((a, b) => a + b, 0);
+        const down = total / 0.2;
+        const L = steps * (ramp + shelf) + down;
+        return [
+          {
+            len: L,
+            shape: (t) => {
+              let y = 0;
+              let x = 0;
+              for (const h of hs) {
+                if (t < x + ramp) return y + h * ease((t - x) / ramp);
+                y += h;
+                x += ramp;
+                if (t < x + shelf) return y;
+                x += shelf;
+              }
+              return y * (1 - ease((t - x) / down));
+            },
+            surface: (t) => (t < steps * (ramp + shelf) ? Surface.Rock : Surface.Sand),
+            onStart: (x0) => this.world.marks.push({ x0, x1: x0 + steps * (ramp + shelf), kind: 'ledges' }),
             props: 0.5,
           },
         ];
@@ -574,7 +701,7 @@ export class Generator {
       let kind = r.weighted(kinds, weights);
       if ((kind === 'pine' || kind === 'pineDead') && !r.chance(def.treeDensity)) kind = 'bush';
       if (kind === 'log' && r.chance(0.5)) kind = 'stump';
-      const big = kind === 'pine' || kind === 'pineDead' || kind === 'boulder' || kind === 'cactus';
+      const big = kind === 'pine' || kind === 'pineDead' || kind === 'boulder' || kind === 'cactus' || kind === 'deadTree' || kind === 'sandstone' || kind === 'palm';
       this.world.props.push({
         x: x + r.range(-0.5, 0.5),
         kind,
@@ -586,7 +713,14 @@ export class Generator {
     }
     // Foreground band (in front of the track, drawn over the bike's lane).
     for (let x = start; x < x1; x += r.range(2.5, 6)) {
-      const kind: PropKind = this.biome === Biome.Canyon ? (r.chance(0.7) ? 'rock' : 'grass') : r.weighted(['grass', 'rock', 'flower'], [5, 2, 3]);
+      const kind: PropKind =
+        this.biome === Biome.Canyon
+          ? r.chance(0.7)
+            ? 'rock'
+            : 'grass'
+          : this.biome === Biome.Desert
+            ? r.weighted(['shrub', 'rock', 'grass', 'tumbleweed'], [4, 3, 2, 0.6])
+            : r.weighted(['grass', 'rock', 'flower'], [5, 2, 3]);
       this.world.props.push({
         x,
         kind,

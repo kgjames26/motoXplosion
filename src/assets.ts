@@ -13,7 +13,7 @@ export interface BackdropMeta {
 
 export interface Assets {
   backdrops: Record<string, { img: HTMLImageElement; meta: BackdropMeta }>;
-  textures: Record<'dirt' | 'grass' | 'rock' | 'rockWarm' | 'stone', HTMLImageElement>;
+  textures: Record<'dirt' | 'grass' | 'rock' | 'rockWarm' | 'stone' | 'sand', HTMLImageElement>;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -34,17 +34,18 @@ export function loadAssets(): Promise<Assets> {
     const base = '/res/';
     const bdMeta = await fetch(base + 'backdrops.json').then((r) => r.json() as Promise<Record<string, BackdropMeta>>);
     const names = Object.keys(bdMeta);
-    const [dirt, grass, rock, rockWarm, stone, ...bds] = await Promise.all([
+    const [dirt, grass, rock, rockWarm, stone, sand, ...bds] = await Promise.all([
       loadImage(base + 'tex-dirt.webp'),
       loadImage(base + 'tex-grass.webp'),
       loadImage(base + 'tex-rock.webp'),
       loadImage(base + 'tex-rock-warm.webp'),
       loadImage(base + 'tex-stone.webp'),
+      loadImage(base + 'tex-sand.webp'),
       ...names.map((n) => loadImage(`${base}backdrop-${n}.webp`)),
     ]);
     const backdrops: Assets['backdrops'] = {};
     names.forEach((n, i) => (backdrops[n] = { img: bds[i], meta: bdMeta[n] }));
-    return { backdrops, textures: { dirt, grass, rock, rockWarm, stone } };
+    return { backdrops, textures: { dirt, grass, rock, rockWarm, stone, sand } };
   })();
   return cached;
 }

@@ -10,6 +10,15 @@ Chaque partie (niveau) se déroule dans **une région**, dont on traverse les di
 | **Alpes** | alpages, forêts de pins, montagne rocheuse, gorges et rivières | bois, pierre, fer, viaducs |
 | **Grande Forêt** | sous-bois, rivières, clairières | surtout bois et pierre |
 | **Canyon** | mesas, sable rouge, roche, oued | treillis en fer, viaducs |
+| **Désert** | grandes dunes, oueds secs, oasis à palmiers, dalles de grès (et un peu de canyon) | bois, fer |
+
+Le **Désert** a son propre jeu de décor (saguaros, palmiers, buissons secs, arbres morts, boules d'herbe sèche, blocs de grès, texture de sable ridé par le vent, panorama de dunes) et ses propres structures, générées au hasard selon des règles qui gardent la partie juste :
+
+- **dunes** asymétriques : longue montée douce (pente 12 à 17 %), crête arrondie, redescente sous le vent ≤ 32 % ;
+- **oued sec** : berges en pente douce (≤ 28 %) vers un lit caillouteux de 0,9 à 1,5 m de profondeur, jamais un trou ;
+- **oasis** : gué peu profond entouré de palmiers, terre tassée autour ;
+- **dalles de grès** : 2 ou 3 marches de 35 à 60 cm avec rampes, puis une longue descente ;
+- pas de gaps ni de ponts au-dessus de l'eau ; la chaleur fait baisser l'énergie du pilote 45 % plus vite : il faut viser les bouteilles d'eau.
 
 Sur la piste : sauts, tabletops, doubles, gaps, step-ups, drops, whoops, berms, gués, troncs, pierriers, montées
 et descentes, et des ponts **en bois** (pont de corde), **en pierre** (arches, dos d'âne), **en fer** (treillis riveté)
@@ -72,7 +81,8 @@ Le projet est un build Vite standard, sans configuration particulière :
 Moteur : **Three.js (WebGL)**. La version précédente dessinait tout en Canvas 2D sur le processeur, ce qui saccadait sur téléphone (en plus, le son programmait 6 automatisations audio par image, qui s'accumulaient). Tout passe maintenant par la carte graphique.
 
 - **Moto « Explorer 98 »** : modèle 3D procédural d'après les planches fournies (cadre double berceau et réservoir laiton/olive à flancs verts, selle cuir marron, plaques « 98 », roues à rayons et pneus à crampons, échappement haut, fourche télescopique, deux amortisseurs arrière à ressorts dorés). Les roues, les fourreaux de fourche (qui coulissent sur les tubes chromés), le bras oscillant (qui pivote sur le cadre) et les deux amortisseurs (qui se compriment entre cadre et bras) suivent la physique.
-- **Pilote** : squelette articulé (bassin, colonne, tête, cuisses, tibias, bras, avant-bras). Le bassin et le buste sont des masses sur ressorts qui réagissent aux accélérations de la moto (poussés en arrière à l'accélération, tassés à l'atterrissage) et à la balance (assis reculé ↔ debout penché sur le guidon). Bras et jambes sont résolus en cinématique inverse : mains sur les poignées, bottes sur les repose-pieds, la tête garde l'horizon. En cas de chute, le pilote est éjecté.
+- **Pilote** : un vrai motard équipé — maillot (panneaux verts et marron, liserés dorés, « 98 » et « EXPLORER » dans le dos), pantalon de cross, genouillères, bottes hautes à boucles et coques, coudières, gants à coques, pare-pierres, minerve, casque cross texturé avec visière, mentonnière et masque à verre orange. Squelette articulé (bassin, colonne, tête, cuisses, tibias, bras, avant-bras). Le bassin et le buste sont des masses sur ressorts qui réagissent aux accélérations de la moto (poussés en arrière à l'accélération, tassés à l'atterrissage) et à la balance (assis reculé ↔ debout penché sur le guidon). Bras et jambes sont résolus en cinématique inverse : mains sur les poignées, bottes sur les repose-pieds, la tête garde l'horizon. En cas de chute, le pilote est éjecté.
+- **Collines** basses et qui s'abaissent au loin, arbres proches et lointains limités en hauteur : le relief du fond (montagnes, mesas, dunes) reste toujours visible.
 - **Décor 3D** : piste texturée, champ, collines et forêts en vraie profondeur (perspective), arbres et rochers en billboards instanciés, ponts 3D (pont de corde, arches de pierre, treillis riveté sur piles, viaducs), rivières, brouillard de distance, ombres portées, fond peint très lointain. L'accueil montre la scène en direct, à l'heure dorée, avec la moto qui roule seule.
 - **Ressources** : `python3 tools/build_backdrops.py` (numpy, scipy, Pillow) produit le fond peint et les textures sans couture de `public/res/` à partir de `art/source/`.
 - **Sécurité de fluidité** : si l'appareil descend sous ~45 images/s pendant 2 s, la définition baisse d'un cran, puis remonte quand la marge revient.

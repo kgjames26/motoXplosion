@@ -6,7 +6,7 @@ import { Biome } from './types';
  * bridge styles and backdrop art.
  */
 export type BridgeKind = 'wood' | 'stone' | 'iron' | 'viaduct';
-export type RegionId = 'alpes' | 'canyon' | 'foret';
+export type RegionId = 'alpes' | 'canyon' | 'foret' | 'desert';
 
 export interface RegionDef {
   id: RegionId;
@@ -48,6 +48,16 @@ export const REGIONS: Record<RegionId, RegionDef> = {
     backdrop: { [Biome.Forest]: 'alps-forest', [Biome.River]: 'alps-forest', [Biome.Meadow]: 'alps-forest' },
     tint: '#eef6ea',
   },
+  desert: {
+    id: 'desert',
+    name: 'Désert',
+    subtitle: 'Dunes, oueds, oasis et dalles de grès',
+    biomes: { [Biome.Desert]: 6, [Biome.Canyon]: 1 },
+    start: Biome.Desert,
+    bridges: { wood: 2, iron: 2 },
+    backdrop: {},
+    tint: '#fff4e0',
+  },
   canyon: {
     id: 'canyon',
     name: 'Canyon',
@@ -60,4 +70,4 @@ export const REGIONS: Record<RegionId, RegionDef> = {
   },
 };
 
-export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon'];
+export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon', 'desert'];

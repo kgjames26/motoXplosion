@@ -9,8 +9,9 @@ export enum Biome {
   Mountain = 2,
   Canyon = 3,
   River = 4,
+  Desert = 5,
 }
-export const BIOME_COUNT = 5;
+export const BIOME_COUNT = 6;
 
 export enum Surface {
   Dirt = 0,
@@ -52,7 +53,13 @@ export type PropKind =
   | 'log'
   | 'cactus'
   | 'flag'
-  | 'stump';
+  | 'stump'
+  // desert set
+  | 'palm'
+  | 'shrub'
+  | 'deadTree'
+  | 'tumbleweed'
+  | 'sandstone';
 
 /**
  * Decorative prop. `depth` 0 = on the track line, >0 = behind (further away, drawn smaller
@@ -95,5 +102,5 @@ export interface Bridge {
 export interface TrackMark {
   x0: number;
   x1: number;
-  kind: 'berm' | 'kicker' | 'whoops' | 'ford' | 'start' | 'checkpoint';
+  kind: 'berm' | 'kicker' | 'whoops' | 'ford' | 'start' | 'checkpoint' | 'wadi' | 'oasis' | 'ledges';
 }

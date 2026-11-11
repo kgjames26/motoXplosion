@@ -26,7 +26,8 @@ export interface ChunkVisual {
 }
 
 export interface TerrainStyle {
-  warm: boolean; // canyon region
+  /** Ground set: green (Alpes, Forêt), canyon (red rock), desert (sand dunes). */
+  kind: 'green' | 'canyon' | 'desert';
   treeDensity: number; // quality multiplier
 }
 
@@ -43,11 +44,17 @@ function smoothVisual(w: World, x: number): number {
 }
 
 /** Height of the hills band (behind the field). */
+/** Set by the builder: shape of the hills (dunes in the desert). */
+let hillKind: TerrainStyle['kind'] = 'green';
+
 export function hillsY(w: World, x: number, z: number): number {
   const t = Math.min(1, Math.max(0, (FIELD_END - z) / (FIELD_END - HILLS_END)));
   const base = smoothVisual(w, x);
-  const swell = 0.8 + 2.6 * (fbm1(x / 55 + z * 0.01, 17, 3) * 0.5 + 0.5);
-  return base + 1.2 + t * swell + Math.sin(x * 0.05 + z * 0.08) * t * 0.6;
+  // Kept low and falling away in the distance so the far relief of the painted backdrop
+  // (mountains, mesas) always stays visible above the hills.
+  const swell = 0.5 + 1.6 * (fbm1(x / 55 + z * 0.01, 17, 3) * 0.5 + 0.5);
+  const dune = hillKind === 'desert' ? Math.pow(Math.abs(Math.sin(x * 0.045 + z * 0.11 + Math.sin(z * 0.05) * 2)), 3) * 1.6 : 0;
+  return base + 1.0 + (swell + dune) * Math.sin(Math.PI * Math.min(1, t * 1.25)) * (1 - t * 0.5) + Math.sin(x * 0.05 + z * 0.08) * t * 0.4 - t * 1.5;
 }
 
 /** Height of the ground in front of the track at (x, z). */
@@ -127,13 +134,15 @@ export class TerrainBuilder {
     private bank: TextureBank,
     private style: TerrainStyle,
   ) {
-    const warm = style.warm;
+    const warm = style.kind !== 'green';
+    const desert = style.kind === 'desert';
+    hillKind = style.kind;
     const lambert = (map: THREE.Texture, color = 0xffffff) => new THREE.MeshLambertMaterial({ map, vertexColors: true, color });
     this.mats = {
-      track: lambert(bank.groundTex('dirt', 3.2), warm ? 0xffe2c4 : 0xffffff),
-      ground: lambert(bank.groundTex(warm ? 'rockWarm' : 'grass', warm ? 7 : 3.4)),
+      track: lambert(bank.groundTex(desert ? 'sand' : 'dirt', desert ? 2.6 : 3.2), desert ? 0xf4dcc0 : warm ? 0xffe2c4 : 0xffffff),
+      ground: lambert(bank.groundTex(desert ? 'sand' : warm ? 'rockWarm' : 'grass', desert ? 4 : warm ? 7 : 3.4)),
       rock: lambert(bank.groundTex(warm ? 'rockWarm' : 'rock', 6)),
-      hills: lambert(bank.groundTex(warm ? 'rockWarm' : 'grass', warm ? 14 : 9)),
+      hills: lambert(bank.groundTex(desert ? 'sand' : warm ? 'rockWarm' : 'grass', desert ? 9 : warm ? 14 : 9)),
       water: new THREE.MeshLambertMaterial({ color: 0x3aa6e0, transparent: true, opacity: 0.88 }),
       lip: lambert(bank.groundTex('dirt', 3.2), 0x8a6a52),
     };
@@ -172,7 +181,8 @@ export class TerrainBuilder {
     const n = CHUNK_SAMPLES + 1;
     const x0 = i0 * DX;
     const x1 = (i0 + CHUNK_SAMPLES) * DX;
-    const warm = this.style.warm;
+    const warm = this.style.kind !== 'green';
+    hillKind = this.style.kind;
 
     // ---- track band (skipping bridge decks)
     let runStart = -1;
@@ -301,7 +311,9 @@ export class TerrainBuilder {
       const s = propSprite(p.kind, p.variant, biome);
       if (p.depth > 0) {
         const z = Z_BACK - 0.4 - p.depth * 9.5;
-        add(s, p.x, backFieldY(w, p.x, z) - 0.05, z, p.scale, p.flip);
+        // tall trees just behind the track are kept moderate so the far relief stays visible
+        const tall = p.kind === 'pine' || p.kind === 'pineDead' || p.kind === 'palm';
+        add(s, p.x, backFieldY(w, p.x, z) - 0.05, z, p.scale * (tall ? 0.62 : 1), p.flip);
       } else if (p.depth < 0) {
         const z = Z_FRONT + 1 - p.depth * 6;
         add(s, p.x, foreY(w, p.x, z) - 0.05, z, p.scale * 0.9, p.flip);
@@ -315,7 +327,8 @@ export class TerrainBuilder {
       const h = hash1(Math.floor(x * 11), 41);
       if (h > 0.55 * this.style.treeDensity + 0.25) continue;
       const z = Z_BACK - 2 - hash1(Math.floor(x * 19), 43) * 9;
-      const kinds: PropKind[] = biome === Biome.Canyon ? ['rock', 'boulder', 'bush'] : ['grass', 'flower', 'bush', 'rock', 'grass'];
+      const kinds: PropKind[] =
+        biome === Biome.Canyon ? ['rock', 'boulder', 'bush'] : biome === Biome.Desert ? ['shrub', 'rock', 'shrub', 'tumbleweed', 'grass'] : ['grass', 'flower', 'bush', 'rock', 'grass'];
       const kind = kinds[Math.floor(hash1(Math.floor(x * 23), 47) * kinds.length)];
       const s = propSprite(kind, Math.floor(h * 7), biome);
       add(s, x + h, backFieldY(w, x + h, z) - 0.05, z, 0.8 + h * 0.6, h > 0.3);
@@ -324,7 +337,7 @@ export class TerrainBuilder {
     const density = this.style.treeDensity;
     for (let x = x0; x < x1; x += 2.2) {
       const biome = w.biomeAt(x);
-      const per = biome === Biome.Forest ? 3 : biome === Biome.Canyon ? 0.6 : biome === Biome.Meadow ? 0.9 : 1.6;
+      const per = biome === Biome.Forest ? 3 : biome === Biome.Canyon ? 0.6 : biome === Biome.Desert ? 0.5 : biome === Biome.Meadow ? 0.9 : 1.6;
       const count = Math.floor(per * density + hash1(Math.floor(x * 7), 3));
       for (let k = 0; k < count; k++) {
         const h = hash1(Math.floor(x * 13) + k * 101, 9);
@@ -332,8 +345,11 @@ export class TerrainBuilder {
         const xx = x + hash1(Math.floor(x * 5) + k, 2) * 2.2;
         let kind: PropKind = biome === Biome.Canyon ? (h > 0.5 ? 'cactus' : 'boulder') : h > 0.92 ? 'pineDead' : 'pine';
         if (biome === Biome.Meadow && h < 0.35) kind = 'bush';
+        if (biome === Biome.Desert) kind = h > 0.75 ? 'cactus' : h > 0.55 ? 'sandstone' : h > 0.45 ? 'deadTree' : 'shrub';
         const s = propSprite(kind, Math.floor(h * 3), biome);
-        add(s, xx, hillsY(w, xx, z) - 0.3, z, 0.8 + h * 0.8, h > 0.5);
+        // far trees are smaller so their tops stay under the backdrop's horizon
+        const farK = 0.8 - Math.min(1, (FIELD_END - z) / (FIELD_END - HILLS_END)) * 0.4;
+        add(s, xx, hillsY(w, xx, z) - 0.3, z, (0.65 + h * 0.5) * farK, h > 0.5);
       }
     }
     for (const [s, mats] of inst) {

@@ -1,7 +1,7 @@
 import { clamp, wrapAngle } from './core/math';
 import { Bike, BikeInput } from './physics/bike';
 import { Particles } from './render/particles';
-import { Surface, SURFACES } from './world/types';
+import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
 import type { RegionId } from './world/regions';
 
@@ -160,7 +160,9 @@ export class Game {
     // ---- energies
     this.fuel -= (0.4 + inp.throttle * 1.25) * (1 + d * 0.5) * dt;
     const roughness = Math.abs(bike.rear.sv) + Math.abs(bike.front.sv);
-    this.stamina -= (0.4 + Math.abs(inp.balance) * 0.2 + Math.min(roughness, 3) * 0.1) * (1 + d * 0.6) * dt;
+    // desert heat: the rider gets thirsty faster on the sand
+    const heat = this.world.biomeAt(bike.x) === Biome.Desert ? 1.45 : 1;
+    this.stamina -= heat * (0.4 + Math.abs(inp.balance) * 0.2 + Math.min(roughness, 3) * 0.1) * (1 + d * 0.6) * dt;
 
     // ---- pickups
     for (const p of this.world.pickups) {
