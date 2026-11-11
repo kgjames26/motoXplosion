@@ -605,13 +605,23 @@ export class GLRenderer {
     const base = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.id === 'sf' ? 'sf.0' : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
     // v2.8: painted panoramas take turns while riding (not behind the home screen)
     const pano = this.sunset < 0.5 || w.region.id === 'sf' ? panoramaAt(w.region.id, w.seed, Math.max(this.camX, w.region.id === 'sf' ? 250 : 0), w.mode === 'cruising') : null;
-    const key = pano ? pano.id : base;
-    // paint the next panorama a little before it is needed (no hitch at the switch)
-    if (pano && w.mode === 'cruising') {
-      const ahead = panoramaAt(w.region.id, w.seed, this.camX + 150, true);
+    let key = pano ? pano.id : base;
+    // paint (or load) the next panorama a little before it is needed (no hitch at the switch)
+    if (pano) {
+      const ahead = panoramaAt(w.region.id, w.seed, this.camX + 250, w.mode === 'cruising');
       if (ahead && ahead.id !== pano.id) paintPanorama(ahead);
     }
-    const bd = pano ? paintPanorama(pano) : this.backdropTex[key];
+    let bd: Backdrop | undefined = pano ? paintPanorama(pano) : this.backdropTex[key];
+    // a painted panorama still loading: keep showing the current one meanwhile
+    if (bd && bd.ready === false) {
+      if (this.prevBd && this.backdropKey) {
+        bd = this.prevBd;
+        key = this.backdropKey;
+      } else {
+        bd = this.backdropTex[base];
+        key = base;
+      }
+    }
     if (!bd) {
       this.backdrop.visible = this.lower.visible = false;
       return;

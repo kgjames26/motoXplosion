@@ -146,7 +146,7 @@ Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record e
 ## Mondes et panoramas
 
 - **5 mondes** : Alpes, Grande Forêt, Canyon, Désert et **San Francisco** (rues très pentues en asphalte avec ligne blanche, maisons victoriennes, boutiques, tours au loin, collines couvertes de petites maisons, **ponts urbains** en béton avec rambardes et lampadaires, supporters qui sautent et applaudissent au bord de la rue dans tous les modes, voitures garées à franchir en trial).
-- **60 panoramas peints** (12 par monde) qui se relaient en **fondu** tous les 650 m environ pendant qu'on roule, dans tous les modes : glaciers, lacs qui reflètent les sommets, couchers de soleil, forêts dorées, buttes rouges, mers de dunes, baie et pont rouge, skyline… Certains sont grandioses (plusieurs plans, perspective atmosphérique, reflets), d'autres plus bancals exprès (ciel gris, pylônes, carrière, antenne, éoliennes), comme dans un vrai voyage. Ils sont peints par le code (`src/gl/panoramas.ts`).
+- **100 panoramas** (20 par monde, v2.19) qui se relaient en fondu pendant qu'on roule. **Alpes** et **Grande Forêt** : 40 panoramas **peints**, tirés des peintures de référence (`art/source/ref-*`) par `tools/build_panoramas.py` : cadrage différent, ciel détouré (GrabCut) et ré-éclairé séparément du paysage — jour, matin rosé, lumière dorée, couchant, crépuscule, temps gris, brume, orage — et saisons (printemps, automne, hiver enneigé). **Canyon**, **Désert** et **San Francisco** : les paysages dessinés par recettes, désormais sous les **ciels peints** (nuages de la peinture, teintés selon l'heure). Les images (≈ 85 Ko chacune) se chargent à la demande, la suivante un peu avant qu'on en ait besoin.
 
 ## Contrôles
 

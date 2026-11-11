@@ -16,6 +16,8 @@ export interface Backdrop {
   horizon: number;
   sky: string;
   ground: string;
+  /** v2.19 painted panoramas load from files: false until the image is there. */
+  ready?: boolean;
 }
 
 type Layer =
@@ -25,6 +27,8 @@ type Layer =
 
 export interface PanoSpec {
   id: string;
+  /** v2.19: a painted panorama (public/res/pano/<id>.webp) instead of a recipe. */
+  painted?: { skyTop: string; ground: string; horizon: number };
   name: string;
   grand: boolean;
   skyTop: string;
@@ -186,13 +190,71 @@ function sf(i: number): PanoSpec {
   });
 }
 
+/**
+ * v2.19: 100 panoramas, 20 per world. Alpes and Grande Forêt: painted (cut from the painted
+ * references and re-lit, see tools/build_panoramas.py). Canyon, Désert and San Francisco: the
+ * recipes, now under the painted skies (public/res/pano/sky-*.webp).
+ */
+const painted = (world: string, n: number): PanoSpec[] =>
+  Array.from({ length: n }, (_, i) => ({ ...alpes(i), id: `${world}.${i}`, name: 'Paysage peint', grand: true, painted: { skyTop: '#2a78e4', ground: '#4a8a5a', horizon: 0.7 } }));
+void foret; // v2.19: the forest recipes gave way to the painted panoramas
 export const PANORAMAS: Record<string, PanoSpec[]> = {
-  alpes: Array.from({ length: 12 }, (_, i) => alpes(i)),
-  foret: Array.from({ length: 12 }, (_, i) => foret(i)),
-  canyon: Array.from({ length: 12 }, (_, i) => canyon(i)),
-  desert: Array.from({ length: 12 }, (_, i) => desert(i)),
-  sf: Array.from({ length: 12 }, (_, i) => sf(i)),
+  alpes: painted('alpes', 20),
+  foret: painted('foret', 20),
+  canyon: Array.from({ length: 20 }, (_, i) => canyon(i)),
+  desert: Array.from({ length: 20 }, (_, i) => desert(i)),
+  sf: Array.from({ length: 20 }, (_, i) => sf(i)),
 };
+
+const PANO_BASE = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+/** Real colours of the painted panoramas (index.json), for the sky and the band under them. */
+fetch(PANO_BASE + 'res/pano/index.json')
+  .then((r) => r.json() as Promise<Record<string, { skyTop: string; ground: string; horizon: number }>>)
+  .then((idx) => {
+    for (const list of Object.values(PANORAMAS)) for (const p of list) if (p.painted && idx[p.id]) p.painted = { skyTop: idx[p.id].skyTop, ground: idx[p.id].ground, horizon: idx[p.id].horizon };
+  })
+  .catch(() => {});
+
+/** Painted skies, by mood (loaded once, used by the recipes as soon as they are there). */
+const SKY_FILES = ['jour', 'matin', 'dore', 'couchant', 'crepuscule', 'gris', 'orage', 'chaud'] as const;
+type SkyLook = (typeof SKY_FILES)[number];
+const skyImgs: Partial<Record<SkyLook, HTMLImageElement>> = {};
+if (typeof Image !== 'undefined')
+  for (const k of SKY_FILES) {
+    const im = new Image();
+    im.onload = () => (skyImgs[k] = im);
+    im.src = `${PANO_BASE}res/pano/sky-${k}.webp`;
+  }
+function skyLookFor(spec: PanoSpec): SkyLook {
+  const t = spec.skyTop;
+  if (t === SKIES.sunset[0]) return 'couchant';
+  if (t === SKIES.dusk[0]) return 'crepuscule';
+  if (t === SKIES.dawn[0]) return 'matin';
+  if (t === SKIES.golden[0]) return 'dore';
+  if (t === SKIES.grey[0]) return 'gris';
+  if (t === SKIES.storm[0]) return 'orage';
+  if (t === SKIES.hot[0] || t === SKIES.haze[0]) return 'chaud';
+  return 'jour';
+}
+
+/** A painted panorama: texture filled when its image has loaded (mirrored repeat = seamless). */
+function loadPainted(spec: PanoSpec): Backdrop {
+  const p = spec.painted!;
+  const tex = new THREE.Texture();
+  tex.wrapS = THREE.MirroredRepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const b: Backdrop = { tex, aspect: 1280 / 512, horizon: p.horizon, sky: p.skyTop, ground: p.ground, ready: false };
+  const im = new Image();
+  im.onload = () => {
+    tex.image = im;
+    tex.needsUpdate = true;
+    b.ready = true;
+    b.sky = spec.painted!.skyTop;
+    b.ground = spec.painted!.ground;
+  };
+  im.src = `${PANO_BASE}res/pano/${spec.id}.webp`;
+  return b;
+}
 
 // ------------------------------------------------------------------ painter
 
@@ -475,6 +537,12 @@ const cache = new Map<string, Backdrop>();
 export function paintPanorama(spec: PanoSpec): Backdrop {
   const hit = cache.get(spec.id);
   if (hit) return hit;
+  if (spec.painted) {
+    const b = loadPainted(spec);
+    cache.set(spec.id, b);
+    trimCache();
+    return b;
+  }
   const cv = document.createElement('canvas');
   cv.width = W;
   cv.height = H;
@@ -499,8 +567,33 @@ export function paintPanorama(spec: PanoSpec): Backdrop {
     c.arc(sx, sy, spec.sun.r * H, 0, Math.PI * 2);
     c.fill();
   }
+  // v2.19: the painted sky (clouds included) when loaded, instead of the gradient and blobs
+  const skyIm = skyImgs[skyLookFor(spec)];
+  if (skyIm) {
+    const sh = H * HORIZON + 30;
+    const sw = (skyIm.width * sh) / skyIm.height;
+    const off = r.range(0, sw);
+    for (let x = -off; x < W; x += sw * 2) {
+      c.drawImage(skyIm, x, 0, sw, sh);
+      // mirrored copy next to it: seamless
+      c.save();
+      c.translate(x + sw * 2, 0);
+      c.scale(-1, 1);
+      c.drawImage(skyIm, 0, 0, sw, sh);
+      c.restore();
+    }
+    if (spec.sun) {
+      const sx = spec.sun.x * W;
+      const sy = spec.sun.y * H;
+      const glow = c.createRadialGradient(sx, sy, 0, sx, sy, H * 0.5);
+      glow.addColorStop(0, spec.sun.glow);
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = glow;
+      c.fillRect(0, 0, W, H);
+    }
+  }
   // clouds
-  for (let k = 0; k < spec.clouds; k++) {
+  for (let k = 0; k < (skyIm ? 0 : spec.clouds); k++) {
     const cx = r.range(0, W);
     const cy = r.range(0.06, 0.4) * H;
     const sc = r.range(0.6, 1.4) * (spec.grand ? 1 : 1.3);
@@ -606,12 +699,7 @@ export function paintPanorama(spec: PanoSpec): Backdrop {
   tex.colorSpace = THREE.SRGBColorSpace;
   const b: Backdrop = { tex, aspect: W / H, horizon: HORIZON, sky: spec.skyTop, ground: spec.ground };
   cache.set(spec.id, b);
-  // keep GPU memory bounded: only a handful painted at once
-  if (cache.size > 6) {
-    const first = cache.keys().next().value as string;
-    cache.get(first)!.tex.dispose();
-    cache.delete(first);
-  }
+  trimCache();
   return b;
 }
 
@@ -637,4 +725,13 @@ export function panoramaAt(world: string, seed: number, x: number, cruising = fa
   }
   const k = Math.floor(Math.max(0, x - 200) / 650);
   return list[(((seed >>> 3) + k * 5) % list.length + list.length) % list.length];
+}
+
+/** Keep GPU memory bounded: only a handful of panoramas at once. */
+function trimCache(): void {
+  while (cache.size > 6) {
+    const first = cache.keys().next().value as string;
+    cache.get(first)!.tex.dispose();
+    cache.delete(first);
+  }
 }
