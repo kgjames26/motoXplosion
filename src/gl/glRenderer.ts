@@ -1,3 +1,4 @@
+import type { Outfit } from '../outfits';
 import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { approach, clamp } from '../core/math';
@@ -220,11 +221,11 @@ export class GLRenderer {
   }
 
   /** The player's bike (garage choice). */
-  setPlayerModel(model: BikeModel): void {
-    if (this.bike3d.model.id === model.id) return;
+  setPlayerModel(model: BikeModel, outfit?: Outfit): void {
+    if (this.bike3d.model.id === model.id && this.bike3d.outfit === (outfit?.id ?? 'moto')) return;
     this.scene.remove(this.bike3d.group);
     disposeObject(this.bike3d.group);
-    this.bike3d = new Bike3D(model);
+    this.bike3d = new Bike3D(model, undefined, outfit);
     this.bike3d.setEnvironment(this.renderer);
     this.scene.add(this.bike3d.group);
   }

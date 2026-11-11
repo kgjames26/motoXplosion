@@ -4,23 +4,34 @@ PWA de **motocross** en 2,5D (scène 3D WebGL vue de côté), jouable sur smartp
 contemplative dans de grands paysages peints, un vrai défi de pilotage grâce à une physique de moto exigeante, quatre modes de jeu,
 sept motos à gagner au garage.
 
+## Accueil
+
+L'accueil tient sur un seul écran paysage : la carte **MODE** (Cruising, Trial, Enduro, Course, chacun avec son icône et son nombre de circuits terminés) à côté de la carte **MONDE** (Alpes, Grande Forêt, Canyon, Désert), puis en bas **GARAGE**, une phrase qui explique le mode, et le gros bouton **JOUER**. Les options sont sous l'engrenage, le porte-monnaie en haut à gauche. En Cruising, JOUER part directement ; dans les trois autres modes, il ouvre le **choix du circuit**.
+
 ## Modes de jeu
 
 | Mode | Règles | Gains |
 | --- | --- | --- |
-| **Cruising** | balade infinie : garder de l'essence (bidons) et de l'eau (bouteilles) | 1 pièce / 20 m + pièces ramassées + sauts |
-| **Trial** | épreuve de **15 zones** d'obstacles (palettes, caisses, blocs, tourets, pneus, fûts, troncs, marches rocheuses, buses, escaliers…), de plus en plus dures. S'arrêter dans une zone = « pied à terre » (+1 point), chute = +5 points et on reprend la zone. **3 casques** : chaque chute en coûte un | 15 / zone, +10 par zone à zéro faute, bonus de fin d'épreuve (120 − 4 × points) |
-| **Enduro** | contre la montre sur terrain cassant (racines, arbres tombés, pierriers, troncs moussus, gués, montées) : 70 s au départ, **+36 s à chaque contrôle** (tous les 700 m), essence et eau gérées, soif plus forte | 1 / 30 m, 20 par contrôle, pièces |
-| **Course** | **8 pilotes** sur une piste de 1,6 à 2,4 km (jumps, doubles, berms, whoops) avec départ arrêté (3-2-1-GO), classement en direct, points de couleur des rivaux sur la barre de progression | prix selon la place (150 → 12) × niveau × difficulté |
+| **Cruising** | balade infinie : garder de l'essence (bidons) et de l'eau (bouteilles). Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
+| **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
+| **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (7 à 22 m de haut, de plus en plus raides, bosses et marches rocheuses sur les pentes), racines, troncs, gués ; essence et eau gérées, chrono | prime de fin de circuit + médailles |
+| **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
-### Course : IA et difficulté évolutive
+### Circuits et médailles
+- Chaque circuit est toujours le même (graine fixe par mode, monde et numéro) et devient plus dur avec son numéro : obstacles plus gros en trial, collines plus hautes en enduro, rivaux plus forts et piste plus longue en course.
+- Écran de choix : grille de **5 × 5** circuits (numéro, médaille, meilleur temps ou meilleure place, cadenas). Terminer un circuit débloque le suivant ; le panneau de droite donne les objectifs.
+- **Médailles** : en trial et enduro, Or et Argent sous des temps cibles, Bronze en arrivant au bout ; en course, Or/Argent/Bronze pour la 1re/2e/3e place. Une médaille obtenue pour la première fois rapporte un bonus unique (Bronze 20, Argent 45, Or 90).
+- En fin de circuit : **REJOUER**, **SUIVANT** (circuit d'après), GARAGE ou ACCUEIL.
+
+### Course : IA et difficulté
 - Les 7 rivaux roulent sur **de vraies motos simulées** (même physique que le joueur). Chacun a son **niveau de 1 à 10**, affiché au-dessus de lui (« Léo Niv.7 »), qui règle sa vitesse visée, sa discipline avant les sauts, sa précision d'équilibre en l'air, son temps de réaction et ses hésitations. Les meilleurs pilotes ont aussi les meilleures motos.
-- Le joueur choisit **Facile / Normal / Difficile** : cela fixe la moyenne du plateau ; autour, les niveaux sont étalés (deux plus forts, deux plus faibles…). Un léger élastique garde le peloton groupé.
-- **Championnat** : chaque podium remplit une pastille ; **3 podiums = niveau supérieur** (une 7e ou 8e place en retire une). Le niveau relève tous les rivaux et allonge la course. Il est affiché par un **badge** (médaille Bronze niv. 1-3, Argent 4-6, Or 7-9, Diamant 10+, avec les pastilles de progression) sur l'accueil et pendant la course.
+- Le niveau moyen du plateau dépend du **numéro du circuit** et de la **difficulté** choisie (Facile reste gagnable jusqu'au circuit 25, Difficile finit avec des pilotes presque parfaits) ; autour, les niveaux sont étalés.
 
 ## Garage et économie
 
-Le **garage** est accessible depuis l'accueil (bouton GARAGE à côté d'OPTIONS) et depuis l'écran de fin de partie, pour dépenser juste après avoir gagné. Vitrine 3D qui tourne (on peut la faire pivoter du doigt), barres de caractéristiques (en vert quand c'est mieux que la moto actuelle), achat et choix de la moto. Le pilote porte une tenue assortie à sa moto.
+Le **garage** est accessible depuis l'accueil (bouton GARAGE à côté d'OPTIONS) et depuis l'écran de fin de partie, pour dépenser juste après avoir gagné. Deux onglets :
+- **MOTOS** : vitrine 3D qui tourne (on peut la faire pivoter du doigt), barres de caractéristiques (en vert quand c'est mieux que la moto actuelle), achat et choix de la moto.
+- **TENUES** : 10 tenues de pilote de couleurs différentes (maillot, pantalon, gants, casque), essayées sur la moto en vitrine : Rouge Feu 300, Bleu Océan 400, Jaune Citron 500, Vert Jungle 650, Orange Volcan 800, Violet Galaxie 1 000, Rose Flash 1 250, Blanc Arctique 1 500, Noir Minuit 2 000, Or Champion 3 000. La tenue « aux couleurs de la moto » est offerte.
 
 | Moto | Style | Prix | Points forts |
 | --- | --- | --- | --- |
@@ -34,7 +45,9 @@ Le **garage** est accessible depuis l'accueil (bouton GARAGE à côté d'OPTIONS
 
 Chaque moto change vraiment la physique (puissance, couple, rupteur, masse, raideur et débattement des suspensions, adhérence, contrôle aérien, consommation, freins).
 
-**Gagner des pièces** sans que ce soit rébarbatif : des pièces dorées sont posées en lignes et en arcs **au-dessus des sauts** (il faut sauter pour les attraper), les beaux sauts rapportent (« BIG AIR » +3 au-delà d'1,1 s de vol, réception « PARFAIT » +2), et chaque partie paie selon le mode. Une bonne partie rapporte 300 à 600 pièces : la première moto s'achète en 2 ou 3 parties, la Dakar après plusieurs heures de jeu. Les gains d'une partie arrêtée depuis la pause sont gardés, ainsi que le record.
+**Gagner des pièces** sans que ce soit rébarbatif : des pièces dorées sont posées en lignes et en arcs **au-dessus des sauts** (il faut sauter pour les attraper), les beaux sauts rapportent (« BIG AIR » +3 au-delà d'1,1 s de vol, réception « PARFAIT » +2), et chaque partie paie selon le mode.
+
+**L'astuce du cruising** : la distance paie de plus en plus. Chaque kilomètre fait monter le **bonus de longue balade** de ×0,25 (×1 au départ, jusqu'à ×4 au 12e km), affiché en haut à droite ; une chute fait redescendre d'un cran. Les circuits rapportent environ 90 à 120 pièces par minute, alors que le cruising démarre à ce niveau puis dépasse largement (environ 2 300 pièces pour 10 minutes de balade sans chute) : **c'est le mode qui rapporte le plus, à condition de cruiser longtemps**. Les gains d'une partie arrêtée depuis la pause sont gardés, ainsi que le record.
 
 Chaque partie (niveau) se déroule dans **une région**, dont on traverse les différents environnements :
 
@@ -115,7 +128,7 @@ Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des su
 - **Musiques** : `public/audio/music-menu.mp3` (accueil, pause, fin de partie) et `music-game.mp3` (en course, en boucle). La boucle saute le silence du début et de la fin et enchaîne avec un fondu de 4 s, sans coupure. Les musiques passent de l'une à l'autre en fondu.
 - **Moteur** : synthétisé en temps réel (AudioWorklet, `src/audio/engineWorklet.ts`), modèle d'un monocylindre 4 temps de cross : une explosion tous les deux tours, avec des irrégularités aléatoires, excitant deux résonateurs (échappement et carter). S'y ajoutent le claquement de combustion sous charge et des pétarades à la décélération, puis un filtre passe-bas qui donne un son un peu sourd.
 
-## Catalogue d'assets (722 éléments)
+## Catalogue d'assets (1 097 éléments)
 
 Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en familles paramétrées : chaque élément est une variante distincte (espèce, taille, saison, couleur, forme), dessinée au premier usage puis mise en cache.
 
@@ -126,6 +139,12 @@ Tous les décors et obstacles sont dessinés par le code (`src/catalog/`), en fa
 | Cartes (Désert) | 111 | saguaros, cactus tonneaux, agaves, arbres de Josué, palmiers, dromadaires, tentes nomades, maisons en adobe, ruines, 4x4, balises de rallye… |
 | Trial | 101 | 85 obstacles physiques (la piste suit exactement leur forme) + portes de zone, juges, tableau des points, spectateurs, conteneurs… |
 | Enduro | 103 | racines, arbres tombés, pierriers, troncs moussus (physiques) + flèches, contrôles, commissaires, ravitaillement, bornes kilométriques… |
+| v2.6 — Alpes | 60 | pylônes de télésiège, cabanes à drapeau, marmottes, bouquetins, névés, blocs erratiques, fontaines, fromageries, téléphériques, croix de sommet, paravalanches, rhododendrons, guirlandes de fanions… |
+| v2.6 — Grande Forêt | 55 | rochers moussus géants, troncs à champignons, souches au lierre, miradors, cabanes de bûcheron, chouettes, renards, sangliers, écureuils, cabane dans l'arbre, balançoire, passerelles… |
+| v2.6 — Canyon | 55 | mouflons, coyotes, géocoucous, façades de saloon, pont ferroviaire en bois, chevalement de mine, épaves, station-service, dômes de grès, ruines troglodytes, yuccas… |
+| v2.6 — Désert | 55 | caravanes de dromadaires, mares d'oasis, étals de marché, poteries, tapis, feux de camp, fennecs, piliers de roche, acacias, fort en ruine, obélisques, camions de rallye… |
+| v2.6 — Trial | 80 | 64 **gros obstacles** physiques (0,4 à 1,3 m) avec rampes de terre tassée + arches de chrono, banderoles, fanions, spectateurs, mécaniciens |
+| v2.6 — Enduro | 70 | grosses racines, marches en rondins et en pierre (physiques), drapeaux et panneaux de colline, rochers de crête, arbres penchés, arches d'arrivée, photographes, quad de secours… |
 | Course | 111 | arche d'arrivée, grille de départ, banderoles de sponsors inventés, tribunes, tentes et camions d'équipe, murs de pneus, foule, tours TV… |
 
 Le générateur tire une « palette » d'une vingtaine d'éléments tous les 100 à 150 m : chaque portion de route a son caractère et le décor ne se répète jamais à l'identique.
@@ -147,11 +166,13 @@ Moteur : **Three.js (WebGL)**. La version précédente dessinait tout en Canvas 
 src/
   main.ts                 boucle de jeu, écrans, modes, garage, gains, haptique, PWA
   modes.ts                modes de jeu et leurs constantes
+  circuits.ts             25 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
+  outfits.ts              tenues du pilote vendues au garage
   bikes.ts                les 7 motos : style, couleurs, caractéristiques, prix
-  profile.ts              progression sauvegardée : pièces, motos, records, championnat
+  profile.ts              progression sauvegardée : pièces, motos, tenues, records, circuits et médailles
   ai.ts                   pilotes IA de la course (niveaux 1-10)
-  catalog/                catalogue d'assets procéduraux (nature, trial, enduro, course)
-  ui/garage.ts            garage avec vitrine 3D
+  catalog/                catalogue d'assets procéduraux (nature, trial, enduro, course, extra v2.6)
+  ui/garage.ts            garage avec vitrine 3D (motos et tenues)
   settings.ts             paramètres enregistrés (volumes, disposition, région, vibrations)
   assets.ts               chargement des images et métadonnées (public/res)
   game.ts                 règles : énergies, bidons/bouteilles, chutes, relance, fin de partie, effets

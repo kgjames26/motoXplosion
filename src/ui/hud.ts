@@ -1,6 +1,5 @@
 import { clamp } from '../core/math';
-import { CHECKPOINT_EVERY, Game } from '../game';
-import { ENDURO_CP, TRIAL_SECTIONS } from '../modes';
+import { CHECKPOINT_EVERY, fmtClock, fmtMult, Game } from '../game';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -23,15 +22,16 @@ export class Hud {
   private distanceUnit = $('distance-unit');
   private timer = $('timer');
   private timerBox = $('hud-timer');
-  private lives = $('lives');
   private zone = $('trial-zone');
-  private faults = $('trial-faults');
+  private falls = $('trial-falls');
+  private level = $('hud-level');
+  private mult = $('mult');
   private pos = $('race-pos');
   private posSfx = $('race-pos-sfx');
   private riders = $('riders');
   private coins = $('coins');
   private coinsBox = $('hud-coins');
-  private last = { speed: -1, dist: -1, coins: -1, lives: -1, mode: '' };
+  private last = { speed: -1, dist: -1, coins: -1, clock: -1, mult: -1, mode: '', circuit: -1 };
   private dots: HTMLElement[] = [];
 
   update(game: Game): void {
@@ -39,8 +39,13 @@ export class Hud {
     if (mode !== this.last.mode) {
       this.last.mode = mode;
       this.root.dataset.mode = mode;
-      this.last.lives = -1;
       this.last.dist = -1;
+      this.last.clock = -1;
+      this.last.mult = -1;
+    }
+    if (game.circuit !== this.last.circuit) {
+      this.last.circuit = game.circuit;
+      this.level.textContent = game.mode === 'course' ? `Circuit ${game.circuit} · ${game.difficulty === 'facile' ? 'Facile' : game.difficulty === 'difficile' ? 'Difficile' : 'Moyen'}` : `Circuit ${game.circuit}`;
       this.riders.innerHTML = '';
       this.dots = [];
     }
@@ -71,33 +76,37 @@ export class Hud {
     let p = 0;
     let text = '';
     let unit = 'm';
+    if (mode === 'trial' || mode === 'enduro') {
+      const t = Math.floor(game.chrono * 10);
+      if (t !== this.last.clock) {
+        this.last.clock = t;
+        this.timer.textContent = fmtClock(game.chrono);
+      }
+      this.timerBox.classList.remove('low');
+    }
     switch (mode) {
       case 'cruising':
         p = (game.distance % CHECKPOINT_EVERY) / CHECKPOINT_EVERY;
         text = Math.floor(game.distance).toLocaleString('fr-FR');
-        break;
-      case 'enduro': {
-        p = (game.distance % ENDURO_CP) / ENDURO_CP;
-        text = `CP ${game.checkpoints + 1}`;
-        unit = `· ${Math.max(0, Math.round(ENDURO_CP - (game.distance % ENDURO_CP)))} m`;
-        const t = Math.max(0, game.timeLeft);
-        this.timer.textContent = `${Math.floor(t / 60)}:${Math.floor(t % 60).toString().padStart(2, '0')}`;
-        this.timerBox.classList.toggle('low', t < 15);
-        break;
-      }
-      case 'trial':
-        p = game.sectionsCleared / TRIAL_SECTIONS;
-        text = `${game.sectionsCleared}/${TRIAL_SECTIONS}`;
-        unit = 'zones';
-        if (game.lives !== this.last.lives) {
-          this.last.lives = game.lives;
-          this.lives.innerHTML = [0, 1, 2].map((i) => `<i class="${i < game.lives ? '' : 'lost'}"></i>`).join('');
+        if (game.cruiseMult !== this.last.mult) {
+          this.last.mult = game.cruiseMult;
+          this.mult.textContent = '×' + fmtMult(game.cruiseMult);
         }
-        this.zone.textContent = `${Math.max(game.section, 1)}/${TRIAL_SECTIONS}`;
-        this.faults.textContent = String(game.totalFaults);
+        break;
+      case 'enduro':
+        p = game.progress;
+        text = String(Math.max(0, Math.round(game.finishX - game.bike.x)));
+        unit = 'm';
+        break;
+      case 'trial':
+        p = game.progress;
+        text = `${game.sectionsCleared}/${game.zones}`;
+        unit = 'zones';
+        this.zone.textContent = `${Math.max(game.section, 1)}/${game.zones}`;
+        this.falls.textContent = String(game.falls);
         break;
       case 'course': {
-        p = clamp((game.bike.x - game.startX) / game.raceLen, 0, 1);
+        p = game.progress;
         text = String(Math.max(0, Math.round(game.finishX - game.bike.x)));
         unit = 'm';
         const pos = game.racePosition();
@@ -114,7 +123,7 @@ export class Hud {
         break;
       }
     }
-    const key = Math.floor(p * 400) + text.length * 1000 + (mode === 'course' ? Math.round(game.bike.x) : 0);
+    const key = Math.floor(p * 400) + text.length * 1000 + (mode !== 'cruising' ? Math.round(game.bike.x) * 7 : 0) + game.sectionsCleared * 13;
     if (key !== this.last.dist) {
       this.last.dist = key;
       this.distance.textContent = text;

@@ -1,4 +1,5 @@
 import { BIKES } from './bikes';
+import type { CircuitRecord } from './circuits';
 import type { Difficulty, ModeId } from './modes';
 import type { RegionId } from './world/regions';
 
@@ -18,10 +19,17 @@ export interface Profile {
   racePoints: number;
   best: Record<string, number>;
   totalEarned: number;
+  /** Rider outfit worn and outfits owned. */
+  outfit: string;
+  outfits: string[];
+  /** Circuit results by `mode:region:n`. */
+  circuits: Record<string, CircuitRecord>;
+  /** Last circuit picked per `mode:region`. */
+  circuitSel: Record<string, number>;
 }
 
 const KEY = 'mx.profile.v1';
-const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0 };
+const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {} };
 
 export function loadProfile(): Profile {
   try {
@@ -35,12 +43,17 @@ export function loadProfile(): Profile {
         if (old > (p.best[k] ?? 0)) p.best[k] = old;
       }
       if (!BIKES.some((b) => b.id === p.bike)) p.bike = 'explorer';
+      p.circuits = { ...p.circuits };
+      p.outfits = [...p.outfits];
+      p.owned = [...p.owned];
+      p.circuitSel = { ...p.circuitSel };
+      if (!p.outfits.includes(p.outfit)) p.outfit = 'moto';
       return p;
     }
   } catch {
     /* storage unavailable */
   }
-  return { ...DEFAULT, best: {}, owned: ['explorer'] };
+  return { ...DEFAULT, best: {}, owned: ['explorer'], outfits: ['moto'], circuits: {}, circuitSel: {} };
 }
 
 export function saveProfile(p: Profile): void {

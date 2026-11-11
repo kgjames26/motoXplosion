@@ -10,7 +10,23 @@ import { Garage } from './ui/garage';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
 import { bikeById } from './bikes';
 import { DIFFICULTIES, MODES, ModeId } from './modes';
-import { bestKey, levelTier, loadProfile, saveProfile } from './profile';
+import { bestKey, loadProfile, saveProfile } from './profile';
+import { outfitById } from './outfits';
+import {
+  CIRCUITS,
+  CircuitMode,
+  circuitKey,
+  circuitLength,
+  CircuitRecord,
+  circuitRaceLevel,
+  fmtTime,
+  isCircuitMode,
+  MEDAL_BONUS,
+  MEDAL_COLORS,
+  MEDAL_NAMES,
+  parTimes,
+  trialZones,
+} from './circuits';
 
 /**
  * Entry point: wires the game loop, renderer, HUD, controls, screens, settings, audio and PWA.
@@ -21,18 +37,22 @@ const settings = loadSettings();
 const profile = loadProfile();
 const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
-const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), difficulty: profile.difficulty, raceLevel: profile.raceLevel });
-const game = new Game(runOpts());
-renderer.setPlayerModel(game.model);
+/** Circuit currently picked for the selected mode and world. */
+const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
+const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), difficulty: profile.difficulty, circuit: circuitOf() });
+const outfit = () => outfitById(profile.outfit);
+const game = new Game({ ...runOpts(), mode: 'cruising' });
+renderer.setPlayerModel(game.model, outfit());
 const garage = new Garage(profile, saveP);
 const controls = new Controls();
 const hud = new Hud();
 const audio = new Audio();
 audio.setVolumes(settings.music, settings.sfx);
 
-type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'none';
+type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'none';
 const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   title: $('screen-title'),
+  circuits: $('screen-circuits'),
   pause: $('screen-pause'),
   over: $('screen-over'),
   settings: $('screen-settings'),
@@ -59,58 +79,153 @@ function show(which: ScreenName): void {
   else garage.close();
 }
 
-function fmtBest(mode: ModeId, v: number): string {
-  if (!v) return '—';
-  if (mode === 'trial') return `${v} zone${v > 1 ? 's' : ''}`;
-  if (mode === 'course') return `${9 - v}e place`;
-  return `${v.toLocaleString('fr-FR')} m`;
+const MODE_ICONS: Record<ModeId, string> = {
+  cruising: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 32 L15 14 L22 22 L32 8 L46 32Z"/><circle cx="39" cy="8" r="4"/><path d="M16 32 L24 24 L30 32" /></svg>',
+  trial: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M3 33h11V21h18v12h13"/><circle cx="13" cy="15" r="4.5"/><circle cx="30" cy="9" r="4.5"/><path d="M13 15 L21 8 L30 9"/></svg>',
+  enduro: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 34 C12 12 19 9 24 9 C30 9 37 14 46 34Z"/><path d="M24 9V2 l8 2.6 -8 2.6"/><path d="M10 29 l3 -3 M36 27 l3 3"/></svg>',
+  course: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M9 35V3"/><path d="M9 4h30v17H9z"/><path d="M9 4h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 8.25H24v4.25h-7.5zm15 0H39v4.25h-7.5zM9 12.5h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 16.75H24V21h-7.5zm15 0H39V21h-7.5z" fill="currentColor" stroke="none"/></svg>',
+};
+const MODE_SHORT: Record<ModeId, string> = {
+  cruising: 'Balade',
+  trial: 'Obstacles',
+  enduro: 'Collines',
+  course: '8 pilotes',
+};
+
+const rec = (mode: CircuitMode, n: number): CircuitRecord | undefined => profile.circuits[circuitKey(mode, settings.region, n)];
+const unlocked = (mode: CircuitMode, n: number) => n === 1 || !!rec(mode, n - 1)?.done;
+/** Medal counts for a mode in the current world: [bronze+, silver+, gold] and circuits done. */
+function medalCounts(mode: CircuitMode): { done: number; gold: number; silver: number; bronze: number } {
+  const c = { done: 0, gold: 0, silver: 0, bronze: 0 };
+  for (let n = 1; n <= CIRCUITS; n++) {
+    const r = rec(mode, n);
+    if (!r?.done) continue;
+    c.done++;
+    if (r.medal === 3) c.gold++;
+    else if (r.medal === 2) c.silver++;
+    else if (r.medal === 1) c.bronze++;
+  }
+  return c;
 }
+const medalIco = (m: number) => `<i class="medal-ico" style="--m:${MEDAL_COLORS[m] || '#666'}"></i>`;
 
 function updateBest(): void {
-  $('best-title').textContent = fmtBest(profile.mode, profile.best[bestKey(profile.mode, settings.region)] ?? 0);
+  const mode = profile.mode;
+  if (isCircuitMode(mode)) {
+    const c = medalCounts(mode);
+    $('best-title').innerHTML = `${c.done}/${CIRCUITS} · ${medalIco(3)} ${c.gold}`;
+    $('best-title').parentElement!.firstChild!.textContent = 'CIRCUITS ';
+  } else {
+    const v = profile.best[bestKey(mode, settings.region)] ?? 0;
+    $('best-title').textContent = v ? `${v.toLocaleString('fr-FR')} m` : '—';
+    $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
+  }
   $('title-coins').textContent = profile.coins.toLocaleString('fr-FR');
-}
-
-/** Championship badge: medal colour by tier, level number, podium progress (3 pips). */
-function badgeHtml(): string {
-  const t = levelTier(profile.raceLevel);
-  const pips = [0, 1, 2].map((i) => `<i class="${i < profile.racePoints ? 'on' : ''}"></i>`).join('');
-  return `<span class="medal">${profile.raceLevel}</span>Niveau ${profile.raceLevel} · ${t.name}<span class="pips">${pips}</span>`;
+  for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card')) {
+    const m = el.dataset.mode as ModeId;
+    const box = el.querySelector('.medals')!;
+    if (isCircuitMode(m)) {
+      const c = medalCounts(m);
+      box.innerHTML = `${medalIco(c.gold ? 3 : c.silver ? 2 : c.done ? 1 : 0)}${c.done}/${CIRCUITS}`;
+    }
+  }
 }
 
 function refreshTitle(): void {
-  for (const el of $('modes').querySelectorAll('.mode-tab')) el.classList.toggle('selected', (el as HTMLElement).dataset.mode === profile.mode);
+  for (const el of $('modes').querySelectorAll('.mode-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.mode === profile.mode);
   const m = MODES.find((x) => x.id === profile.mode)!;
   $('mode-desc').textContent = m.description;
-  const course = profile.mode === 'course';
-  $('course-opts').classList.toggle('hidden', !course);
-  const badge = $('level-badge');
-  badge.style.setProperty('--tier', levelTier(profile.raceLevel).color);
-  badge.innerHTML = badgeHtml();
-  for (const el of $('diffs').querySelectorAll('.diff')) el.classList.toggle('selected', (el as HTMLElement).dataset.diff === profile.difficulty);
-  const hl = $('hud-level');
-  hl.className = 'hud-level level-badge';
-  hl.style.setProperty('--tier', levelTier(profile.raceLevel).color);
-  hl.innerHTML = badgeHtml();
   updateBest();
 }
 
 function buildModes(): void {
-  $('modes').innerHTML = MODES.map((m) => `<button class="mode-tab" data-mode="${m.id}">${m.name}<small>${m.short}</small></button>`).join('');
-  for (const el of $('modes').querySelectorAll('.mode-tab'))
+  $('modes').innerHTML = MODES.map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('');
+  for (const el of $('modes').querySelectorAll('.mode-card'))
     el.addEventListener('click', () => {
       profile.mode = (el as HTMLElement).dataset.mode as ModeId;
       saveP();
       refreshTitle();
     });
-  $('diffs').innerHTML = DIFFICULTIES.map((d) => `<button class="diff" data-diff="${d.id}">${d.name}</button>`).join('');
-  for (const el of $('diffs').querySelectorAll('.diff'))
+  $('circ-diffs').innerHTML = DIFFICULTIES.map((d) => `<button class="diff" data-diff="${d.id}">${d.name}</button>`).join('');
+  for (const el of $('circ-diffs').querySelectorAll('.diff'))
     el.addEventListener('click', () => {
       profile.difficulty = (el as HTMLElement).dataset.diff as typeof profile.difficulty;
       saveP();
-      refreshTitle();
+      renderCircuits();
     });
 }
+
+// ---------------------------------------------------------------- circuits screen
+
+function openCircuits(): void {
+  const mode = profile.mode as CircuitMode;
+  // pick the selected circuit, or the first one not finished yet
+  let n = circuitOf();
+  if (!unlocked(mode, n)) n = 1;
+  profile.circuitSel[`${mode}:${settings.region}`] = n;
+  renderCircuits();
+  show('circuits');
+}
+
+function renderCircuits(): void {
+  const mode = profile.mode as CircuitMode;
+  const sel = circuitOf();
+  $('circ-mode').textContent = MODES.find((m) => m.id === mode)!.name;
+  $('circ-world').textContent = REGIONS[settings.region].name;
+  const c = medalCounts(mode);
+  $('circ-medals').innerHTML = `<span>${medalIco(3)} ${c.gold}</span><span>${medalIco(2)} ${c.silver}</span><span>${medalIco(1)} ${c.bronze}</span>`;
+  let next = 0;
+  for (let n = 1; n <= CIRCUITS && !next; n++) if (!rec(mode, n)?.done) next = n;
+  const tiles: string[] = [];
+  for (let n = 1; n <= CIRCUITS; n++) {
+    const r = rec(mode, n);
+    const open = unlocked(mode, n);
+    const sub = r?.done ? (mode === 'course' ? `${r.place}${r.place === 1 ? 'er' : 'e'}` : fmtTime(r.time ?? 0)) : '';
+    const cls = ['circ-tile', open ? '' : 'locked', n === sel ? 'selected' : '', n === next && open ? 'next' : ''].join(' ');
+    tiles.push(`<button class="${cls}" data-n="${n}"${open ? '' : ' disabled'}>${r?.medal ? medalIco(r.medal) : ''}<b>${n}</b>${sub ? `<small>${sub}</small>` : ''}</button>`);
+  }
+  $('circ-grid').innerHTML = tiles.join('');
+  // details of the selected circuit
+  $('circ-num').textContent = `Circuit ${sel}`;
+  const meta =
+    mode === 'trial'
+      ? `${trialZones(sel)} zones d’obstacles · chute = +15 s`
+      : mode === 'enduro'
+        ? `${(circuitLength(mode, sel) / 1000).toFixed(1).replace('.', ',')} km · grosses collines`
+        : `${(circuitLength(mode, sel) / 1000).toFixed(1).replace('.', ',')} km · pilotes niveau ${circuitRaceLevel(sel)}`;
+  $('circ-meta').textContent = meta;
+  $('circ-diffs').classList.toggle('hidden', mode !== 'course');
+  for (const el of $('circ-diffs').querySelectorAll('.diff')) el.classList.toggle('selected', (el as HTMLElement).dataset.diff === profile.difficulty);
+  const r = rec(mode, sel);
+  const got = r?.medal ?? 0;
+  if (mode === 'course') {
+    $('circ-goals').innerHTML = [3, 2, 1].map((m) => `<li class="${got >= m ? 'got' : ''}">${medalIco(m)} ${m === 3 ? '1re place' : m === 2 ? '2e place' : '3e place'}</li>`).join('');
+    $('circ-best').textContent = r?.place ? `Meilleure place : ${r.place}${r.place === 1 ? 're' : 'e'}` : '';
+  } else {
+    const p = parTimes(mode, sel);
+    $('circ-goals').innerHTML = [
+      `<li class="${got >= 3 ? 'got' : ''}">${medalIco(3)} moins de ${fmtTime(p.gold)}</li>`,
+      `<li class="${got >= 2 ? 'got' : ''}">${medalIco(2)} moins de ${fmtTime(p.silver)}</li>`,
+      `<li class="${got >= 1 ? 'got' : ''}">${medalIco(1)} arriver au bout</li>`,
+    ].join('');
+    $('circ-best').textContent = r?.time ? `Record : ${fmtTime(r.time)}` : '';
+  }
+  ($('btn-circ-go') as HTMLButtonElement).disabled = !unlocked(mode, sel);
+}
+
+$('circ-grid').addEventListener('click', (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>('.circ-tile');
+  if (!el || el.classList.contains('locked')) return;
+  const n = Number(el.dataset.n);
+  const key = `${profile.mode}:${settings.region}`;
+  if (profile.circuitSel[key] === n) {
+    start();
+    return;
+  }
+  profile.circuitSel[key] = n;
+  saveP();
+  renderCircuits();
+});
 
 // ---------------------------------------------------------------- regions (levels)
 
@@ -120,21 +235,21 @@ function buildRegions(): void {
   for (const id of REGION_ORDER) {
     const r = REGIONS[id];
     const b = document.createElement('button');
-    b.className = 'region-card' + (id === settings.region ? ' selected' : '');
+    b.className = 'world-card' + (id === settings.region ? ' selected' : '');
     b.dataset.region = id;
     const thumb =
       id === 'desert'
         ? 'linear-gradient(180deg,#5d9be6 0%,#fbe3b8 48%,#f6d39a 49%,#e8b676 70%,#cf9152 100%)'
         : id === 'canyon'
-        ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
-        : `url(/res/backdrop-alps-forest.webp)`;
-    // (cards are compact on the home screen: name only, subtitle as tooltip)
-    b.innerHTML = `<i class="thumb" style="background-image:${thumb};${id === 'foret' ? 'filter:hue-rotate(-12deg) saturate(1.2) brightness(0.9)' : ''}"></i>${r.name}`;
+          ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
+          : `url(/res/backdrop-alps-forest.webp)`;
+    const photo = id === 'alpes' || id === 'foret';
+    b.innerHTML = `<i class="thumb${photo ? ' photo' : ''}" style="background-image:${thumb};${id === 'foret' ? 'filter:hue-rotate(-12deg) saturate(1.2) brightness(0.9);background-position:78% 96%' : ''}"></i><span>${r.name}</span>`;
     b.title = r.subtitle;
     b.addEventListener('click', () => {
       settings.region = id as RegionId;
       saveSettings(settings);
-      for (const el of box.querySelectorAll('.region-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
+      for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
       game.newRun({ ...runOpts(), mode: 'cruising' });
       game.state = 'title';
       updateBest();
@@ -240,11 +355,17 @@ function start(): void {
   void immersive();
   controls.reset();
   const model = bikeById(profile.bike);
-  renderer.setPlayerModel(model);
+  renderer.setPlayerModel(model, outfit());
   audio.setElectric(!!model.electric);
   game.newRun(runOpts());
   renderer.render(game, 0, true);
   show('none');
+}
+
+/** JOUER: cruising starts at once, circuit modes open the circuit picker. */
+function play(): void {
+  if (isCircuitMode(profile.mode)) openCircuits();
+  else start();
 }
 
 function pause(): void {
@@ -279,49 +400,71 @@ const OVER_TITLES: Record<string, string> = {
   fuel: "PANNE D'ESSENCE !",
   stamina: 'PILOTE ÉPUISÉ !',
   time: 'TEMPS ÉCOULÉ !',
-  lives: 'PLUS DE CASQUES !',
   quit: 'PARTIE ARRÊTÉE',
 };
 
-/** Bank the run: coins, record, championship progress. Shows the results when asked. */
+/** Bank the run: coins, records, circuit medals. Shows the results when asked. */
 function finishRun(display: boolean): void {
   const r = game.result;
   if (!r) return;
+  const mode = game.mode;
+  let bestText = '';
+  if (isCircuitMode(mode) && r.circuit) {
+    const key = circuitKey(mode, game.region, r.circuit);
+    const old = profile.circuits[key] ?? { medal: 0, done: false };
+    if (r.reason === 'finish') {
+      const nr: CircuitRecord = { ...old, done: true };
+      if (r.time !== undefined && (old.time === undefined || r.time < old.time)) {
+        r.newRecord = old.time !== undefined;
+        nr.time = r.time;
+      }
+      if (r.place !== undefined && (old.place === undefined || r.place < old.place)) nr.place = r.place;
+      const medal = r.medal ?? 0;
+      if (medal > old.medal) {
+        const bonus = MEDAL_BONUS[medal] - MEDAL_BONUS[old.medal];
+        r.lines.push({ label: `Médaille ${MEDAL_NAMES[medal]} (nouvelle)`, coins: bonus });
+        r.total += bonus;
+        nr.medal = medal;
+      }
+      profile.circuits[key] = nr;
+      // the next circuit becomes the selection
+      if (r.circuit < CIRCUITS) profile.circuitSel[`${mode}:${game.region}`] = r.circuit + 1;
+    }
+    const cur = profile.circuits[key];
+    bestText = cur?.time !== undefined ? `Record : ${fmtTime(cur.time)}` : cur?.place ? `Meilleure place : ${cur.place}${cur.place === 1 ? 're' : 'e'}` : '';
+  } else {
+    const key = bestKey(mode, game.region);
+    if (r.score > (profile.best[key] ?? 0)) {
+      r.newRecord = (profile.best[key] ?? 0) > 0;
+      profile.best[key] = r.score;
+    }
+    bestText = 'Record : ' + (profile.best[key] ?? 0).toLocaleString('fr-FR') + ' m';
+  }
   profile.coins += r.total;
   profile.totalEarned += r.total;
-  const key = bestKey(game.mode, game.region);
-  if (r.score > (profile.best[key] ?? 0)) {
-    r.newRecord = (profile.best[key] ?? 0) > 0 || game.mode !== 'course';
-    profile.best[key] = r.score;
-  }
-  if (game.mode === 'course' && r.place) {
-    if (r.place <= 3) {
-      profile.racePoints++;
-      if (profile.racePoints >= 3) {
-        profile.raceLevel++;
-        profile.racePoints = 0;
-        r.levelUp = true;
-      }
-    } else if (r.place >= 7 && profile.racePoints > 0) profile.racePoints--;
-  }
   saveP();
   if (!display) return;
   let title = OVER_TITLES[r.reason] ?? 'FIN';
-  if (r.reason === 'finish') title = game.mode === 'trial' ? 'ÉPREUVE TERMINÉE !' : r.place === 1 ? 'VICTOIRE !' : r.place! <= 3 ? 'PODIUM !' : `${r.place}e PLACE`;
+  if (r.reason === 'finish') {
+    if (mode === 'course') title = r.place === 1 ? 'VICTOIRE !' : r.place! <= 3 ? 'PODIUM !' : `${r.place}e PLACE`;
+    else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
+  }
   $('over-title').textContent = title;
-  $('over-score-label').textContent = game.mode === 'trial' ? 'Zones' : game.mode === 'course' ? 'Classement' : 'Distance';
+  $('over-score-label').textContent = mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;
-  $('over-best').textContent = 'Record : ' + fmtBest(game.mode, profile.best[key] ?? 0);
+  $('over-best').textContent = bestText;
   $('over-record').classList.toggle('hidden', !r.newRecord);
-  const lu = $('over-levelup');
-  lu.classList.toggle('hidden', game.mode !== 'course' || !r.place);
-  lu.innerHTML = r.levelUp ? `NIVEAU ${profile.raceLevel} ATTEINT ! (${levelTier(profile.raceLevel).name})` : game.mode === 'course' ? `Niveau ${profile.raceLevel} · podiums ${profile.racePoints}/3` : '';
+  const om = $('over-medal');
+  om.classList.toggle('hidden', !r.medal);
+  om.innerHTML = r.medal ? `${medalIco(r.medal)} Médaille ${MEDAL_NAMES[r.medal]}` : '';
   const st = $('over-standings');
   st.classList.toggle('hidden', !r.standings);
   st.innerHTML = (r.standings ?? []).map((s) => `<li class="${s.you ? 'you' : ''}">${s.name}${s.you ? '' : `<small>Niv.${s.level}</small>`}</li>`).join('');
   $('over-lines').innerHTML = r.lines.map((l) => `<li><span>${l.label}</span><b>+${l.coins}</b></li>`).join('') || '<li><span>Rien cette fois</span><b>0</b></li>';
   $('over-total').textContent = `+${r.total}`;
   $('over-wallet').textContent = profile.coins.toLocaleString('fr-FR');
+  const canNext = isCircuitMode(mode) && r.reason === 'finish' && !!r.circuit && r.circuit < CIRCUITS;
+  $('btn-next').classList.toggle('hidden', !canNext);
   show('over');
 }
 
@@ -333,16 +476,32 @@ function openGarage(from: ScreenName): void {
 garage.onChange = () => {
   updateBest();
   if (game.state === 'title') {
-    renderer.setPlayerModel(bikeById(profile.bike));
+    renderer.setPlayerModel(bikeById(profile.bike), outfit());
     game.newRun({ ...runOpts(), mode: 'cruising' });
     game.state = 'title';
     audio.setElectric(!!game.model.electric);
   }
 };
 
-$('btn-play').addEventListener('click', start);
-$('btn-again').addEventListener('click', start);
-$('btn-restart').addEventListener('click', start);
+$('btn-play').addEventListener('click', play);
+$('btn-circ-go').addEventListener('click', start);
+$('btn-circuits-back').addEventListener('click', () => {
+  refreshTitle();
+  show('title');
+});
+$('btn-again').addEventListener('click', () => {
+  // replay the same circuit (finishing moved the selection to the next one)
+  if (game.circuit) profile.circuitSel[`${game.mode}:${game.region}`] = game.circuit;
+  start();
+});
+$('btn-next').addEventListener('click', () => {
+  profile.circuitSel[`${game.mode}:${game.region}`] = Math.min(CIRCUITS, game.circuit + 1);
+  start();
+});
+$('btn-restart').addEventListener('click', () => {
+  if (game.circuit) profile.circuitSel[`${game.mode}:${game.region}`] = game.circuit;
+  start();
+});
 $('btn-resume').addEventListener('click', resume);
 $('btn-home').addEventListener('click', home);
 $('btn-home2').addEventListener('click', home);

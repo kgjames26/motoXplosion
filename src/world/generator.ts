@@ -4,6 +4,7 @@ import type { World } from './world';
 import { BridgeKind, RegionDef } from './regions';
 import { AssetDef, AssetGroup, assetsFor, Slot } from '../catalog';
 import { ENDURO_CP, ModeId, raceLength } from '../modes';
+import { circuitGrade, circuitLength, isCircuitMode, trialZones } from '../circuits';
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -42,6 +43,7 @@ type FeatureName =
   | 'logs'
   | 'rocks'
   | 'enduroObs'
+  | 'bigHill'
   // desert
   | 'dunes'
   | 'wadi'
@@ -193,6 +195,12 @@ export class Generator {
   private raceLen: number;
   private palette: Partial<Record<Slot, AssetDef[]>> = {};
   private paletteEnd = -1;
+  /** Circuit grade 0..1 (circuits only). */
+  private grade = 0;
+  /** Track drawing multiplier: cruising +5 %, race circuits +35 % on top of that. */
+  private hard = 1;
+  private trialZones = Infinity;
+  private trialDone = false;
 
   constructor(
     private world: World,
@@ -200,20 +208,32 @@ export class Generator {
     private region: RegionDef,
     private mode: ModeId = 'cruising',
     level = 1,
+    private circuit = 0,
   ) {
     this.rng = new Rng(seed);
     this.biome = region.start;
     this.biomeEnd = 380;
-    this.raceLen = raceLength(level);
+    const circ = circuit > 0 && isCircuitMode(mode);
+    if (!circ) this.circuit = 0;
+    this.grade = circ ? circuitGrade(circuit) : 0;
+    this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
+    this.hard = mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.35 : 1;
+    if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     // A calm start straight.
     this.queue.push(this.flat(mode === 'trial' ? 20 : 60, Surface.Dirt));
     this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
-    if (mode === 'course') this.world.marks.push({ x0: 5 + this.raceLen, x1: 7 + this.raceLen, kind: 'finish' });
+    if (mode === 'course' || (circ && mode === 'enduro')) this.setFinish(5 + this.raceLen);
   }
 
-  /** Difficulty 0..1 grows with distance. */
+  private setFinish(x: number): void {
+    this.world.finishX = x;
+    this.world.marks.push({ x0: x, x1: x + 2, kind: 'finish' });
+  }
+
+  /** Difficulty 0..1: grows with distance (endless) or with the circuit number. */
   private difficulty(x: number): number {
+    if (this.circuit) return clamp(0.1 + this.grade * 0.75 + x / 20000, 0, 1);
     return clamp(x / 5000, 0, 1);
   }
 
@@ -248,7 +268,7 @@ export class Generator {
   /** Decide what comes next: maybe switch biome, then a base stretch and a feature. */
   private plan(): void {
     const x = this.segX0;
-    if (this.mode === 'course' && x > this.raceLen + 5) {
+    if (x > this.world.finishX - 5 || this.trialDone) {
       // after the finish line: a long calm run-out
       this.queue.push(this.flat(300, Surface.Dirt));
       return;
@@ -276,7 +296,7 @@ export class Generator {
       // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
       feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
     } else if (this.mode === 'enduro') {
-      feats = { ...def.features, enduroObs: 5, ford: 2, climb: 2, descent: 2, rocks: 2, logs: 1.5 };
+      feats = { ...def.features, enduroObs: 5, ford: 2, climb: 2, descent: 2, rocks: 2, logs: 1.5, bigHill: this.circuit ? 3.5 + this.grade * 3 : 1.5 };
       delete feats.tabletop;
       delete feats.double;
     }
@@ -290,7 +310,7 @@ export class Generator {
     }
     this.queue.push(...segs);
     const every = this.mode === 'enduro' ? ENDURO_CP : 1000;
-    if (this.mode !== 'course' && x + 120 > this.nextCheckpoint) {
+    if (this.mode !== 'course' && x + 120 > this.nextCheckpoint && this.nextCheckpoint < this.world.finishX - 100) {
       const cx = this.nextCheckpoint;
       this.world.marks.push({ x0: cx, x1: cx + 2, kind: 'checkpoint', n: Math.round(cx / every) });
       this.nextCheckpoint += every;
@@ -305,7 +325,11 @@ export class Generator {
   private planTrial(): void {
     const r = this.rng;
     const n = ++this.section;
-    const tierMax = n <= 2 ? 1 : n <= 4 ? 2 : 3;
+    const circ = this.circuit > 0;
+    // circuits: big obstacles, harder with the circuit number and along the circuit
+    const pos = circ ? (n - 1) / Math.max(1, this.trialZones - 1) : 0;
+    const level = this.grade * 0.75 + pos * 0.35;
+    const tierMax = circ ? (level < 0.2 ? 1 : level < 0.55 ? 2 : 3) : n <= 2 ? 1 : n <= 4 ? 2 : 3;
     this.queue.push({
       len: 10,
       shape: () => 0,
@@ -316,8 +340,8 @@ export class Generator {
       },
       props: 0.5,
     });
-    const obstacles = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tier <= tierMax);
-    const count = 3 + Math.min(4, Math.floor(n / 2));
+    const obstacles = assetsFor(['trial'], 'obstacle').filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ);
+    const count = circ ? 3 + Math.round(this.grade * 2 + pos) : 3 + Math.min(4, Math.floor(n / 2));
     for (let k = 0; k < count; k++) {
       const a = r.weighted(obstacles, obstacles.map((o) => (o.obstacle!.tier === tierMax ? 3 : 1)));
       this.queue.push(this.obstacleSeg(a));
@@ -334,6 +358,21 @@ export class Generator {
         for (const slot of [0.3, 0.55, 0.8]) this.decor(x0 + r.range(-6, 6), 'trial', undefined, slot);
       },
     });
+    if (n >= this.trialZones) {
+      // last zone: the finish line and the chrono arch
+      this.trialDone = true;
+      this.queue.push({
+        len: 30,
+        shape: () => 0,
+        surface: () => Surface.Dirt,
+        onStart: (x0) => {
+          this.setFinish(x0 + 12);
+          this.decor(x0 + 13, 'trial', 'tb.arch.' + r.int(0, 1), 0.02);
+          for (let k = 0; k < 5; k++) this.decor(x0 + 6 + k * 3, 'trial', undefined, r.range(0.1, 0.4));
+        },
+      });
+      return;
+    }
     this.queue.push(this.base(r.range(14, 22), 0.25));
   }
 
@@ -341,12 +380,29 @@ export class Generator {
   private obstacleSeg(a: AssetDef): Segment {
     const o = a.obstacle!;
     const pad = 0.3;
+    const top = (t: number) => {
+      const u = (t - pad) / o.w;
+      return u <= 0 || u >= 1 ? 0 : o.h * o.profile(u);
+    };
+    if (o.big) {
+      // big trial obstacles: packed-earth ramps against both faces (as on real trial
+      // sections) keep every face at ≤ ~50°, so they are climbable at walking pace
+      const ramp = o.h * 0.75;
+      const len = o.w + ramp * 2;
+      const slope = o.h / ramp;
+      return {
+        len,
+        shape: (t) => Math.max(top(t - ramp + pad), Math.min(o.h * 0.92, t * slope, (len - t) * slope)),
+        visual: (t) => Math.min(o.h * 0.92, t * slope, (len - t) * slope) * (t < ramp || t > len - ramp ? 1 : 0),
+        surface: () => (a.id.includes('rock') || a.id.includes('boulder') || a.id.includes('stone') || a.id.includes('slab') ? Surface.Rock : Surface.Wood),
+        noPickup: [[0, len]],
+        onStart: (x0, h0) => this.world.props.push({ x: x0 + ramp + o.w / 2, kind: 'asset', asset: a.id, depth: 0, scale: 1, variant: 0, flip: false, baseY: h0 }),
+        props: 0.3,
+      };
+    }
     return {
       len: o.w + pad * 2,
-      shape: (t) => {
-        const u = (t - pad) / o.w;
-        return u <= 0 || u >= 1 ? 0 : o.h * o.profile(u);
-      },
+      shape: top,
       // the drawn obstacle stands on the flat ground: the track band does not bulge under it
       visual: () => 0,
       surface: () => (a.id.includes('rock') || a.id.includes('stone') ? Surface.Rock : Surface.Wood),
@@ -427,7 +483,7 @@ export class Generator {
     const seed = this.rng.int(0, 1e6);
     const pull = clamp(-this.segH0 / 260, -0.08, 0.08);
     const trend = clamp(this.rng.range(-def.trend, def.trend) + pull, -0.22, 0.22);
-    const amp = def.baseAmp * ampScale;
+    const amp = def.baseAmp * ampScale * this.hard;
     const wave = def.baseWave;
     const n0 = fbm1(0, seed, 4);
     return {
@@ -441,9 +497,10 @@ export class Generator {
 
   private feature(name: FeatureName, d: number): Segment[] {
     const r = this.rng;
+    const k = this.hard;
     switch (name) {
       case 'tabletop': {
-        const H = r.range(1.0, 1.7) + d * 0.5;
+        const H = (r.range(1.0, 1.7) + d * 0.5) * k;
         const Lr = H * r.range(4.2, 5); // ~14° lip: realistic, not a launch pad
         const top = r.range(7, 13);
         const Ld = H * r.range(5, 6.5);
@@ -466,7 +523,7 @@ export class Generator {
       case 'double':
       case 'gap': {
         const gap = name === 'gap';
-        const H = r.range(1.0, 1.5) + d * 0.4;
+        const H = (r.range(1.0, 1.5) + d * 0.4) * k;
         const Lr = H * r.range(4, 4.8);
         const down = gap ? r.range(2, 3.5) + d * 2 : 0;
         const fall = (H + down) / 0.9;
@@ -501,7 +558,7 @@ export class Generator {
         ];
       }
       case 'stepUp': {
-        const H = r.range(0.7, 1.2) + d * 0.3;
+        const H = (r.range(0.7, 1.2) + d * 0.3) * k;
         const L = H * 5;
         return [
           this.flat(4),
@@ -510,7 +567,7 @@ export class Generator {
       }
       case 'drop': {
         const kick = 0.12;
-        const D = r.range(1.0, 1.8) + d * 0.5;
+        const D = (r.range(1.0, 1.8) + d * 0.5) * k;
         const lipLen = 3;
         const faceLen = D / 0.75;
         const runout = 8;
@@ -531,7 +588,7 @@ export class Generator {
       case 'whoops': {
         const n = r.int(6, 11);
         const s = r.range(3.2, 4.4);
-        const a = r.range(0.22, 0.38) + d * 0.1;
+        const a = (r.range(0.22, 0.38) + d * 0.1) * k;
         return [
           {
             len: n * s,
@@ -544,7 +601,7 @@ export class Generator {
       case 'rollers': {
         const n = r.int(3, 5);
         const s = r.range(13, 17);
-        const a = r.range(0.6, 1.0) + d * 0.2;
+        const a = (r.range(0.6, 1.0) + d * 0.2) * k;
         return [{ len: n * s, shape: (t) => a * sin2(t / s) }];
       }
       case 'berm': {
@@ -552,7 +609,7 @@ export class Generator {
         return [
           {
             len: L,
-            shape: (t) => 0.7 * sin2(t / L),
+            shape: (t) => 0.7 * k * sin2(t / L),
             surface: () => Surface.Dirt,
             onStart: (x0) => this.world.marks.push({ x0, x1: x0 + L, kind: 'berm' }),
           },
@@ -658,8 +715,8 @@ export class Generator {
         // asymmetric dunes: long gentle windward rise, rounded crest, steeper (but safe) lee
         const n = r.int(2, 4);
         const out: Segment[] = [];
-        for (let k = 0; k < n; k++) {
-          const H = r.range(1.2, 2.6) + d * 0.5;
+        for (let j = 0; j < n; j++) {
+          const H = (r.range(1.2, 2.6) + d * 0.5) * k;
           const up = H / r.range(0.12, 0.17);
           const down = H / r.range(0.24, 0.32);
           const crest = r.range(3, 6);
@@ -725,7 +782,7 @@ export class Generator {
         // sandstone steps: up two or three low rock shelves with ramps, then a long ramp down
         const steps = r.int(2, 3);
         const hs: number[] = [];
-        for (let k = 0; k < steps; k++) hs.push(r.range(0.35, 0.6));
+        for (let j = 0; j < steps; j++) hs.push(r.range(0.35, 0.6) * k);
         const ramp = 1.6;
         const shelf = r.range(4, 7);
         const total = hs.reduce((a, b) => a + b, 0);
@@ -765,6 +822,54 @@ export class Generator {
           },
         ];
       }
+      case 'bigHill': {
+        // enduro: a big hill to climb then ride down without falling, bumps and steps on the
+        // faces; higher and steeper with the circuit number
+        const g = this.circuit ? this.grade : d * 0.5;
+        const H = r.range(7, 10) + g * 12;
+        const sUp = r.range(0.2, 0.25) + g * 0.12; // mean slope (peak ≈ 1.5×)
+        const sDn = r.range(0.22, 0.27) + g * 0.12;
+        const up = H / sUp;
+        const dn = H / sDn;
+        const crest = r.range(4, 9);
+        const bump = 0.12 + g * 0.22;
+        const seed = r.int(0, 1e5);
+        const L = up + crest + dn;
+        const steps: number[] = [];
+        if (g > 0.3) for (let j = 0; j < 1 + Math.floor(g * 3); j++) steps.push(r.range(0.2, 0.85));
+        return [
+          this.flat(6),
+          {
+            len: L,
+            shape: (t) => {
+              let y: number;
+              if (t < up) y = H * ease(t / up);
+              else if (t < up + crest) y = H;
+              else y = H * (1 - ease((t - up - crest) / dn));
+              // bumps fade out near the foot and the crest
+              const face = t < up ? sin2(t / up) : t > up + crest ? sin2((t - up - crest) / dn) : 0;
+              y += bump * face * (0.5 + 0.5 * noise1(t / 2.2, seed));
+              // small rock steps on the climb
+              for (const u of steps) {
+                const sx = u * up;
+                if (t > sx && t < sx + 3) y += 0.22 * smoothstep((t - sx) / 0.35);
+                else if (t >= sx + 3 && t < sx + 4) y += 0.22 * (1 - smoothstep(t - sx - 3));
+              }
+              return y;
+            },
+            surface: (t) => (noise1(t / 9, seed + 3) > 0.35 ? Surface.Rock : Surface.Dirt),
+            noPickup: [[0, L]],
+            onStart: (x0, h0) => {
+              this.decor(x0 - 3, 'enduro', 'eb.steep.0', 0.1);
+              this.decor(x0 + up + crest + 1, 'enduro', 'eb.steep.1', 0.1);
+              this.decor(x0 + up + crest / 2, 'enduro', 'eb.hillflag.' + r.int(0, 3), 0.06);
+              void h0;
+            },
+            props: 0.8,
+          },
+          this.flat(5),
+        ];
+      }
       case 'enduroObs': {
         // one to three enduro obstacles (roots, fallen trees, stones, mossy logs) in a row
         const list = assetsFor(['enduro'], 'obstacle');
@@ -801,7 +906,7 @@ export class Generator {
       case 'rocks': {
         const L = r.range(14, 24);
         const bumps: [number, number, number][] = [];
-        for (let x = 1.5; x < L - 1.5; x += r.range(1.4, 3)) bumps.push([x, r.range(0.08, 0.2) + d * 0.05, r.range(0.6, 1.2)]);
+        for (let x = 1.5; x < L - 1.5; x += r.range(1.4, 3)) bumps.push([x, (r.range(0.08, 0.2) + d * 0.05) * k, r.range(0.6, 1.2)]);
         return [
           {
             len: L,
@@ -935,6 +1040,8 @@ export class Generator {
       for (let x = x0; x < x1; x += dense(x) ? r.range(2.5, 5) : r.range(12, 24)) put('trackside', x, r.range(0.04, 0.4), 1);
       if (this.mode === 'course' && x0 <= this.raceLen + 5 && x1 > this.raceLen + 5) this.decor(this.raceLen + 6, 'course', 'c.finish.' + r.int(0, 3), 0.02);
       if (this.mode === 'course' && x0 < 10) this.decor(4, 'course', 'c.startgate.0', 0.02);
+      const fx = this.world.finishX;
+      if (this.mode === 'enduro' && x0 <= fx && x1 > fx) this.decor(fx + 1, 'enduro', 'eb.finish.' + r.int(0, 2), 0.02);
     }
   }
 }

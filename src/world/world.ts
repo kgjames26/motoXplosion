@@ -45,6 +45,8 @@ export class World {
   coins: Coin[] = [];
   bridges: Bridge[] = [];
   marks: TrackMark[] = [];
+  /** Circuits: x of the finish line, once the generator has placed it. */
+  finishX = Infinity;
   private gen: Generator;
 
   readonly region: RegionDef;
@@ -55,9 +57,11 @@ export class World {
     readonly mode: ModeId = 'cruising',
     /** Course: championship level (race length, density). */
     readonly level = 1,
+    /** Circuit number (1..25) for trial / enduro / course, 0 = endless. */
+    readonly circuit = 0,
   ) {
     this.region = REGIONS[regionId];
-    this.gen = new Generator(this, seed, this.region, mode, level);
+    this.gen = new Generator(this, seed, this.region, mode, level, circuit);
   }
 
   /** True when x is over a bridge deck (no ground band drawn there). */

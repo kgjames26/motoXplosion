@@ -34,8 +34,7 @@
           </div>
           <div class="hud-timer panel" id="hud-timer"><svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="13" r="8" /><path d="M12 13V8M9 2h6" /></svg><b id="timer">1:10</b></div>
           <div class="hud-trial" id="hud-trial">
-            <div class="lives" id="lives"></div>
-            <div class="trial-info panel"><span>ZONE</span><b id="trial-zone">0/15</b><span>POINTS</span><b id="trial-faults">0</b></div>
+            <div class="trial-info panel"><span>ZONE</span><b id="trial-zone">0/4</b><span>CHUTES</span><b id="trial-falls">0</b></div>
           </div>
           <div class="hud-race panel" id="hud-race"><b id="race-pos">1</b><small id="race-pos-sfx">er</small><span>/8</span></div>
           <div class="energies">
@@ -71,6 +70,7 @@
 
         <div class="hud-coins panel" id="hud-coins"><i class="coin-ico"></i><b id="coins">0</b></div>
         <div class="hud-level" id="hud-level"></div>
+        <div class="hud-mult panel" id="hud-mult">BONUS <b id="mult">×1</b></div>
         <button class="hud-tr panel btn-pause" id="btn-pause" aria-label="Pause">
           <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
         </button>
@@ -132,20 +132,25 @@
           <div class="tag">CRUISING MOTOCROSS ADVENTURE</div>
         </div>
         <div class="wallet panel" id="title-wallet"><i class="coin-ico"></i><b id="title-coins">0</b></div>
+        <button class="icon-btn" id="btn-settings-title" aria-label="Options">
+          <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
+        </button>
         <div class="title-menu">
-          <div class="modes" id="modes"></div>
-          <div class="mode-desc" id="mode-desc"></div>
-          <div class="course-opts hidden" id="course-opts">
-            <div class="level-badge" id="level-badge"></div>
-            <div class="diffs" id="diffs"></div>
+          <div class="pick-box">
+            <div class="pick-label">MODE</div>
+            <div class="mode-cards" id="modes"></div>
           </div>
-          <button class="btn-slant btn-jouer" id="btn-play">JOUER</button>
-          <div class="regions" id="regions"></div>
-          <div class="title-row">
-            <button class="btn-slant small" id="btn-settings-title">OPTIONS</button>
-            <button class="btn-slant small garage" id="btn-garage">GARAGE</button>
-            <div class="best">RECORD <b id="best-title">0</b></div>
+          <div class="pick-box">
+            <div class="pick-label">MONDE</div>
+            <div class="world-cards" id="regions"></div>
           </div>
+        </div>
+        <div class="title-bottom">
+          <button class="btn-slant garage-big" id="btn-garage">
+            <svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg>GARAGE
+          </button>
+          <div class="title-info"><div class="mode-desc" id="mode-desc"></div><div class="best">RECORD <b id="best-title">0</b></div></div>
+          <button class="btn-slant btn-jouer" id="btn-play">JOUER <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg></button>
         </div>
         <div class="loading" id="loading">Chargement…</div>
         <div class="version" id="version"></div>
@@ -170,7 +175,7 @@
           <div class="over-left">
             <div class="over-score panel"><span id="over-score-label">Distance</span><b id="over-score">0 m</b><small id="over-best">Record : 0</small></div>
             <div class="new-record hidden" id="over-record">NOUVEAU RECORD !</div>
-            <div class="level-up hidden" id="over-levelup"></div>
+            <div class="over-medal hidden" id="over-medal"></div>
             <ol class="standings panel hidden" id="over-standings"></ol>
           </div>
           <div class="over-coins panel">
@@ -182,15 +187,38 @@
         </div>
         <div class="row">
           <button class="btn-primary" id="btn-again"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" /></svg> REJOUER</button>
+          <button class="btn-primary hidden" id="btn-next">SUIVANT <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM16 5h3v14h-3z" /></svg></button>
           <button class="btn-secondary" id="btn-garage2">GARAGE</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
+        </div>
+      </div>
+
+      <div id="screen-circuits" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="btn-circuits-back">‹ RETOUR</button>
+          <div class="circ-title"><b id="circ-mode">Trial</b><span id="circ-world">Alpes</span></div>
+          <div class="circ-medals panel" id="circ-medals"></div>
+        </div>
+        <div class="circ-body">
+          <div class="circ-grid" id="circ-grid"></div>
+          <div class="circ-info panel">
+            <div class="circ-num" id="circ-num">Circuit 1</div>
+            <div class="circ-meta" id="circ-meta"></div>
+            <div class="diffs hidden" id="circ-diffs"></div>
+            <ul class="circ-goals" id="circ-goals"></ul>
+            <div class="circ-best" id="circ-best"></div>
+            <button class="btn-primary circ-go" id="btn-circ-go"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> PARTIR</button>
+          </div>
         </div>
       </div>
 
       <div id="screen-garage" class="screen hidden">
         <div class="garage-top">
           <button class="btn-secondary" id="btn-garage-back">‹ RETOUR</button>
-          <h2>GARAGE</h2>
+          <div class="garage-tabs" id="garage-tabs">
+            <button class="g-tab selected" data-tab="bikes"><svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg>MOTOS</button>
+            <button class="g-tab" data-tab="outfits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3l-5 3 2 5 2-1v11h10V10l2 1 2-5-5-3c-.5 1.5-2 2.5-4 2.5S8.5 4.5 8 3z" /></svg>TENUES</button>
+          </div>
           <div class="wallet panel"><i class="coin-ico"></i><b id="garage-coins">0</b></div>
         </div>
         <div class="garage-body">
@@ -201,6 +229,7 @@
             <div class="g-tag" id="g-tag"></div>
             <p class="g-desc" id="g-desc"></p>
             <div class="g-stats" id="g-stats"></div>
+            <div class="g-swatches" id="g-swatches"></div>
             <button class="btn-primary g-action" id="g-action">CHOISIR</button>
           </div>
           <button class="garage-arrow" id="garage-next" aria-label="Moto suivante">›</button>

@@ -1051,3 +1051,5 @@ for (let i = 0; i < 2; i++)
   );
 
 export const NATURE_ASSETS = out;
+
+export { trunk, rockShape, quad, house, RED };

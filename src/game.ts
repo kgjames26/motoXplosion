@@ -1,7 +1,8 @@
 import { aiInput, createOpponents, Opponent } from './ai';
 import { BikeModel, BIKES } from './bikes';
 import { clamp, wrapAngle } from './core/math';
-import { Difficulty, ENDURO_BONUS, ENDURO_START, ModeId, raceLength, TRIAL_SECTIONS } from './modes';
+import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
+import { Difficulty, ModeId, raceLength } from './modes';
 import { Bike, BikeInput } from './physics/bike';
 import { Particles } from './render/particles';
 import type { RegionId } from './world/regions';
@@ -56,7 +57,10 @@ export interface RunResult {
   /** Course: final standings. */
   standings?: { name: string; level: number; you: boolean }[];
   place?: number;
-  levelUp?: boolean;
+  /** Circuits: chrono (penalties included) and medal. */
+  time?: number;
+  medal?: Medal;
+  circuit?: number;
 }
 
 export interface RunOptions {
@@ -64,12 +68,18 @@ export interface RunOptions {
   mode: ModeId;
   model: BikeModel;
   difficulty: Difficulty;
-  raceLevel: number;
+  /** Circuit number (1..25) for trial / enduro / course. */
+  circuit: number;
 }
 
 const PHYSICS_DT = 1 / 300;
 export const CHECKPOINT_EVERY = 1000;
-const PRIZES = [150, 100, 70, 50, 35, 25, 18, 12];
+const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
+/** Trial: seconds added for each fall. */
+export const TRIAL_PENALTY = 15;
+/** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
+export const CRUISE_STEP = 0.25;
+export const CRUISE_MAX = 4;
 
 /**
  * Game rules for every mode: energies, pickups and coins, crashes and respawns, trial sections,
@@ -83,6 +93,16 @@ export class Game {
   model: BikeModel = BIKES[0];
   difficulty: Difficulty = 'normal';
   raceLevel = 1;
+  circuit = 0;
+  /** Circuit chrono (s), started at GO, stopped at the finish. */
+  clock = 0;
+  /** Trial: seconds of fall penalties. */
+  penalty = 0;
+  falls = 0;
+  // cruising "long ride" bonus
+  cruiseLevel = 0;
+  cruiseCoins = 0;
+  private cruiseLastDist = 0;
   world!: World;
   bike = new Bike();
   particles = new Particles();
@@ -102,18 +122,12 @@ export class Game {
   coinsRun = 0;
   stuntCoins = 0;
   // trial
-  lives = 3;
   section = 0;
+  zones = 0;
   inSection = false;
-  sectionFaults = 0;
-  totalFaults = 0;
   sectionsCleared = 0;
-  cleanSections = 0;
   private sectionStartX = 0;
-  private stopTimer = 0;
-  private dabbed = false;
   // enduro
-  timeLeft = ENDURO_START;
   checkpoints = 0;
   // course
   opponents: Opponent[] = [];
@@ -149,9 +163,11 @@ export class Game {
     this.mode = opts.mode ?? this.mode;
     this.model = opts.model ?? this.model;
     this.difficulty = opts.difficulty ?? this.difficulty;
-    this.raceLevel = opts.raceLevel ?? this.raceLevel;
-    const seed = (Math.random() * 2 ** 31) | 0;
-    this.world = new World(seed, this.region, this.mode, this.raceLevel);
+    this.circuit = isCircuitMode(this.mode) ? Math.max(1, opts.circuit ?? this.circuit) : 0;
+    const cm = this.mode as CircuitMode;
+    this.raceLevel = this.circuit ? circuitRaceLevel(this.circuit) : 1;
+    const seed = this.circuit ? circuitSeed(cm, this.region, this.circuit) : (Math.random() * 2 ** 31) | 0;
+    this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit);
     this.world.ensure(220);
     this.bike = new Bike(this.model.spec);
     this.bike.reset(this.world, this.startX);
@@ -170,21 +186,24 @@ export class Game {
     this.acc = 0;
     this.coinsRun = 0;
     this.stuntCoins = 0;
-    this.lives = 3;
     this.section = 0;
+    this.zones = this.mode === 'trial' ? trialZones(this.circuit) : 0;
     this.inSection = false;
-    this.sectionFaults = 0;
-    this.totalFaults = 0;
     this.sectionsCleared = 0;
-    this.cleanSections = 0;
-    this.timeLeft = ENDURO_START;
+    this.sectionStartX = this.startX;
     this.checkpoints = 0;
+    this.clock = 0;
+    this.penalty = 0;
+    this.falls = 0;
+    this.cruiseLevel = 0;
+    this.cruiseCoins = 0;
+    this.cruiseLastDist = 0;
     this.finished = false;
     this.finishOrder = [];
     this.finishDelay = 0;
     this.place = 0;
     this.result = null;
-    this.raceLen = raceLength(this.raceLevel);
+    this.raceLen = this.circuit && this.mode !== 'trial' ? circuitLength(cm, this.circuit) : raceLength(this.raceLevel);
     this.finishX = this.startX + this.raceLen;
     this.opponents = this.mode === 'course' ? createOpponents(this.world, this.startX, this.difficulty, this.raceLevel, seed ^ 0x5bd1e995) : [];
     this.countdown = this.mode === 'course' ? 3.2 : 0;
@@ -250,13 +269,21 @@ export class Game {
       this.pickups();
     }
     this.collectCoins();
+    if (this.circuit && !this.finished) this.clock += dt;
 
     // ---- mode rules
     if (this.mode === 'cruising') {
+      // the long-ride bonus: distance pays more and more as the kilometres add up
+      const dd = this.distance - this.cruiseLastDist;
+      if (dd > 0) {
+        this.cruiseCoins += (dd / 20) * this.cruiseMult;
+        this.cruiseLastDist = this.distance;
+      }
       const cp = Math.floor(this.distance / CHECKPOINT_EVERY);
       if (cp > this.lastCheckpoint) {
         this.lastCheckpoint = cp;
-        this.popup(bike.x + 2, bike.y + 2.5, `${cp * CHECKPOINT_EVERY} m !`, '#ffffff');
+        if (this.cruiseMult < CRUISE_MAX) this.cruiseLevel++;
+        this.popup(bike.x + 2, bike.y + 2.5, `${cp * CHECKPOINT_EVERY} m !  BONUS ×${fmtMult(this.cruiseMult)}`, '#ffd23f');
         this.events.checkpoint = true;
       }
     } else if (this.mode === 'enduro') this.enduroRules(dt);
@@ -293,7 +320,7 @@ export class Game {
     if (this.crashTimer > 0) {
       this.crashTimer -= dt;
       this.updateRagdoll(dt);
-      if (this.crashTimer <= 0) this.respawn(this.mode === 'trial' ? this.sectionStartX || bike.x + 1 : bike.x + 1);
+      if (this.crashTimer <= 0) this.respawn(this.mode === 'trial' ? this.sectionStartX : bike.x + 1);
     } else if (!this.finished) this.rescueIfStuck(dt);
 
     // ---- end conditions
@@ -313,76 +340,72 @@ export class Game {
     return this.mode === 'cruising' || this.mode === 'enduro';
   }
 
+  /** Cruising distance multiplier (×1 → ×4). */
+  get cruiseMult(): number {
+    return Math.min(CRUISE_MAX, 1 + this.cruiseLevel * CRUISE_STEP);
+  }
+
+  /** Circuit time shown to the player (trial penalties included). */
+  get chrono(): number {
+    return this.clock + this.penalty;
+  }
+
+  /** Circuits: 0..1 progress to the finish line. */
+  get progress(): number {
+    if (this.mode === 'trial') {
+      const f = this.world.finishX;
+      const within = this.inSection ? 0.5 : 0;
+      return isFinite(f) ? clamp((this.bike.x - this.startX) / (f - this.startX), 0, 1) : clamp((this.sectionsCleared + within) / this.zones, 0, 0.97);
+    }
+    return clamp((this.bike.x - this.startX) / this.raceLen, 0, 1);
+  }
+
+  /** Circuits: reached the finish line (player only). */
+  private checkFinish(): void {
+    if (this.finished || this.bike.x < this.world.finishX) return;
+    this.finished = true;
+    const t = this.chrono;
+    this.popup(this.bike.x + 2, this.bike.y + 3, `ARRIVÉE !  ${fmtClock(t)}`, '#ffd23f');
+    this.events.finish = 1;
+    setTimeout(() => this.endRun('finish'), 1800);
+  }
+
   // ---------------------------------------------------------------- modes
 
   private enduroRules(dt: number): void {
     const bike = this.bike;
-    this.timeLeft -= dt;
+    void dt;
     for (const m of this.world.marks) {
       if (m.kind !== 'checkpoint' || (m.n ?? 0) <= this.checkpoints) continue;
       if (bike.x >= m.x0) {
         this.checkpoints = m.n ?? this.checkpoints + 1;
-        this.timeLeft += ENDURO_BONUS;
-        this.popup(bike.x + 2, bike.y + 2.6, `CONTRÔLE ${this.checkpoints}  +${ENDURO_BONUS} s`, '#7dff7a');
+        this.popup(bike.x + 2, bike.y + 2.6, `CONTRÔLE ${this.checkpoints}  ${fmtClock(this.chrono)}`, '#7dff7a');
         this.events.checkpoint = true;
       }
     }
-    if (this.timeLeft <= 0) {
-      this.timeLeft = 0;
-      this.endRun('time');
-    }
+    this.checkFinish();
   }
 
   private trialRules(dt: number): void {
     const bike = this.bike;
+    void dt;
     for (const m of this.world.marks) {
       if (m.kind === 'sectionStart' && !this.inSection && (m.n ?? 0) === this.section + 1 && bike.x >= m.x0) {
         this.section = m.n!;
         this.inSection = true;
-        this.sectionFaults = 0;
         this.sectionStartX = m.x0 - 3;
-        this.popup(bike.x + 3, bike.y + 3.4, `ZONE ${this.section}`, '#ffffff');
+        this.popup(bike.x + 3, bike.y + 3.4, `ZONE ${this.section}/${this.zones}`, '#ffffff');
         this.events.section = 'start';
       }
       if (m.kind === 'sectionEnd' && this.inSection && m.n === this.section && bike.x >= m.x0) {
         this.inSection = false;
         this.sectionsCleared++;
-        if (this.sectionFaults === 0) {
-          this.cleanSections++;
-          this.popup(bike.x + 2, bike.y + 2.4, 'ZÉRO FAUTE ! +10', '#7dff7a');
-          this.coinsRun += 10;
-          this.events.section = 'clean';
-        } else {
-          this.popup(bike.x + 2, bike.y + 2.4, `${this.sectionFaults} POINT${this.sectionFaults > 1 ? 'S' : ''}`, '#ffd8a0');
-          this.events.section = 'faults';
-        }
-        if (this.sectionsCleared >= TRIAL_SECTIONS) {
-          this.finished = true;
-          this.popup(bike.x + 2, bike.y + 3.2, 'ÉPREUVE TERMINÉE !', '#ffd23f');
-          setTimeout(() => this.endRun('finish'), 1500);
-        }
+        this.sectionStartX = m.x0 + 2;
+        this.popup(bike.x + 2, bike.y + 2.4, 'ZONE FRANCHIE !', '#7dff7a');
+        this.events.section = 'clean';
       }
     }
-    // "dab": stopping in a section is like putting a foot down → 1 point (once per stop)
-    if (this.inSection && this.crashTimer <= 0) {
-      if (bike.speed < 0.25 && bike.grounded) {
-        this.stopTimer += dt;
-        if (this.stopTimer > 1.4 && !this.dabbed) {
-          this.dabbed = true;
-          this.fault(1, 'PIED À TERRE');
-        }
-      } else if (bike.speed > 0.8) {
-        this.stopTimer = 0;
-        this.dabbed = false;
-      }
-    }
-  }
-
-  private fault(n: number, text: string): void {
-    this.sectionFaults += n;
-    this.totalFaults += n;
-    this.popup(this.bike.x, this.bike.y + 2, `${text} +${n}`, '#ff9a5a');
-    this.events.fault = n;
+    this.checkFinish();
   }
 
   private raceRules(dt: number): void {
@@ -472,36 +495,42 @@ export class Game {
     const lines: { label: string; coins: number }[] = [];
     let score = 0;
     let scoreLabel = '';
-    const picked = this.coinsRun - this.stuntCoins - (this.mode === 'trial' ? this.cleanSections * 10 : 0);
+    const picked = this.coinsRun - this.stuntCoins;
     if (picked > 0) lines.push({ label: 'Pièces ramassées', coins: picked });
     if (this.stuntCoins > 0) lines.push({ label: 'Sauts et réceptions', coins: this.stuntCoins });
     let standings: RunResult['standings'];
     let place: number | undefined;
+    let time: number | undefined;
+    let medal: Medal | undefined;
+    const g = circuitGrade(this.circuit);
+    const done = reason === 'finish';
     switch (this.mode) {
       case 'cruising':
         score = Math.round(this.distance);
         scoreLabel = `${score.toLocaleString('fr-FR')} m`;
-        lines.push({ label: 'Distance', coins: Math.floor(score / 20) });
+        lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins) });
         break;
       case 'enduro':
-        score = Math.round(this.distance);
-        scoreLabel = `${score.toLocaleString('fr-FR')} m · ${this.checkpoints} contrôle${this.checkpoints > 1 ? 's' : ''}`;
-        lines.push({ label: 'Distance', coins: Math.floor(score / 30) });
-        if (this.checkpoints) lines.push({ label: 'Contrôles franchis', coins: this.checkpoints * 20 });
-        break;
       case 'trial':
-        score = this.sectionsCleared;
-        scoreLabel = `${score} zone${score > 1 ? 's' : ''} · ${this.totalFaults} point${this.totalFaults > 1 ? 's' : ''}`;
-        if (score) lines.push({ label: 'Zones franchies', coins: score * 15 });
-        if (this.cleanSections) lines.push({ label: 'Zones à zéro faute', coins: this.cleanSections * 10 });
-        if (reason === 'finish') lines.push({ label: 'Épreuve terminée', coins: Math.max(0, 120 - this.totalFaults * 4) });
+        if (done) {
+          time = this.chrono;
+          medal = medalForTime(this.mode, this.circuit, time);
+          score = Math.round(time * 10);
+          scoreLabel = fmtClock(time) + (this.falls ? ` · ${this.falls} chute${this.falls > 1 ? 's' : ''}` : '');
+          lines.push({ label: 'Circuit terminé', coins: Math.round((this.mode === 'trial' ? 25 : 35) + g * 40) });
+        } else {
+          scoreLabel = 'Abandon';
+          if (this.mode === 'enduro') lines.push({ label: 'Distance', coins: Math.floor(this.distance / 40) });
+          else if (this.sectionsCleared) lines.push({ label: 'Zones franchies', coins: this.sectionsCleared * 3 });
+        }
         break;
       case 'course': {
-        if (reason === 'finish') {
+        if (done) {
           place = this.place;
+          medal = medalForPlace(place);
           score = 9 - place;
           scoreLabel = `${place}e / 8`;
-          const mult = (1 + (this.raceLevel - 1) * 0.15) * (this.difficulty === 'facile' ? 0.8 : this.difficulty === 'difficile' ? 1.3 : 1);
+          const mult = (1 + g * 0.6) * (this.difficulty === 'facile' ? 0.8 : this.difficulty === 'difficile' ? 1.3 : 1);
           lines.push({ label: `Prix de la ${place}e place`, coins: Math.round(PRIZES[place - 1] * mult) });
           // final standings: finishers in order, then the others by distance
           const rest = this.opponents.filter((o) => !o.finished).sort((a, b) => b.bike.x - a.bike.x);
@@ -512,7 +541,7 @@ export class Game {
       }
     }
     const total = lines.reduce((a, l) => a + l.coins, 0);
-    return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place };
+    return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place, time, medal, circuit: this.circuit || undefined };
   }
 
   private endRun(reason: OverReason): void {
@@ -604,11 +633,9 @@ export class Game {
       this.progressTimer = 0;
       this.stuckTimer = 0;
       if (this.usesEnergy) this.stamina -= 4;
-      if (trial && this.inSection) {
-        // in trial, being stuck counts as a dab and you retry the obstacle a bit further back
-        this.fault(1, 'PIED À TERRE');
-        this.respawn(bike.x - 2);
-      } else this.respawn(bike.x + 6);
+      // in trial you retry the obstacle from a bit further back (no skipping)
+      if (trial) this.respawn(bike.x - 3);
+      else this.respawn(bike.x + 6);
       this.popup(bike.x, bike.y + 2, 'HOP !', '#ffffff');
     }
   }
@@ -622,15 +649,15 @@ export class Game {
     this.ragdoll = { x: hx, y: hy, vx: bike.vx * 0.8, vy: Math.max(2, bike.vy + 3), angle: bike.angle, omega: -4 - bike.speed * 0.3 };
     this.events.crash = true;
     this.landingDust(1);
+    this.falls++;
     if (this.mode === 'trial') {
-      this.lives--;
-      if (this.inSection) this.fault(5, 'CHUTE');
-      else this.popup(hx, hy + 1.5, 'CHUTE !', '#ff6b5a');
-      if (this.lives <= 0) {
-        this.crashTimer = 1.2;
-        setTimeout(() => this.endRun('lives'), 1200);
-      }
+      this.penalty += TRIAL_PENALTY;
+      this.popup(hx, hy + 1.5, `CHUTE  +${TRIAL_PENALTY} s`, '#ff6b5a');
     } else this.popup(hx, hy + 1.5, 'CHUTE !', '#ff6b5a');
+    if (this.mode === 'cruising' && this.cruiseLevel > 0) {
+      this.cruiseLevel--;
+      this.popup(hx, hy + 2.3, `BONUS ×${fmtMult(this.cruiseMult)}`, '#ffb070');
+    }
   }
 
   private updateRagdoll(dt: number): void {
@@ -665,8 +692,6 @@ export class Game {
     this.resetBikeAt(this.bike, x);
     this.ragdoll = null;
     this.crashTimer = 0;
-    this.stopTimer = 0;
-    this.dabbed = false;
   }
 
   private popup(x: number, y: number, text: string, color: string): void {
@@ -757,4 +782,14 @@ export class Game {
     }
     this.shake = Math.max(0, this.shake - dt * 2.5);
   }
+}
+
+export function fmtMult(m: number): string {
+  return m.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
+}
+
+export function fmtClock(s: number): string {
+  const m = Math.floor(s / 60);
+  const r = s - m * 60;
+  return `${m}:${r.toFixed(1).padStart(4, '0')}`;
 }

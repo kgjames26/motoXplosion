@@ -2,13 +2,16 @@ import * as THREE from 'three';
 import { BIKES, BikeModel, ratings } from '../bikes';
 import { Bike3D, disposeObject } from '../gl/bike3d';
 import { Bike } from '../physics/bike';
+import { OUTFITS, outfitById } from '../outfits';
 import type { Profile } from '../profile';
 
 const $ = (id: string) => document.getElementById(id)!;
 
 /**
- * Garage: browse the 7 bikes in a rotating 3D showroom, compare specs (bars turn green when
- * better than the bike you ride), buy with coins, choose the bike to ride.
+ * Garage: two shelves.
+ *  - MOTOS: browse the 7 bikes in a rotating 3D showroom, compare specs (bars turn green when
+ *    better than the bike you ride), buy with coins, choose the bike to ride.
+ *  - TENUES: dress the rider (10 colour outfits + the bike's colours), shown on your bike.
  */
 export class Garage {
   private renderer: THREE.WebGLRenderer | null = null;
@@ -17,6 +20,8 @@ export class Garage {
   private bike3d: Bike3D | null = null;
   private physics = new Bike();
   private index = 0;
+  private oIndex = 0;
+  private tab: 'bikes' | 'outfits' = 'bikes';
   private raf = 0;
   private angle = 0.6;
   private drag: number | null = null;
@@ -26,8 +31,14 @@ export class Garage {
     private profile: Profile,
     private save: () => void,
   ) {
-    $('garage-prev').addEventListener('click', () => this.show(this.index - 1));
-    $('garage-next').addEventListener('click', () => this.show(this.index + 1));
+    $('garage-prev').addEventListener('click', () => (this.tab === 'bikes' ? this.show(this.index - 1) : this.showOutfit(this.oIndex - 1)));
+    $('garage-next').addEventListener('click', () => (this.tab === 'bikes' ? this.show(this.index + 1) : this.showOutfit(this.oIndex + 1)));
+    for (const b of document.querySelectorAll<HTMLElement>('#garage-tabs .g-tab'))
+      b.addEventListener('click', () => this.setTab(b.dataset.tab as 'bikes' | 'outfits'));
+    $('g-swatches').addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-o]');
+      if (el) this.showOutfit(Number(el.dataset.o));
+    });
     $('g-action').addEventListener('click', () => this.action());
     const view = $('garage-view');
     view.addEventListener('pointerdown', (e) => {
@@ -78,7 +89,8 @@ export class Garage {
       view.appendChild(this.renderer.domElement);
     }
     this.index = Math.max(0, BIKES.findIndex((b) => b.id === this.profile.bike));
-    this.show(this.index);
+    this.oIndex = Math.max(0, OUTFITS.findIndex((o) => o.id === this.profile.outfit));
+    this.setTab(this.tab);
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
       this.frame();
@@ -109,14 +121,30 @@ export class Garage {
     this.renderer.render(this.scene, this.camera);
   }
 
+  private setTab(t: 'bikes' | 'outfits'): void {
+    this.tab = t;
+    for (const b of document.querySelectorAll<HTMLElement>('#garage-tabs .g-tab')) b.classList.toggle('selected', b.dataset.tab === t);
+    $('screen-garage').dataset.tab = t;
+    if (t === 'bikes') this.show(this.index);
+    else this.showOutfit(this.oIndex);
+  }
+
+  private showOutfit(i: number): void {
+    this.oIndex = (i + OUTFITS.length) % OUTFITS.length;
+    this.build(BIKES.find((b) => b.id === this.profile.bike)!, OUTFITS[this.oIndex].id);
+  }
+
   private show(i: number): void {
     this.index = (i + BIKES.length) % BIKES.length;
-    const m = BIKES[this.index];
+    this.build(BIKES[this.index], this.profile.outfit);
+  }
+
+  private build(m: BikeModel, outfit: string): void {
     if (this.bike3d) {
       this.scene.remove(this.bike3d.group);
       disposeObject(this.bike3d.group);
     }
-    this.bike3d = new Bike3D(m);
+    this.bike3d = new Bike3D(m, undefined, outfitById(outfit));
     if (this.renderer) this.bike3d.setEnvironment(this.renderer);
     // place parts at rest: run the model update once with the resting physics bike
     this.physics.angle = 0;
@@ -134,9 +162,13 @@ export class Garage {
   }
 
   refresh(): void {
-    const m = BIKES[this.index];
     const p = this.profile;
     $('garage-coins').textContent = p.coins.toLocaleString('fr-FR');
+    if (this.tab === 'outfits') {
+      this.refreshOutfit();
+      return;
+    }
+    const m = BIKES[this.index];
     $('g-name').textContent = m.name;
     $('g-tag').textContent = m.tagline + (m.price ? ` · ${m.price.toLocaleString('fr-FR')} pièces` : ' · offerte');
     $('g-desc').textContent = m.description;
@@ -160,9 +192,52 @@ export class Garage {
     $('garage-dots').innerHTML = BIKES.map((b, i) => `<i class="${i === this.index ? 'on' : ''} ${p.owned.includes(b.id) ? 'own' : ''}"></i>`).join('');
   }
 
-  private action(): void {
-    const m: BikeModel = BIKES[this.index];
+  private refreshOutfit(): void {
     const p = this.profile;
+    const o = OUTFITS[this.oIndex];
+    $('g-name').textContent = o.name;
+    $('g-tag').textContent = o.price ? `Tenue · ${o.price.toLocaleString('fr-FR')} pièces` : 'Tenue · offerte';
+    $('g-desc').textContent = o.colors ? 'Maillot, pantalon, gants et casque assortis.' : 'Le pilote porte les couleurs de la moto choisie.';
+    $('g-swatches').innerHTML = OUTFITS.map((x, i) => {
+      const c = x.colors ?? { jersey: '#6a4127', accent: '#35553a', helmet: '#3d5d3f' };
+      const st = `background:linear-gradient(135deg, ${c.helmet} 0 34%, ${c.jersey} 34% 72%, ${c.accent} 72%)`;
+      return `<button class="g-sw ${i === this.oIndex ? 'on' : ''} ${p.outfits.includes(x.id) ? 'own' : ''} ${p.outfit === x.id ? 'worn' : ''}" data-o="${i}" style="${st}" aria-label="${x.name}"></button>`;
+    }).join('');
+    const btn = $('g-action');
+    btn.classList.remove('locked', 'owned');
+    if (p.outfit === o.id) {
+      btn.textContent = 'PORTÉE ✓';
+      btn.classList.add('owned');
+    } else if (p.outfits.includes(o.id)) btn.textContent = 'PORTER';
+    else if (p.coins >= o.price) btn.textContent = `ACHETER · ${o.price.toLocaleString('fr-FR')}`;
+    else {
+      btn.textContent = `Il manque ${(o.price - p.coins).toLocaleString('fr-FR')}`;
+      btn.classList.add('locked');
+    }
+    $('garage-dots').innerHTML = OUTFITS.map((x, i) => `<i class="${i === this.oIndex ? 'on' : ''} ${p.outfits.includes(x.id) ? 'own' : ''}"></i>`).join('');
+  }
+
+  private action(): void {
+    const p = this.profile;
+    if (this.tab === 'outfits') {
+      const o = OUTFITS[this.oIndex];
+      if (p.outfit === o.id) return;
+      if (!p.outfits.includes(o.id)) {
+        if (p.coins < o.price) {
+          navigator.vibrate?.(30);
+          return;
+        }
+        p.coins -= o.price;
+        p.outfits.push(o.id);
+        navigator.vibrate?.([20, 40, 60]);
+      }
+      p.outfit = o.id;
+      this.save();
+      this.refresh();
+      this.onChange();
+      return;
+    }
+    const m: BikeModel = BIKES[this.index];
     if (p.bike === m.id) return;
     if (!p.owned.includes(m.id)) {
       if (p.coins < m.price) {

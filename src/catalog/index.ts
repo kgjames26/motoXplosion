@@ -1,4 +1,5 @@
 import type { Sprite } from '../render/sprites';
+import { EXTRA_ASSETS } from './extra';
 import { MODE_ASSETS } from './modes';
 import { NATURE_ASSETS } from './nature';
 import type { AssetDef, AssetGroup, Slot } from './types';
@@ -6,7 +7,7 @@ import type { AssetDef, AssetGroup, Slot } from './types';
 export type { AssetDef, AssetGroup, Slot, Obstacle } from './types';
 
 /** Every asset of the game, by id. */
-export const CATALOG: AssetDef[] = [...NATURE_ASSETS, ...MODE_ASSETS];
+export const CATALOG: AssetDef[] = [...NATURE_ASSETS, ...MODE_ASSETS, ...EXTRA_ASSETS];
 const byId = new Map(CATALOG.map((a) => [a.id, a]));
 const sprites = new Map<string, Sprite>();
 

@@ -1,3 +1,4 @@
+import type { Outfit } from '../outfits';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clamp, wrapAngle } from '../core/math';
@@ -243,7 +244,11 @@ const darker = (c: string, k: number) => {
 };
 
 /** Gear matching a bike (the player) or an opponent's team colours. */
-export function gearFor(model: BikeModel, rival?: RiderLook): GearLook {
+export function gearFor(model: BikeModel, rival?: RiderLook, outfit?: Outfit): GearLook {
+  if (outfit?.colors) {
+    const c = outfit.colors;
+    return { ...c, number: model.number, name: model.name.split(' ')[0].toUpperCase() };
+  }
   if (rival) return { jersey: rival.jersey, accent: rival.accent, trim: '#ffffff', pants: darker(rival.jersey, 0.45), helmet: rival.helmet, text: '#ffffff', number: rival.number, name: 'RACING' };
   if (model.id === 'explorer') return { jersey: '#6a4127', accent: '#35553a', trim: '#d99a3a', pants: '#4d3322', helmet: '#3d5d3f', text: '#e6d8b0', number: '98', name: 'EXPLORER' };
   const p = hexs(model.colors.primary);
@@ -570,8 +575,11 @@ export class Bike3D {
   /** Depth of the bike on the track (opponents ride on their own lane). */
   lane = -0.25;
 
-  constructor(model: BikeModel = BIKES[0], rival?: RiderLook) {
+  readonly outfit: string;
+
+  constructor(model: BikeModel = BIKES[0], rival?: RiderLook, outfit?: Outfit) {
     this.model = model;
+    this.outfit = outfit?.id ?? 'moto';
     const k = model.colors;
     const scrambler = model.style === 'scrambler';
     const plastic = (c: number) => std(c, 0.05, 0.38);
@@ -600,7 +608,7 @@ export class Bike3D {
     this.buildSwingArm();
     this.buildForkLowers();
     this.buildShocks(scrambler ? [-0.13, 0.13] : [0]);
-    this.rider = new Rider(mats, gearFor(model, rival));
+    this.rider = new Rider(mats, gearFor(model, rival, outfit));
     this.riderHolder.add(this.rider.group);
     this.chassis.add(this.riderHolder);
     this.group.traverse((o) => {

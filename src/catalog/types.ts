@@ -17,6 +17,8 @@ export interface Obstacle {
   profile: (u: number) => number;
   /** 1 = easy, 2 = medium, 3 = hard. */
   tier: 1 | 2 | 3;
+  /** Big trial obstacle (circuits since v2.6). */
+  big?: boolean;
 }
 
 export interface AssetDef {
