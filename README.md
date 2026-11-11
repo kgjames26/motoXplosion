@@ -1,6 +1,6 @@
 # MotoXplosion
 
-PWA de **cruising motocross infini** en 2,5D, jouable uniquement en mode paysage sur smartphone : une balade
+PWA de **cruising motocross infini** en 2,5D (scène 3D WebGL vue de côté), jouable sur smartphone, de préférence en paysage (le portrait marche aussi) : une balade
 contemplative dans de grands paysages peints, et un vrai défi de pilotage grâce à une physique de moto exigeante.
 
 Chaque partie (niveau) se déroule dans **une région**, dont on traverse les différents environnements :
@@ -24,13 +24,14 @@ But du jeu : **aller le plus loin possible** en gérant deux énergies :
 
 Quand l'une des deux jauges tombe à zéro, la partie est terminée. Le record est enregistré dans le navigateur.
 
-## Contrôles (paysage)
+## Contrôles
 
 - **Balance ARRIÈRE / AVANT** (en bas à gauche) : déplace le poids du pilote. Au sol, elle change le centre de gravité (balance à moitié en arrière = wheelie, tout en arrière plein gaz = on se retourne). En l'air, elle fait tourner la moto pour préparer l'atterrissage. Elle revient au centre quand on la lâche.
 - **Disque de frein** (juste à gauche de l'accélérateur) : freins avant + arrière.
 - **Poignée d'accélérateur** (à droite) : faire glisser vers le bas pour accélérer (plus c'est bas, plus ça pousse). On relâche : gaz coupés, frein moteur.
 - **Pause** en haut à droite. Compteur de vitesse en haut à gauche, progression vers le prochain drapeau (tous les 1 000 m) en haut au centre.
-- **Paramètres** (roue dentée sur l'accueil et dans le menu pause) : volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), vibrations.
+- **Options** (accueil et menu pause) : volume de la musique, volume du moteur et des effets, disposition des commandes (*Balance à gauche* par défaut, *Balance au centre*, *Gaucher* en miroir), **qualité graphique** (*Haute* : pleine définition, ombres 2048, forêts denses ; *Moyenne* ; *Basse* : définition 1×, sans ombres portées, moins d'arbres), vibrations.
+- Le numéro de version est affiché en tout petit en bas à gauche de l'accueil (`public/version.json`, incrémenté automatiquement, voir CLAUDE.md).
 - Au clavier (pour tester sur ordinateur) : ↑/W gaz, ↓/S/Espace frein, ←/A arrière, →/D avant, P/Échap pause.
 
 ## Développement
@@ -58,7 +59,8 @@ Le projet est un build Vite standard, sans configuration particulière :
 
 - `public/manifest.webmanifest` : plein écran, orientation `landscape`, icônes 192/512 (dont une maskable) et une icône SVG.
 - `public/sw.js` : réseau d'abord pour la page (avec repli hors ligne), cache d'abord pour le code hashé, les images de `public/res/` et les icônes. Après une première visite, le jeu fonctionne hors ligne (sans la musique, qui est diffusée en streaming). **Penser à changer `CACHE` dans `sw.js` quand un fichier de `public/res/` change.**
-- Au lancement d'une partie, le jeu demande le plein écran et le verrouillage en paysage quand la plateforme le permet (Android / PWA installée). En portrait, un écran « Tournez votre téléphone » recouvre le jeu et la partie se met en pause.
+- Au lancement d'une partie, le jeu demande le plein écran quand la plateforme le permet. L'orientation est libre : en portrait, la caméra garde ~15 m de piste en largeur et les commandes se réorganisent.
+- La musique d'accueil démarre dès l'ouverture du jeu ; si le navigateur bloque la lecture automatique, elle démarre au premier toucher. Elle revient à chaque retour dans les menus.
 
 ## Son
 
@@ -67,17 +69,13 @@ Le projet est un build Vite standard, sans configuration particulière :
 
 ## Graphismes et ressources
 
-Tout ce qui est dans `art/source/` a été fourni par l'auteur du jeu (planches de poses du pilote, peintures de référence, musiques). Les fichiers du jeu sont produits par deux scripts Python (numpy, scipy, Pillow) :
+Moteur : **Three.js (WebGL)**. La version précédente dessinait tout en Canvas 2D sur le processeur, ce qui saccadait sur téléphone (en plus, le son programmait 6 automatisations audio par image, qui s'accumulaient). Tout passe maintenant par la carte graphique.
 
-```bash
-python3 tools/build_rider_atlas.py   # poses du pilote -> public/res/rider-atlas.webp + .json
-python3 tools/build_backdrops.py     # fond peint + textures -> public/res/*.webp
-```
-
-- **Moto et pilote** : 90 poses détourées dans les deux planches. Chaque pose est alignée sur les axes de roues, les numéros et l'ombre peinte sont retirés, et les roues, le bras oscillant et le bas de fourche sont effacés : le jeu les redessine aux positions de la physique, ce qui rend la compression et la détente des suspensions visibles. La pose est choisie selon la balance, l'écrasement des suspensions et le vol, avec un fondu court entre deux poses.
-- **Fond** : panorama peint (montagnes enneigées, collines boisées), rendu sans couture par miroir, avec une parallaxe très lente. Le canyon a un fond procédural (mesas, strates).
-- **Textures** sans couture : terre caillouteuse, herbe, roche à facettes (grise ou rouge), pierre de taille pour les ponts.
-- **Résolution adaptative** : si l'appareil n'arrive plus à suivre (moins d'environ 48 images/s), la définition du rendu baisse par paliers, puis remonte quand la marge revient.
+- **Moto « Explorer 98 »** : modèle 3D procédural d'après les planches fournies (cadre double berceau et réservoir laiton/olive à flancs verts, selle cuir marron, plaques « 98 », roues à rayons et pneus à crampons, échappement haut, fourche télescopique, deux amortisseurs arrière à ressorts dorés). Les roues, les fourreaux de fourche (qui coulissent sur les tubes chromés), le bras oscillant (qui pivote sur le cadre) et les deux amortisseurs (qui se compriment entre cadre et bras) suivent la physique.
+- **Pilote** : squelette articulé (bassin, colonne, tête, cuisses, tibias, bras, avant-bras). Le bassin et le buste sont des masses sur ressorts qui réagissent aux accélérations de la moto (poussés en arrière à l'accélération, tassés à l'atterrissage) et à la balance (assis reculé ↔ debout penché sur le guidon). Bras et jambes sont résolus en cinématique inverse : mains sur les poignées, bottes sur les repose-pieds, la tête garde l'horizon. En cas de chute, le pilote est éjecté.
+- **Décor 3D** : piste texturée, champ, collines et forêts en vraie profondeur (perspective), arbres et rochers en billboards instanciés, ponts 3D (pont de corde, arches de pierre, treillis riveté sur piles, viaducs), rivières, brouillard de distance, ombres portées, fond peint très lointain. L'accueil montre la scène en direct, à l'heure dorée, avec la moto qui roule seule.
+- **Ressources** : `python3 tools/build_backdrops.py` (numpy, scipy, Pillow) produit le fond peint et les textures sans couture de `public/res/` à partir de `art/source/`.
+- **Sécurité de fluidité** : si l'appareil descend sous ~45 images/s pendant 2 s, la définition baisse d'un cran, puis remonte quand la marge revient.
 
 ## Architecture
 
@@ -95,13 +93,14 @@ src/
     regions.ts            régions (niveaux) : environnements, types de ponts, fonds
     generator.ts          génération procédurale : environnements puis structures de cross, ponts, décor, bonus
   render/
-    renderer.ts           orchestration du rendu Canvas 2D : caméra, fond peint, couches, bonus, moto, particules
-    terrain.ts            sol : champ, piste texturée 2,5D, surfaces, ravins, rivières
-    bridges.ts            ponts en bois, en pierre (arches), en fer (treillis) et viaducs
-    bikeSprite.ts         moto + pilote à partir de l'atlas de poses, roues/bras oscillant/fourche physiques
-    bikeRenderer.ts       moto vectorielle de secours (affichée tant que l'atlas charge)
-    background.ts         couches de parallaxe en tuiles mises en cache (rangées de pins, mesas)
-    view.ts               interface écran partagée et motifs de textures ancrés au monde
+  gl/
+    glRenderer.ts         scène Three.js : caméra, lumières, qualité, fond, streaming des chunks, bonus, particules
+    terrain.ts            maillages par chunk : piste, champ, collines, sol avant, billboards instanciés
+    bridges.ts            ponts 3D : bois, pierre (arches), fer (treillis), viaducs
+    bike3d.ts             moto 3D Explorer 98 + pilote articulé (ressorts, cinématique inverse)
+    textures.ts           textures du sol et des sprites
+  render/
+    background.ts         panorama procédural du canyon
     sprites.ts            sprites pré-rendus (pins peints, rochers, herbes, fleurs, nuages, bidons, bouteilles)
     particles.ts          particules en pool (poussière, mottes de terre, éclaboussures, étincelles)
     palette.ts            palettes par biome et fondus entre biomes
@@ -113,7 +112,6 @@ tools/                    scripts de préparation des images (atlas des poses, f
 art/source/               fichiers originaux fournis (poses, peintures, musiques)
 ```
 
-Le rendu est en Canvas 2D plutôt qu'en Three.js : pour une vue de côté en 2,5D faite d'images peintes et de sprites, c'est plus léger sur mobile.
 
 ### Physique (pas fixe de 300 Hz)
 
@@ -121,12 +119,14 @@ Valeurs mesurées sur le modèle actuel (banc d'essai hors navigateur) :
 
 | Mesure | Résultat |
 | --- | --- |
-| Répartition statique avant / arrière | 740 N / 875 N (46 % sur l'avant) ; balance avant 1 145 / 472 N, arrière 340 / 1 271 N |
-| Enfoncement statique (sag) | 21 % avant, 23 % arrière |
+| Masse | 178 kg de moto + pilote (+ 2 roues de 11 kg) : une scrambler lourde |
+| Répartition statique avant / arrière | 888 N / 1 050 N ; balance avant 1 394 / 547 N, arrière 389 / 1 545 N |
+| Enfoncement statique (sag) | 20 % avant, 23 % arrière |
 | Chute de 1 m / 3 m sur le plat | 73 % / 94 % de débattement utilisé, sans talonner, stabilisé en ~1 s |
-| 0 → 50 km/h | terre 1,7 s, herbe 1,75 s, sable 1,9 s, boue 2,5 s (patinage fort dans la boue) |
-| Vitesse max | ~114 km/h |
-| Rotation en l'air (1 s) | 0° sans action, ±60 à 70° balance à fond |
+| 0 → 50 km/h | terre 2,2 s, herbe 2,2 s, sable 2,4 s, boue 2,6 s (patinage fort dans la boue) |
+| Vitesse max | ~97 km/h (rupteur) |
+| Rotation en l'air (1 s) | 0° sans action, ±53° balance à fond |
+| Sauts | tremplins à ~14°, réceptions longues : la plupart des vols durent moins de 1,2 s |
 
 - **Châssis rigide** (moto + pilote, masse, inertie en tangage). Le **centre de gravité se déplace** avec la balance du pilote, avec un transfert de poids progressif.
 - **Deux roues indépendantes** : chacune est une masse qui coulisse sur l'axe de sa suspension (fourche avec angle de chasse, axe arrière incliné comme un bras oscillant), avec **ressort progressif + précharge**, **amortissement séparé en compression et en détente**, butée de détente et **butée de fin de course progressive**. Un talonnage transmet le choc au châssis.
@@ -140,7 +140,7 @@ Valeurs mesurées sur le modèle actuel (banc d'essai hors navigateur) :
 ### Génération procédurale
 
 1. **Paysage** : suite de biomes (forêt, prairie, montagne, canyon, rivière) avec leur relief de base (bruit fractal, tendance de pente bornée), leurs surfaces et leur décor.
-2. **Structures de cross** posées sur le relief selon des poids par biome : tabletops, doubles, gaps, step-ups, drops, whoops, rollers, berms, ponts en bois (ravin ou rivière), gués, montées, descentes, troncs, pierriers. La difficulté (hauteur des sauts, longueur des gaps, consommation) augmente avec la distance.
+2. **Structures de cross** posées sur le relief selon des poids par biome : tabletops, petits doubles franchissables même trop court, step-ups doux, drops modestes, whoops, rollers, berms, ponts, gués, montées, descentes, petits troncs, pierriers bas. Pas de gaps ni de crevasses : rien ne piège le pilote. La difficulté (hauteur des sauts, longueur des gaps, consommation) augmente avec la distance.
 3. Les **bidons et bouteilles** sont placés à intervalles aléatoires mais réguliers, jamais au fond d'un gap ni sur un pont.
 
 Le terrain est produit par chunks de 128 m devant le joueur et supprimé derrière lui.

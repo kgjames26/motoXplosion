@@ -12,8 +12,6 @@ const SHELL = [
   '/icons/icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/res/rider-atlas.webp',
-  '/res/rider-atlas.json',
   '/res/backdrops.json',
   '/res/backdrop-alps-forest.webp',
   '/res/tex-dirt.webp',

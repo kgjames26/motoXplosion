@@ -7,6 +7,7 @@ import type { RegionId } from './world/regions';
  *  - layout 'inverse' : mirrored for left-handed players (throttle on the left)
  */
 export type Layout = 'gauche' | 'centre' | 'inverse';
+export type Quality = 'haute' | 'moyenne' | 'basse';
 
 export interface Settings {
   music: number; // 0..1
@@ -14,10 +15,11 @@ export interface Settings {
   layout: Layout;
   region: RegionId;
   vibration: boolean;
+  quality: Quality;
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true };
+const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute' };
 
 export function loadSettings(): Settings {
   try {

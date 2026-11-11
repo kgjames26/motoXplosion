@@ -48,6 +48,11 @@ class MusicTrack {
     this.tick();
   }
 
+  /** Retry playback (autoplay can be refused until the first touch). */
+  kick(): void {
+    if (this.playing && this.els[this.active].paused) void this.els[this.active].play().catch(() => {});
+  }
+
   pause(): void {
     this.playing = false;
     clearTimeout(this.timer);
@@ -102,6 +107,7 @@ export class Audio {
   unlock(): void {
     if (this.ctx) {
       if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.current) this.tracks[this.current]?.kick();
       return;
     }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -213,22 +219,35 @@ export class Audio {
   }
 
   /** Continuous engine/wind parameters, call every frame. */
+  // Smoothed control values. Parameters are written directly (.value) at most ~30 times per
+  // second: scheduling a new automation event every frame makes the AudioParam timelines grow
+  // and slowly eats CPU on phones.
+  private eng = { rpm: 1400, thr: 0, gain: 0, wind: 0, lp: 900, t: 0 };
   engine(rpm: number, throttle: number, speed: number, running: boolean): void {
     if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const now = performance.now();
+    const e = this.eng;
+    const dt = Math.min(0.1, (now - e.t) / 1000);
+    if (dt < 1 / 30) return;
+    e.t = now;
+    const k = (rate: number) => 1 - Math.exp(-rate * dt);
+    e.rpm += (rpm - e.rpm) * k(25);
+    e.thr += (throttle - e.thr) * k(30);
+    e.gain += ((running ? 0.55 + throttle * 0.25 : 0) - e.gain) * k(8);
+    e.wind += (Math.min(0.2, (speed / 30) ** 2 * 0.2) - e.wind) * k(4);
+    e.lp += (520 + throttle * 900 + rpm * 0.07 - e.lp) * k(15);
     if (this.engineNode) {
       const p = this.engineNode.parameters;
-      p.get('rpm')!.setTargetAtTime(rpm, t, 0.04);
-      p.get('throttle')!.setTargetAtTime(throttle, t, 0.03);
+      p.get('rpm')!.value = e.rpm;
+      p.get('throttle')!.value = e.thr;
     } else if (this.fallback) {
-      const f = 25 + (rpm / 60) * 0.5;
-      this.fallback.osc.frequency.setTargetAtTime(f, t, 0.03);
-      this.fallback.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.03);
+      const f = 25 + (e.rpm / 60) * 0.5;
+      this.fallback.osc.frequency.value = f;
+      this.fallback.osc2.frequency.value = f * 0.5;
     }
-    // muffled: the filter opens with throttle and revs
-    this.engineFilter.frequency.setTargetAtTime(520 + throttle * 900 + rpm * 0.07, t, 0.06);
-    this.engineGain.gain.setTargetAtTime(running ? 0.55 + throttle * 0.25 : 0, t, 0.12);
-    this.windGain.gain.setTargetAtTime(Math.min(0.2, (speed / 30) ** 2 * 0.2), t, 0.25);
+    this.engineFilter.frequency.value = e.lp;
+    this.engineGain.gain.value = e.gain;
+    this.windGain.gain.value = e.wind;
   }
 
   private tone(freq: number, dur: number, type: OscillatorType, vol: number, delay = 0, slide = 1): void {

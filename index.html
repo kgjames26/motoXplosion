@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-    <meta name="theme-color" content="#1f6fe0" />
+    <meta name="theme-color" content="#2a1c18" />
     <meta name="description" content="MotoXplosion — cruising motocross infini en 2,5D cel-shading." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -113,18 +113,25 @@
 
       <!-- Screens -->
       <div id="screen-title" class="screen">
-        <button class="icon-btn btn-settings" id="btn-settings-title" aria-label="Paramètres">
-          <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
-        </button>
-        <div class="logo">
-          <span class="l1">MOTO</span><span class="l2">XPLOSION</span>
+        <div class="title-grade"></div>
+        <div class="title-frame"></div>
+        <div class="logo2">
+          <svg class="burst" viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M50 2l7 26 20-17-6 25 27-4-21 17 23 14-27 1 11 25-22-15-6 26-7-25-19 18 5-27-26 6 20-18L1 37l27-2-13-24 23 15z" />
+          </svg>
+          <div class="word"><span class="w1">moto</span><span class="wx">X</span><span class="w2">plosion</span></div>
+          <div class="tag">CRUISING MOTOCROSS ADVENTURE</div>
         </div>
-        <div class="regions" id="regions"></div>
-        <button class="btn-primary" id="btn-play">
-          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> JOUER
-        </button>
-        <div class="best">Record : <b id="best-title">0</b> m</div>
+        <div class="title-menu">
+          <button class="btn-slant btn-jouer" id="btn-play">JOUER</button>
+          <div class="regions" id="regions"></div>
+          <div class="title-row">
+            <button class="btn-slant small" id="btn-settings-title">OPTIONS</button>
+            <div class="best">RECORD <b id="best-title">0</b> m</div>
+          </div>
+        </div>
         <div class="loading" id="loading">Chargement…</div>
+        <div class="version" id="version"></div>
       </div>
 
       <div id="screen-pause" class="screen hidden">
@@ -184,6 +191,14 @@
               </button>
             </div>
           </div>
+          <div class="set-row layout-row">
+            <span>Graphismes</span>
+            <div class="layouts quality" id="set-quality">
+              <button data-quality="haute" class="layout-opt">Haute</button>
+              <button data-quality="moyenne" class="layout-opt">Moyenne</button>
+              <button data-quality="basse" class="layout-opt">Basse</button>
+            </div>
+          </div>
           <label class="set-row check">
             <span>Vibrations</span>
             <input type="checkbox" id="set-vibration" />
@@ -192,14 +207,6 @@
         <button class="btn-primary" id="btn-settings-back">RETOUR</button>
       </div>
 
-      <div id="rotate">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <rect x="20" y="8" width="24" height="44" rx="4" class="phone" />
-          <path d="M10 40 a24 24 0 0 0 20 16" class="arrow" />
-          <path d="M26 52 l4 4 l-5 2" class="arrow" />
-        </svg>
-        <p>Tournez votre téléphone</p>
-      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

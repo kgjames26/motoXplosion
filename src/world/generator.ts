@@ -52,7 +52,7 @@ interface BiomeDef {
 const BIOMES: Record<Biome, BiomeDef> = {
   [Biome.Forest]: {
     length: [450, 750],
-    baseAmp: 2.2,
+    baseAmp: 1.43,
     baseWave: 45,
     trend: 0.06,
     surface: Surface.Dirt,
@@ -71,7 +71,7 @@ const BIOMES: Record<Biome, BiomeDef> = {
   },
   [Biome.Meadow]: {
     length: [400, 650],
-    baseAmp: 3,
+    baseAmp: 1.95,
     baseWave: 70,
     trend: 0.05,
     surface: Surface.Dirt,
@@ -88,11 +88,11 @@ const BIOMES: Record<Biome, BiomeDef> = {
   },
   [Biome.Mountain]: {
     length: [450, 700],
-    baseAmp: 4.5,
+    baseAmp: 2.93,
     baseWave: 55,
     trend: 0.16,
     surface: Surface.Dirt,
-    features: { climb: 3, descent: 3, rocks: 3, drop: 2, stepUp: 2, bridge: 2, tabletop: 1, gap: 1 },
+    features: { climb: 3, descent: 3, rocks: 3, drop: 2, stepUp: 2, bridge: 2, tabletop: 1 },
     props: [
       { kind: 'pine', weight: 6 },
       { kind: 'pineDead', weight: 1 },
@@ -104,11 +104,11 @@ const BIOMES: Record<Biome, BiomeDef> = {
   },
   [Biome.Canyon]: {
     length: [400, 650],
-    baseAmp: 3.5,
+    baseAmp: 2.27,
     baseWave: 50,
     trend: 0.08,
     surface: Surface.Sand,
-    features: { gap: 3, drop: 2, tabletop: 2, bridge: 2, rocks: 2, double: 2, stepUp: 1, whoops: 1 },
+    features: { drop: 2, tabletop: 3, bridge: 2, rocks: 2, double: 2, stepUp: 1, whoops: 1 },
     props: [
       { kind: 'boulder', weight: 4 },
       { kind: 'rock', weight: 5 },
@@ -120,7 +120,7 @@ const BIOMES: Record<Biome, BiomeDef> = {
   },
   [Biome.River]: {
     length: [350, 550],
-    baseAmp: 1.8,
+    baseAmp: 1.17,
     baseWave: 60,
     trend: 0.04,
     surface: Surface.Dirt,
@@ -277,8 +277,8 @@ export class Generator {
     const r = this.rng;
     switch (name) {
       case 'tabletop': {
-        const H = r.range(1.4, 2.4) + d * 1.4;
-        const Lr = H * r.range(2.6, 3.4);
+        const H = r.range(1.0, 1.7) + d * 0.5;
+        const Lr = H * r.range(4.2, 5); // ~14° lip: realistic, not a launch pad
         const top = r.range(7, 13);
         const Ld = H * r.range(5, 6.5);
         const len = Lr + top + Ld;
@@ -287,7 +287,7 @@ export class Generator {
           {
             len,
             shape: (t) => {
-              if (t < Lr) return H * Math.pow(t / Lr, 1.4);
+              if (t < Lr) return H * Math.pow(t / Lr, 1.25);
               if (t < Lr + top) return H;
               return H * (1 - ease((t - Lr - top) / Ld));
             },
@@ -300,13 +300,13 @@ export class Generator {
       case 'double':
       case 'gap': {
         const gap = name === 'gap';
-        const H = r.range(1.5, 2.3) + d * 1.2;
-        const Lr = H * r.range(2.4, 3);
+        const H = r.range(1.0, 1.5) + d * 0.4;
+        const Lr = H * r.range(4, 4.8);
         const down = gap ? r.range(2, 3.5) + d * 2 : 0;
-        const fall = (H + down) / 1.3;
-        const G = gap ? r.range(2, 5) : r.range(3, 7) + d * 3;
+        const fall = (H + down) / 0.9;
+        const G = gap ? r.range(2, 5) : r.range(1.5, 3) + d;
         const H2 = H * r.range(0.8, 1.0);
-        const rise = (H2 + down) / 1.3;
+        const rise = (H2 + down) / 0.9;
         const roundTop = 1.5;
         const Ld = H2 * r.range(5, 6.5);
         const a = Lr;
@@ -320,7 +320,7 @@ export class Generator {
           {
             len,
             shape: (t) => {
-              if (t < a) return H * Math.pow(t / a, 1.4);
+              if (t < a) return H * Math.pow(t / a, 1.25);
               if (t < b) return H - (H + down) * ease((t - a) / fall);
               if (t < c) return -down;
               if (t < e) return -down + (H2 + down) * ease((t - c) / rise);
@@ -335,16 +335,16 @@ export class Generator {
         ];
       }
       case 'stepUp': {
-        const H = r.range(1.2, 2.2) + d;
-        const L = H * 1.6;
+        const H = r.range(0.7, 1.2) + d * 0.3;
+        const L = H * 5;
         return [
           this.flat(4),
           { len: L + 6, shape: (t) => (t < L ? H * ease(t / L) : H), props: 0.7 },
         ];
       }
       case 'drop': {
-        const kick = 0.5;
-        const D = r.range(2, 3.5) + d * 2;
+        const kick = 0.12;
+        const D = r.range(1.0, 1.8) + d * 0.5;
         const lipLen = 3;
         const faceLen = D / 0.75;
         const runout = 8;
@@ -365,7 +365,7 @@ export class Generator {
       case 'whoops': {
         const n = r.int(6, 11);
         const s = r.range(3.2, 4.4);
-        const a = r.range(0.35, 0.6) + d * 0.25;
+        const a = r.range(0.22, 0.38) + d * 0.1;
         return [
           {
             len: n * s,
@@ -377,8 +377,8 @@ export class Generator {
       }
       case 'rollers': {
         const n = r.int(3, 5);
-        const s = r.range(9, 13);
-        const a = r.range(0.9, 1.5) + d * 0.5;
+        const s = r.range(13, 17);
+        const a = r.range(0.6, 1.0) + d * 0.2;
         return [{ len: n * s, shape: (t) => a * sin2(t / s) }];
       }
       case 'berm': {
@@ -510,7 +510,7 @@ export class Generator {
             shape: (t) => {
               for (const bx of bumps) {
                 const u = (t - bx) / 0.45;
-                if (u > -1 && u < 1) return 0.38 * Math.sqrt(1 - u * u);
+                if (u > -1 && u < 1) return 0.26 * Math.sqrt(1 - u * u);
               }
               return 0;
             },
@@ -524,7 +524,7 @@ export class Generator {
       case 'rocks': {
         const L = r.range(14, 24);
         const bumps: [number, number, number][] = [];
-        for (let x = 1.5; x < L - 1.5; x += r.range(1.4, 3)) bumps.push([x, r.range(0.12, 0.38) + d * 0.1, r.range(0.5, 1.1)]);
+        for (let x = 1.5; x < L - 1.5; x += r.range(1.4, 3)) bumps.push([x, r.range(0.08, 0.2) + d * 0.05, r.range(0.6, 1.2)]);
         return [
           {
             len: L,

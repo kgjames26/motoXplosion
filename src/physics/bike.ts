@@ -76,10 +76,10 @@ function makeWheel(front: boolean): Wheel {
     axisX: Math.sin(rake),
     axisY: -Math.cos(rake),
     travel,
-    k: front ? 5600 : 6200,
-    preload: front ? 110 : 120,
-    cComp: front ? 520 : 600,
-    cReb: front ? 860 : 980,
+    k: front ? 6900 : 7600,
+    preload: front ? 140 : 150,
+    cComp: front ? 700 : 800,
+    cReb: front ? 1500 : 1700,
     radius: 0.43, // matches the (slightly cartoon) proportions of the rider sprites
     mass: 11,
     inertia: 1.0,
@@ -106,8 +106,8 @@ export class Bike {
   vx = 0;
   vy = 0;
   omega = 0;
-  readonly mass = 145; // frame + rider (wheels separate)
-  readonly inertia = 42;
+  readonly mass = 178; // frame + engine + rider (wheels separate): a heavy scrambler
+  readonly inertia = 64;
   rear = makeWheel(false);
   front = makeWheel(true);
   /** Smoothed rider balance actually applied (-1..1). */
@@ -130,7 +130,7 @@ export class Bike {
   // tuning
   readonly maxWheelTorque = 540; // N·m at the rear wheel
   readonly power = 30000; // W at the wheel
-  readonly maxSpeed = 33; // m/s rev limiter (~120 km/h)
+  readonly maxSpeed = 27; // m/s rev limiter (~97 km/h): a scrambler, not a race bike
   readonly brakeTorque = 1100;
 
   reset(world: World, x: number): void {
@@ -374,7 +374,7 @@ export class Bike {
     // ---- rider: weight shift torque (on ground) and body english (in the air)
     if (!this.crashed) {
       if (anyContact) {
-        torque += -this.lean * 260;
+        torque += -this.lean * 330;
         // Rider instinct: on the ground a real rider stops a wheelie (or a stoppie) from
         // looping by moving his body and feathering the controls. Pulling hard on the balance
         // (ARRIÈRE / AVANT) overrides it, so wheelies and stoppies stay possible on purpose.
@@ -383,15 +383,15 @@ export class Bike {
         const wantStoppie = clamp(this.lean, 0, 1);
         if (rel > 0.12) {
           const k = 1 - wantWheelie * 0.7;
-          torque -= (rel - 0.12) * 2600 * k + Math.max(0, this.omega) * 60 * k;
+          torque -= (rel - 0.12) * 3400 * k + Math.max(0, this.omega) * 80 * k;
         } else if (rel < -0.1) {
           const k = 1 - wantStoppie * 0.7;
-          torque += (-0.1 - rel) * 2600 * k - Math.min(0, this.omega) * 60 * k;
+          torque += (-0.1 - rel) * 3400 * k - Math.min(0, this.omega) * 80 * k;
         }
       } else {
-        torque += -this.lean * 820;
+        torque += -this.lean * 300;
         // pitch damping in the air keeps control precise
-        torque -= this.omega * 18;
+        torque -= this.omega * 150;
       }
     }
 

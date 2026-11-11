@@ -2,8 +2,8 @@ import './style.css';
 import { Audio } from './audio/audio';
 import { loadAssets } from './assets';
 import { Game } from './game';
-import { Renderer } from './render/renderer';
-import { loadSettings, saveSettings, Layout } from './settings';
+import { GLRenderer } from './gl/glRenderer';
+import { loadSettings, saveSettings, Layout, Quality } from './settings';
 import { Controls } from './ui/controls';
 import { formatTime, Hud } from './ui/hud';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
@@ -14,8 +14,7 @@ import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
 const $ = (id: string) => document.getElementById(id)!;
 
 const settings = loadSettings();
-const canvas = $('game') as HTMLCanvasElement;
-const renderer = new Renderer(canvas);
+const renderer = new GLRenderer($('app'), settings.quality);
 const game = new Game(settings.region);
 const controls = new Controls();
 const hud = new Hud();
@@ -62,7 +61,9 @@ function buildRegions(): void {
       id === 'canyon'
         ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
         : `url(/res/backdrop-alps-forest.webp)`;
-    b.innerHTML = `<i class="thumb" style="background-image:${thumb};${id === 'foret' ? 'filter:hue-rotate(-12deg) saturate(1.2) brightness(0.9)' : ''}"></i>${r.name}<small>${r.subtitle}</small>`;
+    // (cards are compact on the home screen: name only, subtitle as tooltip)
+    b.innerHTML = `<i class="thumb" style="background-image:${thumb};${id === 'foret' ? 'filter:hue-rotate(-12deg) saturate(1.2) brightness(0.9)' : ''}"></i>${r.name}`;
+    b.title = r.subtitle;
     b.addEventListener('click', () => {
       settings.region = id as RegionId;
       saveSettings(settings);
@@ -78,6 +79,10 @@ function buildRegions(): void {
 }
 
 // ---------------------------------------------------------------- settings screen
+
+function applyQuality(q: Quality): void {
+  for (const b of $('set-quality').querySelectorAll('.layout-opt')) b.classList.toggle('selected', (b as HTMLElement).dataset.quality === q);
+}
 
 function applyLayout(l: Layout): void {
   controlsEl.classList.remove('layout-gauche', 'layout-centre', 'layout-inverse');
@@ -95,6 +100,7 @@ function openSettings(from: ScreenName): void {
   $('set-sfx-v').textContent = s.value;
   ($('set-vibration') as HTMLInputElement).checked = settings.vibration;
   applyLayout(settings.layout);
+  applyQuality(settings.quality);
   show('settings');
 }
 
@@ -118,6 +124,14 @@ function bindSettings(): void {
       saveSettings(settings);
     });
   }
+  for (const b of $('set-quality').querySelectorAll('.layout-opt')) {
+    b.addEventListener('click', () => {
+      settings.quality = (b as HTMLElement).dataset.quality as Quality;
+      applyQuality(settings.quality);
+      renderer.setQuality(settings.quality);
+      saveSettings(settings);
+    });
+  }
   ($('set-vibration') as HTMLInputElement).addEventListener('change', (e) => {
     settings.vibration = (e.target as HTMLInputElement).checked;
     saveSettings(settings);
@@ -132,16 +146,14 @@ function bindSettings(): void {
 
 // ---------------------------------------------------------------- flow
 
-/** Fullscreen + landscape lock where the platform allows it (Android Chrome, installed PWA). */
+/** Fullscreen on phones where allowed. Orientation is free (landscape is just the best fit). */
 async function immersive(): Promise<void> {
   try {
     if (!document.fullscreenElement && document.documentElement.requestFullscreen && matchMedia('(pointer: coarse)').matches) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
     }
-    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
-    await o.lock?.('landscape');
   } catch {
-    /* not supported: the CSS rotate screen covers portrait */
+    /* not supported */
   }
 }
 
@@ -192,15 +204,14 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
 });
 window.addEventListener('resize', () => renderer.resize());
-// Pause automatically when the phone is turned to portrait (the rotate screen covers the game).
-matchMedia('(orientation: portrait)').addEventListener('change', (e) => {
-  if (e.matches && matchMedia('(pointer: coarse)').matches) pause();
-});
 window.addEventListener('orientationchange', () => setTimeout(() => renderer.resize(), 200));
 // Block the iOS context menu / double-tap zoom on long presses.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
-// First touch anywhere unlocks audio so the menu music can start.
-window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+// Music starts as soon as the game opens; browsers that block autoplay start it on the first
+// touch or key press anywhere.
+audio.unlock();
+for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, () => audio.unlock(), { passive: true });
+$('version').textContent = 'v' + __APP_VERSION__;
 
 buildRegions();
 bindSettings();

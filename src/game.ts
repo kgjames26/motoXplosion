@@ -124,8 +124,20 @@ export class Game {
   update(dt: number): void {
     dt = Math.min(dt, 1 / 20);
     if (this.state === 'title') {
-      // Attract mode: the bike idles on the start line.
-      this.stepPhysics(dt, { throttle: 0, brake: 1, balance: 0 });
+      // Attract mode behind the home screen: the rider cruises and jumps on his own.
+      const b = this.bike;
+      const w = this.world;
+      const err = wrapAngle(b.angle - (b.grounded ? w.slopeAt(b.x) : w.slopeAt(b.x + Math.max(1, b.vx * 0.4))));
+      this.input.throttle = b.grounded ? (b.speed < 17 ? 0.8 : 0.35) : 0.1;
+      this.input.balance = clamp(err * 2.5 + b.omega * 0.35, -1, 1);
+      this.input.brake = 0;
+      this.stepPhysics(dt, this.input);
+      w.ensure(b.x + 140);
+      w.trim(b.x - 120);
+      const ev = b.consumeEvents();
+      if (ev.crashed || (b.speed < 0.5 && this.time > 3)) this.respawn(b.x + 8);
+      this.time += dt;
+      if (ev.landing) this.landingDust(Math.min(1, ev.landing / 7));
       this.updateFx(dt);
       return;
     }

@@ -3,22 +3,6 @@
  * service worker after the first visit.
  */
 
-export interface AtlasFrame {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rear: [number, number];
-  front: [number, number];
-  rr: number;
-  fr: number;
-  pivot: [number, number];
-  forkTop: [number, number];
-  helmet: [number, number];
-  torso: [number, number];
-}
-
 export interface BackdropMeta {
   w: number;
   h: number;
@@ -28,8 +12,6 @@ export interface BackdropMeta {
 }
 
 export interface Assets {
-  atlas: HTMLImageElement;
-  frames: AtlasFrame[];
   backdrops: Record<string, { img: HTMLImageElement; meta: BackdropMeta }>;
   textures: Record<'dirt' | 'grass' | 'rock' | 'rockWarm' | 'stone', HTMLImageElement>;
 }
@@ -50,13 +32,9 @@ export function loadAssets(): Promise<Assets> {
   if (cached) return cached;
   cached = (async () => {
     const base = '/res/';
-    const [atlasMeta, bdMeta] = await Promise.all([
-      fetch(base + 'rider-atlas.json').then((r) => r.json() as Promise<{ frames: AtlasFrame[] }>),
-      fetch(base + 'backdrops.json').then((r) => r.json() as Promise<Record<string, BackdropMeta>>),
-    ]);
+    const bdMeta = await fetch(base + 'backdrops.json').then((r) => r.json() as Promise<Record<string, BackdropMeta>>);
     const names = Object.keys(bdMeta);
-    const [atlas, dirt, grass, rock, rockWarm, stone, ...bds] = await Promise.all([
-      loadImage(base + 'rider-atlas.webp'),
+    const [dirt, grass, rock, rockWarm, stone, ...bds] = await Promise.all([
       loadImage(base + 'tex-dirt.webp'),
       loadImage(base + 'tex-grass.webp'),
       loadImage(base + 'tex-rock.webp'),
@@ -66,7 +44,7 @@ export function loadAssets(): Promise<Assets> {
     ]);
     const backdrops: Assets['backdrops'] = {};
     names.forEach((n, i) => (backdrops[n] = { img: bds[i], meta: bdMeta[n] }));
-    return { atlas, frames: atlasMeta.frames, backdrops, textures: { dirt, grass, rock, rockWarm, stone } };
+    return { backdrops, textures: { dirt, grass, rock, rockWarm, stone } };
   })();
   return cached;
 }
