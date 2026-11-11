@@ -8,7 +8,18 @@ sept motos à gagner au garage.
 
 - **Écran de lancement** : l'affiche du jeu (`public/res/splash.webp`, tirée de l'image fournie, bouton et engrenage peints effacés) apparaît en fondu depuis le noir avec un lent zoom ; le pilote et sa moto vibrent avec le moteur, de la poussière jaillit de la roue arrière et un reflet balaie le logo. Sur tous les formats d'écran l'image est montrée en entier, une copie floue remplit les côtés (ou le haut et le bas). Boutons **JOUER** (néon orange et turquoise, comme sur l'affiche) et options.
 - En revenant d'une partie au menu, l'affiche réapparaît **1,5 s** sans boutons, avec un fondu au noir à l'entrée et à la sortie.
-- **Accueil** : à gauche, trois boutons néon empilés — **MODE**, **MONDE** (avec leur icône) et **GARAGE**. Un toucher sur Mode ou Monde ouvre le choix en cartes ; en bas à droite le gros bouton **JOUER** ; au centre la phrase du mode et, en cruising, les boutons de difficulté/météo. Le pseudo s'affiche à côté du porte-monnaie.
+- **Accueil** : à gauche, trois boutons néon empilés — **MODE**, **MONDE** (avec leur icône) et, un peu plus bas, **Garage** (icône de garage avec clé). Un toucher sur Mode ou Monde ouvre le choix en cartes ; en bas à droite le gros bouton **JOUER** ; au centre la phrase du mode et, en cruising, les boutons de difficulté/météo. Le pseudo s'affiche à côté du porte-monnaie.
+
+## Multijoueur (2 à 4 pilotes, gratuit)
+
+- Dans le choix du mode, la carte **Multijoueur** ouvre l'écran des salons : **Créer un salon** (un code de 5 lettres s'affiche) ou **Rejoindre** avec ce code (on peut aussi ouvrir le jeu avec `?salon=CODE`).
+- **Pair à pair** (WebRTC via PeerJS) : le serveur public gratuit de PeerJS ne sert qu'à se présenter, ensuite tout passe directement entre les navigateurs. Pas de serveur à payer, quel que soit le nombre de joueurs (chaque salon ne dépend que de ses 4 navigateurs). Le créateur du salon est **l'hôte** : il tient le salon et le championnat et relaie les positions de chacun (~12 fois par seconde).
+- **Salon** : liste des pilotes (couleur, moto, statut, couronne de l'hôte, victoires et points), et réglages de l'hôte : mode, monde, circuit, difficulté/météo, **nombre de victoires** pour remporter le championnat.
+- **Rejoindre à tout moment** : pendant une épreuve, un nouveau pilote entre directement s'il arrive dans les 8 premières secondes, sinon il regarde le classement en direct depuis le salon et court à l'épreuve suivante.
+- **Pendant l'épreuve**, tout le monde roule sur la même piste (même circuit, même graine) et voit les autres pilotes (avec leur nom). Panneau en direct à droite : en course et en enduro les **positions et écarts** (en secondes) ; en trial la **zone, les chutes et le chrono** de chacun ; en cruising la distance. Pas d'IA en multijoueur.
+- **Fin d'épreuve** : en course et enduro, les autres ont 45 s / 60 s après le premier arrivé ; en **trial tout le monde attend que tous aient fini** (écran d'attente avec les performances de chacun ; l'hôte peut clore l'étape) ; en cruising (balade libre, sans chrono) l'hôte termine l'étape quand il veut.
+- **Récapitulatif obligatoire après chaque épreuve** : classement de l'épreuve (temps, chutes, points 10 / 6 / 4 / 2, trophée au vainqueur) et classement général (victoires puis points). Le premier à atteindre le nombre de victoires choisi est **champion**. L'hôte prépare l'épreuve suivante (ou un nouveau championnat).
+- Pour tester en local : `node` + le paquet `peer` en dépendance de dev (serveur de signalisation local), puis ouvrir le jeu avec `?peer=127.0.0.1:9000`.
 
 ## Modes de jeu
 
@@ -16,7 +27,7 @@ sept motos à gagner au garage.
 | --- | --- | --- |
 | **Cruising** | balade infinie et libre : plus d'essence ni d'eau à gérer (le bonus de longue balade fait tout l'intérêt). Tracé **+5 %** plus relevé qu'avant | distance × **bonus de longue balade** + pièces ramassées + sauts |
 | **Trial** | **25 circuits par monde** de **gros obstacles** (pneus de chantier empilés, blocs béton, rochers, épaves, troncs géants, conteneurs, tourets, murs de palettes, pyramides de fûts, meules de foin…), de 4 à 10 zones. Le but : **arriver au bout le plus vite possible**, chaque **chute ajoute 15 secondes** et fait reprendre la zone | prime de fin de circuit + médailles |
-| **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (7 à 22 m de haut, de plus en plus raides, bosses et marches rocheuses sur les pentes), racines, troncs, gués ; essence et eau gérées, chrono | prime de fin de circuit + médailles |
+| **Enduro** | **25 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **25 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
 ### Difficultés et météo (tous les modes)
@@ -159,9 +170,17 @@ Le projet est un build Vite standard, sans configuration particulière :
 
 Vibrations à l'atterrissage (proportionnelles à l'impact), au talonnage des suspensions, aux chutes, aux bidons, pièces et cascades, aux fautes et zones réussies en trial, au compte à rebours et à l'arrivée d'une course. Réglables dans les Options. (Les navigateurs iPhone ne permettent pas la vibration.)
 
+## Argent
+
+Les pièces sont représentées partout par une **vraie pièce d'or** (bord, étoile en relief, reflet qui passe) ; le porte-monnaie de l'accueil et du jeu est plus grand, encadré d'or et lumineux.
+
+## Confort visuel
+
+Ce qui fatiguait les yeux, c'était le premier plan qui défile très vite. Plutôt qu'un flou de mouvement (coûteux et qui donne mal au cœur sur téléphone), le jeu imite la **profondeur de champ** d'une caméra : les plantes et objets du premier plan et le sol devant la piste sont légèrement **floutés** et moins nombreux. La piste, la moto et le décor du fond restent nets. Les panoramas sont plus riches : rayons du soleil, oiseaux, brume entre les plans, reflets de lumière sur les crêtes, ravines sur les montagnes, petits villages et champs sur les collines.
+
 ## Revêtements de route
 
-La piste est plus vivante : taches de couleur le long de la route, voie usée plus sombre là où roulent les motos, et un décor de détails par-dessus — ornières et traces de crampons, gravillons, cailloux, touffes d'herbe et feuilles mortes (mondes verts), brindilles sèches (canyon, désert), fissures, rustines de goudron et plaques d'égout (San Francisco), flaques brillantes sous la pluie. En **neige**, la route est blanche sur toute sa largeur, avec deux ornières de neige fondue boueuse et une trace grise piétinée entre elles. À San Francisco, hors trial, les décors de rue sont un peu reculés pour défiler moins vite.
+La piste est plus vivante : taches de couleur le long de la route, voie usée plus sombre là où roulent les motos, et un décor de détails par-dessus — ornières et traces de crampons, gravillons, cailloux, touffes d'herbe et feuilles mortes (mondes verts), brindilles sèches (canyon, désert), fissures, rustines de goudron et plaques d'égout (San Francisco), flaques brillantes sous la pluie. En **neige**, la route est blanche sur toute sa largeur, avec deux ornières de neige fondue boueuse et une trace grise piétinée entre elles ; la moto patine davantage et la roue arrière projette de la neige boueuse. À San Francisco, hors trial, les décors de rue sont un peu reculés pour défiler moins vite.
 
 ## Son
 
@@ -216,6 +235,8 @@ src/
   circuits.ts             25 circuits par mode et par monde : graines, longueurs, temps cibles, médailles
   outfits.ts              tenues du pilote vendues au garage
   weather.ts              météo par difficulté (sec, pluie, neige) : adhérence, pneus, adoucissement des tracés
+  net/multi.ts            multijoueur pair à pair (PeerJS) : salon, états, championnat
+  ui/multiplayer.ts       écrans du multijoueur (salon, direct, attente, récapitulatif)
   upgrades.ts             pièces d'amélioration des motos et chiffres du comparateur
   climb.ts                hauteur de rocher franchissable mesurée avec la physique (motos améliorées)
   gl/panoramas.ts         60 panoramas peints par le code et leur rotation

@@ -1092,8 +1092,19 @@ export class Generator {
       default:
         pieces = [[H / su, su], [r.range(4, 9), 0], [H / sd, -sd]];
     }
+    // a short steeper pitch inside the first climb, from the first circuits on
+    if (r.chance(0.55 + g * 0.3)) {
+      const i = pieces.findIndex((p) => p[1] > 0.05);
+      if (i >= 0) {
+        const [L0, s0] = pieces[i];
+        const sSteep = r.range(0.42, 0.5) + g * 0.12;
+        const hs = Math.min(L0 * s0 * 0.35, 1.6 + g * 1.6);
+        const rest = (L0 * s0 - hs) / s0;
+        pieces.splice(i, 1, [rest * 0.5, s0], [hs / sSteep, sSteep], [rest * 0.5, s0]);
+      }
+    }
     const seed = r.int(0, 1e5);
-    const seg = this.slopeProfile(pieces, bump, seed);
+    const seg = this.slopeProfile(pieces, bump, seed, 3);
     const top = pieces[0][0];
     if (variant === 'ridge') {
       // rollers on the ridge
@@ -1147,7 +1158,7 @@ export class Generator {
   // ---------------------------------------------------------------- content
 
   private maybePickup(x: number, h: number, seg: Segment, t: number): void {
-    if (this.mode !== 'enduro') return;
+    return; // fuel / water pickups removed (v2.10)
     const blocked = seg.noPickup?.some(([a, b]) => t >= a && t <= b) ?? false;
     if (blocked) return;
     const d = this.difficulty(x);
@@ -1187,7 +1198,7 @@ export class Generator {
       });
     }
     // Foreground band (in front of the track, drawn over the bike's lane).
-    for (let x = start; x < x1; x += r.range(2.5, 6) * (this.mode === 'trial' ? 2.5 : 1)) {
+    for (let x = start; x < x1; x += r.range(2.5, 6) * (this.mode === 'trial' ? 2.5 : 1.7)) {
       const kind: PropKind =
         this.biome === Biome.Canyon
           ? r.chance(0.7)
@@ -1271,7 +1282,7 @@ export class Generator {
       }
     } else for (let x = x0 + r.range(0, 40); x < x1; x += r.range(45, 90)) put('structure', x, r.range(0.65, 1), 1);
     for (let x = x0 + r.range(0, 50); x < x1; x += r.range(60, 120)) put('animal', x, r.range(0.3, 0.9), 1);
-    for (let x = x0; x < x1; x += r.range(5, 11) * (this.mode === 'trial' ? 2.5 : this.region.id === 'sf' ? 1.6 : 1)) put('ground', x, -r.range(this.mode === 'trial' ? 0.5 : 0.2, 0.9), r.range(0.9, 1.3));
+    for (let x = x0; x < x1; x += r.range(5, 11) * (this.mode === 'trial' ? 2.5 : this.region.id === 'sf' ? 2.2 : 1.6)) put('ground', x, -r.range(this.mode === 'trial' ? 0.5 : 0.2, 0.9), r.range(0.9, 1.3));
     // mode decor along the track
     if (this.mode === 'course' || this.mode === 'enduro' || this.region.id === 'sf') {
       const dense = (x: number) => this.mode === 'course' && (x < 120 || Math.abs(x - (this.raceLen + 5)) < 80);

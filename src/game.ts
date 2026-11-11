@@ -1,6 +1,7 @@
 import { aiInput, createOpponents, Opponent } from './ai';
+import type { PlayerState } from './net/multi';
 import { BikeModel, BIKES } from './bikes';
-import { clamp, wrapAngle } from './core/math';
+import { clamp, Rng, wrapAngle } from './core/math';
 import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
 import { rockCapacity } from './climb';
@@ -80,6 +81,8 @@ export interface RunOptions {
   spec?: BikeSpec;
   /** Tyre sets owned (one per weather, mounted automatically). */
   tyres?: string[];
+  /** Multiplayer stage: no AI riders, start countdown in every race mode. */
+  multi?: boolean;
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -109,6 +112,8 @@ export class Game {
   tyres: string[] = [];
   /** Player name (settings). */
   pseudo = '';
+  /** Multiplayer stage in progress. */
+  multi = false;
   /** Grip bonus of the tyres mounted for this weather (1 = none). */
   tyreK = 1;
   /** Circuit chrono (s), started at GO, stopped at the finish. */
@@ -232,8 +237,9 @@ export class Game {
     this.result = null;
     this.raceLen = this.circuit && this.mode !== 'trial' ? circuitLength(cm, this.circuit) : raceLength(this.raceLevel);
     this.finishX = this.startX + this.raceLen;
-    this.opponents = this.mode === 'course' ? createOpponents(this.world, this.startX, this.difficulty, this.raceLevel, seed ^ 0x5bd1e995) : [];
-    this.countdown = this.mode === 'course' ? 3.2 : 0;
+    this.multi = !!opts.multi;
+    this.opponents = this.mode === 'course' && !this.multi ? createOpponents(this.world, this.startX, this.difficulty, this.raceLevel, seed ^ 0x5bd1e995) : [];
+    this.countdown = this.mode === 'course' || (this.multi && this.mode !== 'cruising') ? 3.2 : 0;
     this.state = 'playing';
   }
 
@@ -382,9 +388,9 @@ export class Game {
     this.updateFx(dt);
   }
 
-  /** Fuel and water: enduro only (cruising is a free ride since v2.9). */
+  /** Fuel and water: no longer used in any mode (v2.10). */
   get usesEnergy(): boolean {
-    return this.mode === 'enduro';
+    return false;
   }
 
   /** Cruising distance multiplier (×1 → ×4). */
@@ -483,6 +489,7 @@ export class Game {
   private raceRules(dt: number): void {
     const bike = this.bike;
     for (const o of this.opponents) {
+      if (o.remote) continue; // finishes come from the network
       if (!o.finished && o.bike.x >= this.finishX) {
         o.finished = true;
         o.finishTime = this.time;
@@ -500,6 +507,91 @@ export class Game {
       this.finishDelay += dt;
       if (this.finishDelay > 2.2) this.endRun('finish');
     }
+  }
+
+  // ---------------------------------------------------------------- multiplayer
+
+  /** Other players of the room, shown as riders on the track (no physics: network poses). */
+  setRemotes(list: { id: string; name: string; color: string; bike: string }[]): void {
+    this.opponents = this.opponents.filter((o) => !o.remote || list.some((p) => p.id === o.netId));
+    list.forEach((p, i) => {
+      if (this.opponents.some((o) => o.netId === p.id)) return;
+      const model = BIKES.find((b) => b.id === p.bike) ?? BIKES[0];
+      const bike = new Bike(model.spec);
+      bike.reset(this.world, this.startX);
+      this.opponents.push({
+        name: p.name,
+        level: 0,
+        model,
+        bike,
+        look: { jersey: p.color, accent: '#1a1a1e', helmet: p.color, number: String(i + 2) },
+        lane: [0.3, -0.35, 0.55][i % 3],
+        finished: false,
+        finishTime: 0,
+        crashTimer: 0,
+        ai: { rng: new Rng(i + 1), noise: 0, delayed: 0, hesitate: 0, stuck: 0, lastX: 0 },
+        remote: true,
+        netId: p.id,
+      });
+    });
+  }
+
+  /** Apply a network pose (smoothed toward it). */
+  applyRemote(s: PlayerState, dt: number): void {
+    const o = this.opponents.find((q) => q.netId === s.id);
+    if (!o) return;
+    const b = o.bike;
+    const k = Math.min(1, dt * 14);
+    const far = Math.abs(s.x - b.x) > 6;
+    b.x = far ? s.x : b.x + (s.x - b.x) * k;
+    b.y = far ? s.y : b.y + (s.y - b.y) * k;
+    b.angle += wrapAngle(s.a - b.angle) * k;
+    b.vx = s.vx;
+    b.vy = s.vy;
+    b.rear.s += (s.rs - b.rear.s) * k;
+    b.front.s += (s.fs - b.front.s) * k;
+    b.rear.compression = s.rc;
+    b.front.compression = s.fc;
+    b.rear.angle = s.ra;
+    b.front.angle = s.fa;
+    b.lean += (s.ln - b.lean) * k;
+    b.grounded = s.g;
+    b.rear.contact = b.front.contact = s.g;
+    b.updateWheelPositions();
+    o.crashTimer = s.cr ? 1 : 0;
+    if (s.fin && !o.finished) {
+      o.finished = true;
+      o.finishTime = this.time;
+      if (this.mode === 'course' && !this.finishOrder.includes(o.name)) this.finishOrder.push(o.name);
+    }
+  }
+
+  /** My state for the network. */
+  netState(id: string): PlayerState {
+    const b = this.bike;
+    return {
+      id,
+      x: b.x,
+      y: b.y,
+      a: b.angle,
+      vx: b.vx,
+      vy: b.vy,
+      rs: b.rear.s,
+      fs: b.front.s,
+      rc: b.rear.compression,
+      fc: b.front.compression,
+      ra: b.rear.angle,
+      fa: b.front.angle,
+      ln: b.lean,
+      g: b.grounded,
+      cr: this.crashTimer > 0,
+      prog: this.circuit ? this.progress : 0,
+      chrono: this.chrono,
+      zone: Math.max(this.section, this.sectionsCleared),
+      falls: this.falls,
+      dist: this.distance,
+      fin: this.finished,
+    };
   }
 
   /** Current race position (1..8) from distance travelled (finished riders first). */
@@ -653,6 +745,7 @@ export class Game {
     let lead = 0;
     for (const o of this.opponents) lead = Math.max(lead, o.bike.x);
     const aiInputs = this.opponents.map((o) => {
+      if (o.remote) return { throttle: 0, brake: 0, balance: 0 };
       if (!withAi || o.finished) return { throttle: o.finished ? 0.1 : 0, brake: o.finished ? 0.4 : 1, balance: 0 };
       if (o.crashTimer > 0) return { throttle: 0, brake: 0, balance: 0 };
       return aiInput(o, this.world, dt, o.bike.x - this.bike.x);
@@ -662,13 +755,14 @@ export class Game {
     let n = 0;
     while (this.acc >= PHYSICS_DT && n < 40) {
       this.bike.step(this.world, inp, PHYSICS_DT);
-      for (let i = 0; i < this.opponents.length; i++) this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
+      for (let i = 0; i < this.opponents.length; i++) if (!this.opponents[i].remote) this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
       this.acc -= PHYSICS_DT;
       n++;
     }
     if (n >= 40) this.acc = 0;
     // AI crashes and rescues
     for (const o of this.opponents) {
+      if (o.remote) continue;
       const ev = o.bike.consumeEvents();
       if (o.crashTimer > 0) {
         o.crashTimer -= dt;
@@ -811,10 +905,11 @@ export class Game {
     const slip = Math.abs(rw.slip);
     const sp = Math.abs(b.forwardSpeed);
     // wet weather: little dust, more mud clods
-    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.35, 0.3][this.weather];
+    this.dustAcc += (sp * 3 + slip * 25 + throttle * 10) * s.dustAmount * dt * rate * [1, 0.35, 1.6][this.weather];
     while (this.dustAcc > 1) {
       this.dustAcc -= 1;
       const water = rw.surface === Surface.Water;
+      const snow = this.weather === 2 && !water;
       const back = -1 - Math.random() * 2;
       this.particles.spawn({
         kind: water ? 'splash' : 'dust',
@@ -825,23 +920,23 @@ export class Game {
         life: water ? 0.8 : 0.7 + Math.random() * 0.9,
         size: water ? 0.08 + Math.random() * 0.08 : 0.18 + Math.random() * 0.22,
         grow: 0.9 + sp * 0.04,
-        r: s.dust[0] + (Math.random() - 0.5) * 20,
-        g: s.dust[1] + (Math.random() - 0.5) * 20,
-        b: s.dust[2] + (Math.random() - 0.5) * 20,
+        r: snow ? 225 - Math.random() * 60 : s.dust[0] + (Math.random() - 0.5) * 20,
+        g: snow ? 220 - Math.random() * 70 : s.dust[1] + (Math.random() - 0.5) * 20,
+        b: snow ? 220 - Math.random() * 80 : s.dust[2] + (Math.random() - 0.5) * 20,
       });
-      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather >= 1 ? 0.8 : 0.35)) {
+      if (!water && (slip > 1.5 || throttle > 0.7) && Math.random() < (this.weather === 2 ? 1 : this.weather === 1 ? 0.8 : 0.35)) {
         this.particles.spawn({
           kind: 'clod',
           x: rw.x - rw.radius,
           y: rw.y - rw.radius * 0.5,
-          vx: -2 - Math.random() * 4 - slip + b.vx * 0.4,
+          vx: (-2 - Math.random() * 4 - slip) * (snow ? 1.4 : 1) + b.vx * 0.4,
           vy: 1.5 + Math.random() * 3,
           life: 1.2,
           size: 0.04 + Math.random() * 0.05,
           grow: 0,
-          r: s.dust[0] * 0.6,
-          g: s.dust[1] * 0.6,
-          b: s.dust[2] * 0.6,
+          r: snow ? (Math.random() < 0.5 ? 235 : 120) : s.dust[0] * 0.6,
+          g: snow ? (Math.random() < 0.5 ? 238 : 95) : s.dust[1] * 0.6,
+          b: snow ? (Math.random() < 0.5 ? 245 : 70) : s.dust[2] * 0.6,
         });
       }
     }

@@ -113,6 +113,7 @@ export class Hud {
         const pos = game.racePosition();
         this.pos.textContent = String(pos);
         this.posSfx.textContent = pos === 1 ? 'er' : 'e';
+        $('race-total').textContent = `/${game.opponents.length + 1}`;
         if (!this.dots.length)
           for (const o of game.opponents) {
             const d = document.createElement('i');

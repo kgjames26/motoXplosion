@@ -36,7 +36,7 @@
           <div class="hud-trial" id="hud-trial">
             <div class="trial-info panel"><span>ZONE</span><b id="trial-zone">0/4</b><span>CHUTES</span><b id="trial-falls">0</b></div>
           </div>
-          <div class="hud-race panel" id="hud-race"><b id="race-pos">1</b><small id="race-pos-sfx">er</small><span>/8</span></div>
+          <div class="hud-race panel" id="hud-race"><b id="race-pos">1</b><small id="race-pos-sfx">er</small><span id="race-total">/8</span></div>
           <div class="energies">
             <div class="energy fuel" aria-label="Essence">
               <svg viewBox="0 0 24 24" class="ico"><path d="M5 4h9l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm2 4l7 7m0-7l-7 7" /><path d="M14 2h5v4" class="spout" /></svg>
@@ -70,6 +70,7 @@
 
         <div class="hud-coins panel" id="hud-coins"><i class="coin-ico"></i><b id="coins">0</b></div>
         <div class="hud-level" id="hud-level"></div>
+        <ol class="mp-live hidden" id="mp-panel"></ol>
         <div class="hud-mult panel" id="hud-mult">BONUS <b id="mult">×1</b></div>
         <button class="hud-tr panel btn-pause" id="btn-pause" aria-label="Pause">
           <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
@@ -150,7 +151,7 @@
         <div class="title-menu">
           <button class="neon-sel" id="sel-mode"><i class="ns-ico" id="sel-mode-ico"></i><span><small>MODE</small><b id="sel-mode-name">Cruising</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
           <button class="neon-sel" id="sel-world"><i class="ns-ico world" id="sel-world-ico"></i><span><small>MONDE</small><b id="sel-world-name">Alpes</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
-          <button class="neon-sel garage" id="btn-garage"><i class="ns-ico"><svg viewBox="0 0 40 26" aria-hidden="true"><circle cx="9" cy="19" r="5.5" /><circle cx="31" cy="19" r="5.5" /><path d="M9 19 L17 12 L26 12 L31 19 M17 12 L14 7 L20 6 L24 11 M26 12 L29 7" /></svg></i><span><small>BOUTIQUE</small><b>Garage</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
+          <button class="neon-sel garage" id="btn-garage"><i class="ns-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 4l9 6.5V20H3z" /><path d="M6.5 20v-6.5h11V20M6.5 16h11" /><path d="M14.8 9.2a1.9 1.9 0 1 0-2.4 2.4l-1.6 1.6.9.9 1.6-1.6a1.9 1.9 0 0 0 2.4-2.4l-1 1-.9-.9z" /></svg></i><span><b>Garage</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
         </div>
         <div class="picker hidden" id="picker-mode"><div class="pick-box"><div class="pick-label">MODE</div><div class="mode-cards" id="modes"></div></div></div>
         <div class="picker hidden" id="picker-world"><div class="pick-box"><div class="pick-label">MONDE</div><div class="world-cards" id="regions"></div></div></div>
@@ -187,8 +188,8 @@
           <div class="over-coins panel">
             <h3><i class="coin-ico"></i> Gains</h3>
             <ul id="over-lines"></ul>
-            <div class="over-total"><span>Total</span><b id="over-total">+0</b></div>
-            <div class="over-wallet">Solde : <b id="over-wallet">0</b></div>
+            <div class="over-total"><span>Total</span><b><span id="over-total">+0</span> <i class="coin-ico"></i></b></div>
+            <div class="over-wallet">Solde : <i class="coin-ico"></i> <b id="over-wallet">0</b></div>
           </div>
         </div>
         <div class="row">
@@ -216,6 +217,49 @@
             <button class="btn-primary circ-go" id="btn-circ-go"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> PARTIR</button>
           </div>
         </div>
+      </div>
+
+      <div id="screen-multi" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="mp-back">‹ RETOUR</button>
+          <h2 class="mp-title">MULTIJOUEUR</h2>
+          <div class="mp-code hidden" id="mp-code"></div>
+        </div>
+        <div class="mp-home" id="mp-home">
+          <p class="mp-intro">Jusqu’à 4 pilotes, en mini-championnat. Gratuit, de navigateur à navigateur.</p>
+          <div class="mp-choices">
+            <button class="neon-play mp-big" id="mp-create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Créer un salon</button>
+            <div class="mp-join">
+              <input id="mp-code-input" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false" />
+              <button class="neon-play mp-big" id="mp-join"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" /></svg>Rejoindre</button>
+            </div>
+          </div>
+          <p class="mp-msg" id="mp-msg"></p>
+        </div>
+        <div class="mp-lobby hidden" id="mp-lobby">
+          <div class="mp-players panel" id="mp-players"></div>
+          <div class="mp-settings panel" id="mp-settings"></div>
+        </div>
+      </div>
+
+      <div id="screen-champ" class="screen hidden">
+        <h2 id="champ-title">ÉPREUVE TERMINÉE</h2>
+        <div class="champion hidden" id="champ-banner"></div>
+        <div class="champ-body">
+          <div class="panel champ-col"><h3>Cette épreuve</h3><ol id="champ-stage"></ol></div>
+          <div class="panel champ-col"><h3>Classement général</h3><ol id="champ-general"></ol><small id="champ-goal"></small></div>
+        </div>
+        <div class="row">
+          <button class="neon-play" id="champ-next">ÉPREUVE SUIVANTE</button>
+          <span class="champ-wait" id="champ-wait">L’hôte prépare l’épreuve suivante…</span>
+          <button class="btn-secondary" id="champ-leave">QUITTER LE SALON</button>
+        </div>
+      </div>
+
+      <div id="screen-mpwait" class="screen hidden">
+        <h2>EN ATTENTE DES AUTRES PILOTES…</h2>
+        <ol class="panel mp-live big" id="mpwait-list"></ol>
+        <button class="neon-play hidden" id="mpwait-end">TERMINER L’ÉTAPE</button>
       </div>
 
       <div id="screen-garage" class="screen hidden">

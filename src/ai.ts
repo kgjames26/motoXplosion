@@ -26,6 +26,9 @@ export interface Opponent {
   finishTime: number;
   crashTimer: number;
   ai: AiState;
+  /** Multiplayer: a real player whose bike is driven by the network. */
+  remote?: boolean;
+  netId?: string;
 }
 
 export interface RiderLook {
@@ -35,7 +38,7 @@ export interface RiderLook {
   number: string;
 }
 
-interface AiState {
+export interface AiState {
   rng: Rng;
   noise: number;
   delayed: number; // delayed balance command

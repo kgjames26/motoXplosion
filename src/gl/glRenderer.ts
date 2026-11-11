@@ -347,7 +347,7 @@ export class GLRenderer {
         tag.className = 'rider-tag';
         tag.style.setProperty('--c', o.look.jersey);
         tag.style.setProperty('--lvl', o.level >= 8 ? '#ff6a5a' : o.level >= 5 ? '#ffd23f' : '#7dff7a');
-        tag.innerHTML = `${o.name} <b>Niv.${o.level}</b>`;
+        tag.innerHTML = o.remote ? `${o.name}` : `${o.name} <b>Niv.${o.level}</b>`;
         this.tagLayer.appendChild(tag);
         this.tags.set(o, tag);
       }

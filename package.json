@@ -10,10 +10,12 @@
   },
   "devDependencies": {
     "@types/three": "^0.170.0",
+    "peer": "^1.0.2",
     "typescript": "5.7.2",
     "vite": "6.0.5"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "0.170.0"
   }
 }

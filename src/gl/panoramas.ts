@@ -271,6 +271,58 @@ function ridge(c: CanvasRenderingContext2D, L: Extract<Layer, { amp: number }>, 
   g.addColorStop(1, mix(L.color, '#000000', 0.25));
   c.fillStyle = g;
   c.fill();
+  // rim light along the crest and a few gullies / slope strokes (v2.10 detail)
+  c.save();
+  c.clip();
+  c.strokeStyle = mix('#fff4dc', sky, 0.35 + haze * 0.5);
+  c.globalAlpha = 0.45;
+  c.lineWidth = 2.5;
+  c.beginPath();
+  for (let x = 0; x <= W; x += 4) {
+    const y = top(x) * H + 2;
+    if (x === 0) c.moveTo(x, y);
+    else c.lineTo(x, y);
+  }
+  c.stroke();
+  if (L.kind === 'peaks' || L.kind === 'mesa' || L.kind === 'cliffs' || L.kind === 'hills') {
+    c.globalAlpha = 0.18;
+    c.strokeStyle = mix(L.color, '#000000', 0.35);
+    c.lineWidth = 1.5;
+    for (let k = 0; k < 140; k++) {
+      const x = tnoise(k / 140, L.seed + 21, 1) * W + k * 13;
+      const xx = x % W;
+      const y0 = top(xx) * H + 6;
+      c.beginPath();
+      c.moveTo(xx, y0);
+      c.lineTo(xx + (L.kind === 'mesa' || L.kind === 'cliffs' ? 0 : 8 - (k % 16)), y0 + 18 + (k % 5) * 9);
+      c.stroke();
+    }
+  }
+  c.restore();
+  c.globalAlpha = 1;
+  if (L.kind === 'hills' && (L.color === '#5a8a3a' || L.color === '#7a90a8' || L.color === '#8a9ab0')) {
+    // little villages and fields on the gentle hills
+    for (let v = 0; v < 6; v++) {
+      const vx = ((tnoise(v / 6, L.seed + 33, 1) + v / 6) % 1) * W;
+      const vy = top(vx) * H + 10;
+      for (let k = 0; k < 5; k++) {
+        const hx = vx + k * 9 - 20;
+        const hy = vy + (k % 2) * 4;
+        c.fillStyle = mix('#f2ead8', sky, haze * 0.6);
+        c.fillRect(hx, hy - 6, 7, 6);
+        c.fillStyle = mix('#a8482a', sky, haze * 0.6);
+        c.beginPath();
+        c.moveTo(hx - 1, hy - 6);
+        c.lineTo(hx + 3.5, hy - 10);
+        c.lineTo(hx + 8, hy - 6);
+        c.fill();
+      }
+      c.fillStyle = mix('#d8c060', sky, 0.3 + haze * 0.5);
+      c.globalAlpha = 0.5;
+      c.fillRect(vx + 30, vy + 4, 40, 6);
+      c.globalAlpha = 1;
+    }
+  }
   if (L.kind === 'peaks' && L.snow) {
     // snow caps above a line
     c.save();
@@ -463,10 +515,52 @@ export function paintPanorama(spec: PanoSpec): Backdrop {
     }
     c.globalAlpha = 1;
   }
+  // grand skies: soft sun rays and a few birds
+  if (spec.grand && spec.sun) {
+    const sx = spec.sun.x * W;
+    const sy = spec.sun.y * H;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 9; k++) {
+      const a = -0.2 + k * 0.42 + r.range(-0.1, 0.1);
+      const gr = c.createLinearGradient(sx, sy, sx + Math.cos(a) * H, sy + Math.sin(a) * H);
+      gr.addColorStop(0, 'rgba(255,230,180,0.16)');
+      gr.addColorStop(1, 'rgba(255,230,180,0)');
+      c.fillStyle = gr;
+      c.beginPath();
+      c.moveTo(sx, sy);
+      c.lineTo(sx + Math.cos(a - 0.05) * H * 1.2, sy + Math.sin(a - 0.05) * H * 1.2);
+      c.lineTo(sx + Math.cos(a + 0.05) * H * 1.2, sy + Math.sin(a + 0.05) * H * 1.2);
+      c.fill();
+    }
+    c.restore();
+  }
+  c.strokeStyle = 'rgba(30,30,40,0.55)';
+  c.lineWidth = 1.6;
+  for (let k = 0; k < (spec.grand ? 7 : 3); k++) {
+    const bx = r.range(0, W);
+    const by = r.range(0.12, 0.38) * H;
+    const bs = r.range(4, 8);
+    c.beginPath();
+    c.moveTo(bx - bs, by - bs * 0.4);
+    c.quadraticCurveTo(bx - bs * 0.4, by - bs * 0.6, bx, by);
+    c.quadraticCurveTo(bx + bs * 0.4, by - bs * 0.6, bx + bs, by - bs * 0.4);
+    c.stroke();
+  }
   // relief layers, far to near (atmospheric perspective)
   const n = spec.layers.length;
   spec.layers.forEach((L, i) => {
     const haze = Math.max(0, 0.55 - (i / Math.max(1, n - 1)) * 0.55);
+    if (i > 0 && L.kind !== 'oddities' && L.kind !== 'water') {
+      // a band of mist in front of the farther layers
+      const my = (L.base - 0.04) * H;
+      const mg = c.createLinearGradient(0, my - 26, 0, my + 10);
+      mg.addColorStop(0, 'rgba(255,255,255,0)');
+      mg.addColorStop(0.7, mix(spec.skyBottom, '#ffffff', 0.4).replace('rgb', 'rgba').replace(')', ',0.32)'));
+      mg.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = mg;
+      c.fillRect(0, my - 26, W, 36);
+    }
     if (L.kind === 'water') {
       const y = L.base * H;
       const wg = c.createLinearGradient(0, y, 0, H);

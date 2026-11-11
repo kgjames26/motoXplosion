@@ -7,6 +7,7 @@ import { loadSettings, saveSettings, Layout, Quality } from './settings';
 import { Controls } from './ui/controls';
 import { Hud } from './ui/hud';
 import { Garage } from './ui/garage';
+import { MultiUI } from './ui/multiplayer';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
 import { bikeById, BIKES, rockClimb } from './bikes';
 import { Difficulty, DIFFICULTIES, MODES, ModeId } from './modes';
@@ -54,10 +55,13 @@ const hud = new Hud();
 const audio = new Audio();
 audio.setVolumes(settings.music, settings.sfx);
 
-type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'none';
+type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'none';
 const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   title: $('screen-title'),
   circuits: $('screen-circuits'),
+  multi: $('screen-multi'),
+  champ: $('screen-champ'),
+  mpwait: $('screen-mpwait'),
   pause: $('screen-pause'),
   over: $('screen-over'),
   settings: $('screen-settings'),
@@ -175,8 +179,14 @@ function refreshTitle(): void {
 }
 
 function buildModes(): void {
-  $('modes').innerHTML = MODES.map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('');
-  for (const el of $('modes').querySelectorAll('.mode-card'))
+  $('modes').innerHTML =
+    MODES.map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
+    `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>`;
+  $('mode-multi').addEventListener('click', () => {
+    closePickers();
+    mp.open();
+  });
+  for (const el of $('modes').querySelectorAll('.mode-card[data-mode]'))
     el.addEventListener('click', () => {
       profile.mode = (el as HTMLElement).dataset.mode as ModeId;
       saveP();
@@ -390,6 +400,7 @@ function bindSettings(): void {
   ($('set-pseudo') as HTMLInputElement).addEventListener('input', (e) => {
     settings.pseudo = (e.target as HTMLInputElement).value.slice(0, 14);
     saveSettings(settings);
+    mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', profile.bike);
     updateBest();
   });
   ($('set-vibration') as HTMLInputElement).addEventListener('change', (e) => {
@@ -452,6 +463,8 @@ function pause(): void {
   if (game.state !== 'playing') return;
   game.state = 'paused';
   controls.reset();
+  // a championship stage cannot be restarted alone
+  $('btn-restart').classList.toggle('hidden', mp.inStage);
   show('pause');
 }
 
@@ -463,6 +476,14 @@ function resume(): void {
 }
 
 function home(): void {
+  // multiplayer stage: leaving the run ends it for me (the others go on)
+  if (mp.inStage) {
+    if (game.state === 'paused' || game.state === 'playing') {
+      game.state = 'playing';
+      game.quit();
+    }
+    return;
+  }
   // quitting a run from the pause menu keeps its record and its coins
   if (game.state === 'paused' || game.state === 'playing') {
     game.quit();
@@ -564,6 +585,7 @@ function openGarage(from: ScreenName): void {
 }
 garage.onChange = () => {
   updateBest();
+  mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', profile.bike);
   if (game.state === 'title') {
     renderer.setPlayerModel(bikeById(profile.bike), outfit());
     game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
@@ -639,6 +661,35 @@ loadAssets()
   });
 show('title');
 renderer.render(game, 0, true);
+
+// ---------------------------------------------------------------- multiplayer
+
+const mp = new MultiUI({
+  game,
+  show: (s) => show(s),
+  pseudo: () => settings.pseudo.trim() || 'Pilote ' + (1 + Math.floor(Math.random() * 99)),
+  bike: () => profile.bike,
+  startStage: (stage, elapsed) => {
+    audio.unlock();
+    controls.reset();
+    const model = bikeById(profile.bike);
+    renderer.setPlayerModel(model, outfit());
+    audio.setElectric(!!model.electric);
+    game.pseudo = settings.pseudo.trim();
+    game.newRun({ region: stage.region, mode: stage.mode, model, spec: upgradedSpec(model, profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: stage.difficulty, circuit: stage.circuit, multi: true });
+    if (elapsed > 0) game.countdown = Math.max(0, game.countdown - elapsed / 1000);
+    renderer.render(game, 0, true);
+    show('none');
+  },
+  backToTitle: () => {
+    game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile' });
+    game.state = 'title';
+    refreshTitle();
+    renderer.render(game, 0, true);
+    show('title');
+  },
+  bank: () => finishRun(false),
+});
 
 // ---------------------------------------------------------------- launch screen
 
@@ -800,8 +851,10 @@ function frame(now: number): void {
   }
   if (ev.over) {
     audio.over();
-    finishRun(true);
+    if (mp.inStage) mp.localOver();
+    else finishRun(true);
   }
+  mp.frame(dt);
   audio.rain(game.state === 'playing' ? [0, 1, 0.12][game.weather] : 0);
   // engine: heard only while riding (silent on the home screen and every menu)
   const running = game.state === 'playing' && (!game.usesEnergy || game.fuel > 0);

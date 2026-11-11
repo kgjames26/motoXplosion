@@ -137,6 +137,45 @@ export class TerrainBuilder {
   private lineMat = new THREE.MeshBasicMaterial({ color: 0xf2f0e6, side: THREE.DoubleSide });
   private shadowGeo = new THREE.PlaneGeometry(1, 1);
   private haloMats = new Map<Sprite, THREE.Material>();
+  private blurMats = new Map<Sprite, THREE.Material>();
+  /** Blurred copy of a sprite (foreground depth of field). */
+  private blurMat(s: Sprite): THREE.Material {
+    let m = this.blurMats.get(s);
+    if (!m) {
+      const c = document.createElement('canvas');
+      c.width = s.canvas.width;
+      c.height = s.canvas.height;
+      const g = c.getContext('2d')!;
+      g.filter = `blur(${Math.max(1.5, c.width / 90)}px)`;
+      g.drawImage(s.canvas, 0, 0);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      m = new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.25, side: THREE.DoubleSide, color: (this.billboardMat(s) as THREE.MeshBasicMaterial).color.clone().multiplyScalar(0.92) });
+      this.blurMats.set(s, m);
+    }
+    return m;
+  }
+  private foreMaterial: THREE.Material | null = null;
+  /** The ground in front of the track: same look, softened (less flicker when it races by). */
+  private foreMat(): THREE.Material {
+    if (!this.foreMaterial) {
+      const base = this.mats.ground as THREE.MeshLambertMaterial;
+      const img = base.map!.image as CanvasImageSource & { width: number; height: number };
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.filter = 'blur(3px)';
+      // draw tiled 3×3 so the blur stays seamless, keep the centre
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) g.drawImage(img, i * c.width, j * c.height);
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.copy(base.map!.repeat);
+      t.colorSpace = THREE.SRGBColorSpace;
+      this.foreMaterial = new THREE.MeshLambertMaterial({ map: t, vertexColors: true, color: base.color.clone() });
+    }
+    return this.foreMaterial;
+  }
   private postGeo = new THREE.BoxGeometry(0.05, 0.8, 0.05);
   private postMat = new THREE.MeshLambertMaterial({ color: 0xf2efe6 });
   private tape: THREE.Material | null = null;
@@ -263,6 +302,8 @@ export class TerrainBuilder {
     for (const m of Object.values(this.mats)) m.dispose();
     this.shadowMaterial?.dispose();
     this.detail?.dispose();
+    this.foreMaterial?.dispose();
+    for (const m of this.blurMats.values()) m.dispose();
     this.tape?.dispose();
     this.postGeo.dispose();
     this.postMat.dispose();
@@ -509,7 +550,7 @@ export class TerrainBuilder {
       },
       (c) => steepAt(x0 + c),
     );
-    const gm = new THREE.Mesh(fore, [this.mats.ground, this.mats.rock]);
+    const gm = new THREE.Mesh(fore, [this.foreMat(), this.mats.rock]);
     gm.receiveShadow = true;
     group.add(gm);
 
@@ -523,6 +564,14 @@ export class TerrainBuilder {
       arr.push(m);
     };
     const anims: THREE.Mesh[] = [];
+    const instFore = new Map<Sprite, THREE.Matrix4[]>();
+    const addFore = (s: Sprite, x: number, y: number, z: number, scale: number, flip: boolean) => {
+      let arr = instFore.get(s);
+      if (!arr) instFore.set(s, (arr = []));
+      const m = new THREE.Matrix4().makeScale(flip ? -scale : scale, scale, scale);
+      m.setPosition(x, y, z);
+      arr.push(m);
+    };
     for (const p of w.props) {
       if (p.x < x0 || p.x >= x1) continue;
       const biome = w.biomeAt(p.x);
@@ -547,7 +596,7 @@ export class TerrainBuilder {
         add(s, p.x, backFieldY(w, p.x, z) - 0.05, z, p.scale * (tall ? 0.62 : 1), p.flip);
       } else if (p.depth < 0) {
         const z = Z_FRONT + 1 - p.depth * 6;
-        add(s, p.x, foreY(w, p.x, z) - 0.05, z, p.scale * 0.9, p.flip);
+        addFore(s, p.x, foreY(w, p.x, z) - 0.05, z, p.scale * 0.9, p.flip);
       } else if (isAsset) {
         // physical obstacle: exact size, base on the ground it was built on, just behind the bike
         add(s, p.x, p.baseY ?? w.heightAt(p.x), -0.5, 1, false);
@@ -609,6 +658,14 @@ export class TerrainBuilder {
     }
     for (const [s, mats] of inst) {
       const im = new THREE.InstancedMesh(this.billboardGeo(s), this.billboardMat(s), mats.length);
+      mats.forEach((m, i) => im.setMatrixAt(i, m));
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere();
+      group.add(im);
+    }
+    // foreground (close to the camera, fast): softly blurred like a camera's depth of field
+    for (const [s, mats] of instFore) {
+      const im = new THREE.InstancedMesh(this.billboardGeo(s), this.blurMat(s), mats.length);
       mats.forEach((m, i) => im.setMatrixAt(i, m));
       im.instanceMatrix.needsUpdate = true;
       im.computeBoundingSphere();

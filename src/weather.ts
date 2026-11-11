@@ -19,9 +19,9 @@ export const diffIndex = (d: Difficulty): number => DIFF_ORDER.indexOf(d);
 
 /** Grip multiplier by weather and surface (sand gets firmer when wet). */
 const GRIP: Record<Surface, [number, number, number]> = {
-  [Surface.Dirt]: [1, 0.88, 0.8],
-  [Surface.Grass]: [1, 0.8, 0.74],
-  [Surface.Mud]: [1, 0.9, 0.86],
+  [Surface.Dirt]: [1, 0.88, 0.74],
+  [Surface.Grass]: [1, 0.8, 0.68],
+  [Surface.Mud]: [1, 0.9, 0.78],
   [Surface.Sand]: [1, 1.05, 0.9],
   [Surface.Rock]: [1, 0.88, 0.8],
   [Surface.Wood]: [1, 0.82, 0.76],
