@@ -139,7 +139,7 @@ const MX_TABLE_H = 3.4;
 
 /** Kit pieces that make a jump: dirt only, flat at both ends, wide enough. */
 export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
-  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 0.9 && m.wid >= 6)
+  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 0.9 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile))
   .map(({ i }) => i);
 
 function shape(f: MxFeature, t: number): number {
