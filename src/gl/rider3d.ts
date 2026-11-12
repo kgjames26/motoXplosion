@@ -314,7 +314,7 @@ export class Rider {
     shell.rotation.y = Math.PI / 2; // bands front → back
     // chin bar: a horizontal arc in front of the mouth, joined to the shell on both sides
     const chin = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.046, sg(14), sg(30), Math.PI * 1.02), helmetPlain);
-    chin.rotation.set(Math.PI / 2, 0, -Math.PI * 0.51 + Math.PI / 2);
+    chin.rotation.set(Math.PI / 2, 0, -Math.PI * 0.51); // arc centred on the front (+x)
     chin.position.set(0.03, -0.085, 0);
     chin.scale.set(1.22, 0.95, 1.25);
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.11), strap);
@@ -347,10 +347,10 @@ export class Rider {
     spoiler.rotation.z = 0.9;
     // goggles: frame arc, curved mirrored lens, strap round the shell
     const frame = new THREE.Mesh(new THREE.TorusGeometry(0.163, 0.03, sg(10), sg(28), Math.PI * 0.62), strap);
-    frame.rotation.set(Math.PI / 2, 0, -Math.PI * 0.31 + Math.PI / 2);
+    frame.rotation.set(Math.PI / 2, 0, -Math.PI * 0.31); // arc centred on the front (+x)
     frame.position.set(0.012, 0.015, 0);
     frame.scale.set(1.1, 1, 1);
-    const lensM = new THREE.Mesh(new THREE.SphereGeometry(0.172, sg(24), sg(10), Math.PI / 2 - 0.62, 1.24, Math.PI / 2 - 0.2, 0.36), lens);
+    const lensM = new THREE.Mesh(new THREE.SphereGeometry(0.2, sg(24), sg(10), Math.PI - 0.62, 1.24, Math.PI / 2 - 0.2, 0.36), lens);
     lensM.position.set(0.02, 0.012, 0);
     const gStrap = new THREE.Mesh(new THREE.TorusGeometry(0.156, 0.017, sg(6), sg(36)).rotateX(Math.PI / 2), strap);
     gStrap.position.y = 0.015;
