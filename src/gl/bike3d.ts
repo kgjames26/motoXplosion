@@ -391,7 +391,12 @@ export class Bike3D {
     for (const o of moving) this.chassis.remove(o);
     mergeByMaterial(this.chassis);
     for (const o of moving) this.chassis.add(o);
-    for (const o of [this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers, this.steerHead]) mergeByMaterial(o);
+    for (const o of [this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers]) mergeByMaterial(o);
+    // the steering head merges its own fixed parts only: the front wheel and the lower legs move
+    // (suspension, spin, mudguard, plate) and must stay separate groups
+    this.steerHead.remove(this.frontWheel, this.forkLowers);
+    mergeByMaterial(this.steerHead);
+    this.steerHead.add(this.frontWheel, this.forkLowers);
     this.group.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true;
     });
@@ -473,8 +478,8 @@ export class Bike3D {
     c.add(box);
     const plateMat = new THREE.MeshStandardMaterial({ map: plateTexture('98', '#cdbf96', '#22402a'), roughness: 0.6, metalness: 0.2, transparent: true });
     for (const z of [-1, 1]) {
-      const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.23), plateMat);
-      plate.position.set(-0.4, 0.0, z * 0.13);
+      const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.15), plateMat);
+      plate.position.set(-0.38, -0.02, z * 0.123);
       if (z < 0) plate.rotation.y = Math.PI;
       c.add(plate);
     }

@@ -141,9 +141,20 @@ const MX_JUMP_MAX = 3.2;
 const MX_TABLES = [61, 65];
 const MX_TABLE_H = 3.4;
 
+/** One rise, one plateau, one fall: no sag between two crests (a double is not a table). */
+function oneHump(p: number[]): boolean {
+  const top = Math.max(...p);
+  const a = p.findIndex((v) => v >= top - 0.05);
+  const b = p.length - 1 - [...p].reverse().findIndex((v) => v >= top - 0.05);
+  for (let i = 0; i < a; i++) if (p[i + 1] < p[i] - 0.15) return false;
+  for (let i = b; i < p.length - 1; i++) if (p[i + 1] > p[i] + 0.15) return false;
+  for (let i = a; i < b; i++) if (p[i] < top - 0.5) return false;
+  return true;
+}
+
 /** Kit pieces that make a jump: dirt only, flat at both ends, wide enough. */
 export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
-  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 0.9 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile))
+  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 2.5 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile) && oneHump(m.profile))
   .map(({ i }) => i);
 
 /** Width of the track covered by the piece (it is stretched across it). */
@@ -155,10 +166,10 @@ function gridHeight(f: MxFeature, tp: number, np: number): number {
   const u = Math.min(47.999, Math.max(0, (tp / f.len) * 48));
   const i = Math.floor(u);
   const a = u - i;
-  const c = 4 + Math.min(0.999, Math.abs(np) / MX_TRACK_W / 0.48) * 4; // pieces are symmetric across
-  const j = Math.min(7, Math.floor(c));
+  const c = 8 + Math.min(0.999, Math.abs(np) / MX_TRACK_W / 0.48) * 8; // pieces are symmetric across
+  const j = Math.min(15, Math.floor(c));
   const b = c - j;
-  const at = (r: number, q: number) => g[r * 9 + q];
+  const at = (r: number, q: number) => g[r * 17 + q];
   const h0 = at(i, j) * (1 - b) + at(i, j + 1) * b;
   const h1 = at(i + 1, j) * (1 - b) + at(i + 1, j + 1) * b;
   return Math.max(0, h0 + (h1 - h0) * a) * f.sy;
@@ -231,7 +242,7 @@ function place(): void {
       // tabletops: a ramp, a flat top at the height of the crest, then the inverted butte that lands
       // the jump. Those pieces (flat plateau, gentle faces) can be much bigger than the others.
       const table = MX_TABLES.includes(mod);
-      const hBig = table ? MX_TABLE_H : Math.min(gentle ? MX_JUMP_MAX : 2.3, Math.max(0.9, top * (gentle ? 0.5 : 0.3)));
+      const hBig = table ? MX_TABLE_H * (0.7 + 0.15 * ((q * 5) % 3)) : Math.min(gentle ? MX_JUMP_MAX : 2.3, Math.max(0.9, top * (gentle ? 0.5 : 0.3)));
       // no face (up or down) steeper than ~0.45 (24°): a short steep ramp throws the bike up like
       // a ski jump (lunar) and a steep back face is a wall. So the height sets the length; take the
       // biggest version of the piece that fits in the stretch.
@@ -239,7 +250,7 @@ function place(): void {
       for (let j = 0; j < 48; j++) step = Math.max(step, Math.abs(m.profile[j + 1] - m.profile[j]));
       let h = hBig;
       let len = 0;
-      for (const k of [1, 0.8, 0.62, 0.48, 0.36]) {
+      for (const k of [1, 0.88, 0.76, 0.66]) {
         h = Math.max(0.6, hBig * k);
         len = Math.max(m.len * 0.42, h * 8.5, (48 * step * (h / top)) / (table ? 0.36 : 0.45));
         if (len <= end - s) break;
