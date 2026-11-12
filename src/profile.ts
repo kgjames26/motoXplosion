@@ -1,3 +1,4 @@
+import { migrateUpgrades } from './upgrades';
 import { BIKES } from './bikes';
 import type { CircuitRecord } from './circuits';
 import type { Difficulty, ModeId } from './modes';
@@ -62,6 +63,7 @@ export function loadProfile(): Profile {
       p.circuits = circ;
       p.cruiseUnlock = { ...p.cruiseUnlock };
       p.upgrades = JSON.parse(JSON.stringify(p.upgrades ?? {}));
+      migrateUpgrades(p.upgrades); // v2.35: five simple parts
       p.tyres = [...(p.tyres ?? [])];
       p.outfits = [...p.outfits];
       p.owned = [...p.owned];

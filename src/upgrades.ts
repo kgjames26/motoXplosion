@@ -21,69 +21,71 @@ const svg = (d: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d=
 
 export const PARTS: Part[] = [
   {
-    id: 'moteur',
-    chip: '+5 % PUISSANCE',
+    id: 'accel',
+    chip: '+6 % ACCÉLÉRATION',
     color: '#ff6a3a',
-    name: 'Préparation moteur',
-    effect: '+5 % de puissance et +4 % de couple par niveau',
+    name: 'Accélération',
+    effect: '+6 % de puissance et +6 % de couple par niveau',
     icon: svg('M4 9h3l2-2h6v3h2l2-2h1v8h-1l-2-2h-2v3H9l-2-2H4zM9 4h6'),
-    apply: (s, l) => ({ ...s, power: s.power * (1 + 0.05 * l), torque: s.torque * (1 + 0.04 * l) }),
+    apply: (s, l) => ({ ...s, power: s.power * (1 + 0.06 * l), torque: s.torque * (1 + 0.06 * l) }),
   },
   {
-    id: 'echappement',
-    chip: '+3 % PUISSANCE · +2,5 % VITESSE',
+    id: 'vmax',
+    chip: '+4 % VITESSE DE POINTE',
     color: '#ffb020',
-    name: 'Échappement sport',
-    effect: '+3 % de puissance et +2,5 % de vitesse max par niveau',
+    name: 'Vitesse de pointe',
+    effect: '+4 % de vitesse max et +2 % de puissance par niveau',
     icon: svg('M3 14h10l4-3h4v6h-4l-4-3M6 14v3M17 9l2-3'),
-    apply: (s, l) => ({ ...s, power: s.power * (1 + 0.03 * l), maxSpeed: s.maxSpeed * (1 + 0.025 * l) }),
+    apply: (s, l) => ({ ...s, maxSpeed: s.maxSpeed * (1 + 0.04 * l), power: s.power * (1 + 0.02 * l) }),
   },
   {
-    id: 'transmission',
-    chip: '+6 % COUPLE',
+    id: 'grip',
+    chip: '+4 % ADHÉRENCE',
     color: '#e84a8a',
-    name: 'Transmission courte',
-    effect: '+6 % de couple par niveau (reprises, montées, rochers)',
-    icon: svg('M8 12a4 4 0 1 0 0 .01M18 12a2.5 2.5 0 1 0 0 .01M8 8l10 1.5M8 16l10-1.5'),
-    apply: (s, l) => ({ ...s, torque: s.torque * (1 + 0.06 * l) }),
+    name: 'Adhérence',
+    effect: '+4 % d’adhérence des pneus par niveau',
+    icon: svg('M12 4a8 8 0 1 0 0 16 8 8 0 1 0 0-16M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8M4 12h3M17 12h3'),
+    apply: (s, l) => ({ ...s, grip: s.grip * (1 + 0.04 * l) }),
   },
   {
-    id: 'suspensions',
+    id: 'control',
+    chip: '+8 % CONTRÔLE',
+    color: '#14d1c0',
+    name: 'Contrôle',
+    effect: '+8 % de freinage et +6 % d’agilité en l’air par niveau',
+    icon: svg('M12 3l7 4v10l-7 4-7-4V7zM12 3v18M5 7l14 10M19 7L5 17'),
+    apply: (s, l) => ({ ...s, brakes: s.brakes * (1 + 0.08 * l), air: s.air * (1 + 0.06 * l) }),
+  },
+  {
+    id: 'susp',
     chip: '+7 % SUSPENSIONS',
     color: '#3fa8ff',
-    name: 'Suspensions réglables',
+    name: 'Suspensions',
     effect: '+7 % de fermeté et +5 % de débattement par niveau',
     icon: svg('M12 2v4M12 18v4M8 6h8M8 18h8M9 8l6 2-6 2 6 2-6 2'),
     apply: (s, l) => ({ ...s, suspK: s.suspK * (1 + 0.07 * l), travel: s.travel * (1 + 0.05 * l) }),
   },
-  {
-    id: 'freins',
-    chip: '+10 % FREINAGE',
-    color: '#d8261f',
-    name: 'Freins gros disque',
-    effect: '+10 % de freinage par niveau',
-    icon: svg('M12 4a8 8 0 1 0 0 16 8 8 0 1 0 0-16M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6M18 6l3-2'),
-    apply: (s, l) => ({ ...s, brakes: s.brakes * (1 + 0.1 * l) }),
-  },
-  {
-    id: 'allegement',
-    chip: '−4 % POIDS · +4 % AGILITÉ',
-    color: '#14d1c0',
-    name: 'Allègement carbone',
-    effect: '−4 % de poids et +4 % d’agilité en l’air par niveau',
-    icon: svg('M12 3l7 4v10l-7 4-7-4V7zM12 3v18M5 7l14 10M19 7L5 17'),
-    apply: (s, l) => ({ ...s, mass: s.mass * (1 - 0.04 * l), air: s.air * (1 + 0.04 * l) }),
-  },
-  {
-    id: 'reservoir',
-    chip: '−8 % CONSOMMATION',
-    color: '#7ad84a',
-    name: 'Grand réservoir / batterie',
-    effect: '−8 % de consommation par niveau (roule plus longtemps)',
-    icon: svg('M6 5h9l3 3v11H6zM9 9h5M18 8h2v6'),
-    apply: (s, l) => ({ ...s, consumption: s.consumption * (1 - 0.08 * l) }),
-  },
 ];
+
+/** Old (v2.15–v2.34) part ids → the five parts of today: levels already bought are kept. */
+export function migrateUpgrades(up: Record<string, Record<string, number>>): void {
+  const map: Record<string, string> = { moteur: 'accel', transmission: 'accel', echappement: 'vmax', freins: 'control', allegement: 'control', suspensions: 'susp' };
+  for (const bike of Object.keys(up)) {
+    const lv = up[bike];
+    let old = false;
+    for (const k of Object.keys(map)) {
+      if (lv[k] === undefined) continue;
+      old = true;
+      lv[map[k]] = Math.min(3, Math.max(lv[map[k]] ?? 0, lv[k]));
+      delete lv[k];
+    }
+    if (lv.reservoir !== undefined) {
+      old = true;
+      delete lv.reservoir;
+    }
+    void old;
+  }
+}
 
 export const MAX_LEVEL = 3;
 export type Levels = Record<string, number>;

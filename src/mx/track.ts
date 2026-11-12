@@ -152,13 +152,30 @@ function oneHump(p: number[]): boolean {
   return true;
 }
 
+/** Half-width of the flat top of a piece, as a fraction of its width (from the measured grid). */
+function plateauFrac(m: { grid: number[]; profile: number[] }): number {
+  if (!m.grid.length) return 0;
+  const top = Math.max(...m.profile);
+  const row = m.profile.indexOf(top);
+  let j = 8;
+  while (j < 16 && m.grid[row * 17 + j + 1] >= top * 0.9) j++;
+  return m.grid[row * 17 + 8] >= top * 0.9 ? (j - 8) * 0.06 + 0.03 : 0;
+}
+
+/**
+ * Pieces are stretched across the track so that their flat top covers the whole rideable width
+ * (and a little more): the bike never rides on a rounded flank.
+ */
+export function mxLatScale(mod: number): number {
+  const m = KIT_MODULES[mod];
+  const q = plateauFrac(m);
+  return q > 0 ? Math.min(1.8, Math.max(1, (MX_HALF_WIDTH + 0.5) / (q * m.wid))) : (MX_HALF_WIDTH * 2 + 0.6) / m.wid;
+}
+
 /** Kit pieces that make a jump: dirt only, flat at both ends, wide enough. */
 export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
-  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 2.5 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile) && oneHump(m.profile))
+  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 2.5 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile) && oneHump(m.profile) && plateauFrac(m) >= 0.2)
   .map(({ i }) => i);
-
-/** Width of the track covered by the piece (it is stretched across it). */
-const MX_TRACK_W = MX_HALF_WIDTH * 2 + 0.6;
 
 /** Height of a piece at its own coordinates: tp along (0..len), np across (m, from its axis). */
 function gridHeight(f: MxFeature, tp: number, np: number): number {
@@ -166,7 +183,7 @@ function gridHeight(f: MxFeature, tp: number, np: number): number {
   const u = Math.min(47.999, Math.max(0, (tp / f.len) * 48));
   const i = Math.floor(u);
   const a = u - i;
-  const c = 8 + Math.min(0.999, Math.abs(np) / MX_TRACK_W / 0.48) * 8; // pieces are symmetric across
+  const c = 8 + Math.min(0.999, Math.abs(np) / (KIT_MODULES[f.mod].wid * mxLatScale(f.mod)) / 0.48) * 8; // pieces are symmetric across
   const j = Math.min(15, Math.floor(c));
   const b = c - j;
   const at = (r: number, q: number) => g[r * 17 + q];
@@ -226,6 +243,23 @@ const CFG_CROSS: PlaceCfg = { tableH: MX_TABLE_H, jumpMax: MX_JUMP_MAX, slope: 0
 /** Cruising rolls through the same track at a ride's pace: low rollers, long and gentle, well spaced. */
 const CFG_CRUISE: PlaceCfg = { tableH: 1.3, jumpMax: 0.9, slope: 0.22, tableSlope: 0.2, gap: 30 };
 
+/** True when no other part of the circuit passes under the (now wide) piece laid on [s, s+len]. */
+function footprintClear(s: number, len: number, mod: number): boolean {
+  const pm = loopAt(s + len / 2);
+  const c = Math.cos(pm.th);
+  const sn = Math.sin(pm.th);
+  const halfW = (KIT_MODULES[mod].wid * mxLatScale(mod)) / 2 + 3;
+  for (let i = 0; i < MX_LEN; i += 3) {
+    const d = (((i - s) % MX_LEN) + MX_LEN) % MX_LEN;
+    if (d < len + 12 || d > MX_LEN - 12) continue;
+    const p = loopAt(i);
+    const dx = p.x - pm.x;
+    const dz = p.z - pm.z;
+    if (Math.abs(dx * c + dz * sn) < len / 2 + 3 && Math.abs(-dx * sn + dz * c) < halfW) return false;
+  }
+  return true;
+}
+
 function place(out: MxFeature[], cfg: PlaceCfg): void {
   const straight = (i: number) => Math.abs(kp[wrap(i)]) < 0.012;
   const gentle = (i: number) => Math.abs(kp[wrap(i)]) < 0.02;
@@ -283,7 +317,7 @@ function place(out: MxFeature[], cfg: PlaceCfg): void {
         len = Math.max(m.len * 0.42, h * 8.5, (48 * step * (h / top)) / (table ? cfg.tableSlope : cfg.slope));
         // the piece is laid straight: the track must not curve away from it (it would leave the
         // module and the bike would ride beside it)
-        if (len <= end - s && pathDrift(s, len) <= MX_MAX_DRIFT) {
+        if (len <= end - s && pathDrift(s, len) <= MX_MAX_DRIFT && footprintClear(s, len, mod)) {
           fits = true;
           break;
         }

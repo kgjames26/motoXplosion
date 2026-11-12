@@ -4,7 +4,7 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
-import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxPose } from './track';
+import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
 
@@ -425,7 +425,7 @@ export class MxScene {
       if (!src) continue;
       const g = src.group.clone();
       const p = loopAt(f.s0 + f.len / 2);
-      const lat = (MX_HALF_WIDTH * 2 + 0.6) / k.wid;
+      const lat = mxLatScale(f.mod);
       g.position.set(p.x, 0.01, p.z);
       // the piece's long axis along the track
       g.rotation.y = k.alongX ? -p.th : Math.PI / 2 - p.th;
