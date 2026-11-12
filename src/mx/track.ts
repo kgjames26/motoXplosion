@@ -129,6 +129,10 @@ export interface MxFeature {
   h: number;
   sx: number;
   sy: number;
+  /** Centre of the piece on the ground (it is laid straight, the track may curve under it). */
+  px: number;
+  pz: number;
+  pth: number;
 }
 export const MX_FEATURES: MxFeature[] = [];
 /** Height of the biggest jumps of the track (m). */
@@ -142,11 +146,43 @@ export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
   .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 0.9 && m.wid >= 6 && m.edge <= 0.3 * Math.max(...m.profile))
   .map(({ i }) => i);
 
-function shape(f: MxFeature, t: number): number {
-  const prof = KIT_MODULES[f.mod].profile;
-  const u = Math.min(47.999, Math.max(0, (t / f.len) * 48));
+/** Width of the track covered by the piece (it is stretched across it). */
+const MX_TRACK_W = MX_HALF_WIDTH * 2 + 0.6;
+
+/** Height of a piece at its own coordinates: tp along (0..len), np across (m, from its axis). */
+function gridHeight(f: MxFeature, tp: number, np: number): number {
+  const g = KIT_MODULES[f.mod].grid;
+  const u = Math.min(47.999, Math.max(0, (tp / f.len) * 48));
   const i = Math.floor(u);
-  return Math.max(0, prof[i] + (prof[i + 1] - prof[i]) * (u - i)) * f.sy;
+  const a = u - i;
+  const c = 4 + Math.min(0.999, Math.abs(np) / MX_TRACK_W / 0.48) * 4; // pieces are symmetric across
+  const j = Math.min(7, Math.floor(c));
+  const b = c - j;
+  const at = (r: number, q: number) => g[r * 9 + q];
+  const h0 = at(i, j) * (1 - b) + at(i, j + 1) * b;
+  const h1 = at(i + 1, j) * (1 - b) + at(i + 1, j + 1) * b;
+  return Math.max(0, h0 + (h1 - h0) * a) * f.sy;
+}
+
+/** Height of a piece at loop arc length s, n metres off the centre line (world-space, like the mesh). */
+function featureHeight(f: MxFeature, s: number, n: number): number {
+  const p = loopAt(s);
+  const dx = p.x - Math.sin(p.th) * n - f.px;
+  const dz = p.z + Math.cos(p.th) * n - f.pz;
+  const c = Math.cos(f.pth);
+  const sn = Math.sin(f.pth);
+  return gridHeight(f, f.len / 2 + dx * c + dz * sn, -dx * sn + dz * c);
+}
+
+/** Track height above the base level at loop arc length s, n metres off the centre line. */
+export function loopHeightN(s: number, n: number): number {
+  const w = wrap(s);
+  for (const f of MX_FEATURES) {
+    let t = w - wrap(f.s0);
+    if (t < 0) t += MX_LEN;
+    if (t <= f.len) return featureHeight(f, s, n);
+  }
+  return 0;
 }
 
 /** The main straight: where the lap starts and where cruising joins and leaves the loop. */
@@ -213,22 +249,17 @@ function place(): void {
         continue;
       }
       tries = 0;
-      MX_FEATURES.push({ mod, s0: s, len, h, sx: len / m.len, sy: h / top });
+      const pm = loopAt(s + len / 2);
+      MX_FEATURES.push({ mod, s0: s, len, h, sx: len / m.len, sy: h / top, px: pm.x, pz: pm.z, pth: pm.th });
       s += len + 8;
     }
   }
 }
 place();
 
-/** Track height above the base level at loop arc length s. */
+/** Track height above the base level at loop arc length s (centre line). */
 export function loopHeight(s: number): number {
-  const w = wrap(s);
-  for (const f of MX_FEATURES) {
-    let t = w - wrap(f.s0);
-    if (t < 0) t += MX_LEN;
-    if (t <= f.len) return shape(f, t);
-  }
-  return 0;
+  return loopHeightN(s, 0);
 }
 
 // ---------------------------------------------------------------- paths
@@ -280,4 +311,13 @@ export function mxPathHeight(u: number, cruise: boolean): number {
   if (!cruise) return loopHeight(MX_STRAIGHT[0] + u);
   if (u < MX_ENTRY || u >= MX_ENTRY + MX_CRUISE_LOOP) return 0;
   return loopHeight(MX_STRAIGHT[0] + (u - MX_ENTRY));
+}
+
+/** How much higher (or lower) the ground is n metres off the centre line at distance u. */
+export function mxLateralDelta(u: number, cruise: boolean, n: number): number {
+  let s: number;
+  if (!cruise) s = MX_STRAIGHT[0] + u;
+  else if (u < MX_ENTRY || u >= MX_ENTRY + MX_CRUISE_LOOP) return 0;
+  else s = MX_STRAIGHT[0] + (u - MX_ENTRY);
+  return loopHeightN(s, n) - loopHeightN(s, 0);
 }

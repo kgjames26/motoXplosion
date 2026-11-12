@@ -1,7 +1,7 @@
 import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
-import { MX_ZONE_LEN } from '../mx/track';
+import { MX_ZONE_LEN, mxLateralDelta } from '../mx/track';
 import type { ModeId } from '../modes';
 import { tyreBonus, Weather, weatherGrip } from '../weather';
 import {
@@ -288,8 +288,15 @@ export class World {
     const t = f - i;
     const a = this.sampleHeight(i);
     const b = this.sampleHeight(i + 1);
-    return a + (b - a) * t;
+    const h = a + (b - a) * t;
+    if (this.mxLatN > 0.05 || this.mxLatN < -0.05) {
+      const z = this.mxAt(x);
+      if (z) return h + mxLateralDelta(x - z.x0, z.cruise, this.mxLatN);
+    }
+    return h;
   }
+  /** Motocross: lateral position (m) of the rider whose physics is being stepped (mounds are lower at their sides). */
+  mxLatN = 0;
   visualAt(x: number): number {
     const f = x / DX;
     const i = Math.floor(f);

@@ -1172,8 +1172,15 @@ export class Game {
     this.acc += dt;
     let n = 0;
     while (this.acc >= PHYSICS_DT && n < 40) {
+      // motocross: the ground under a rider depends on how far off the centre line he is
+      this.world.mxLatN = this.mxKind ? this.mxN : 0;
       this.bike.step(this.world, inp, PHYSICS_DT);
-      for (let i = 0; i < this.opponents.length; i++) if (!this.opponents[i].remote) this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
+      for (let i = 0; i < this.opponents.length; i++) {
+        if (this.opponents[i].remote) continue;
+        this.world.mxLatN = this.mxKind ? (this.opponents[i].mxN ?? 0) : 0;
+        this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
+      }
+      this.world.mxLatN = 0;
       this.acc -= PHYSICS_DT;
       n++;
     }
