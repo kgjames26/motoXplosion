@@ -17,7 +17,7 @@ import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose } fr
 /** v2.26 motocross events: one lap against the clock, flips on half a lap, 2-lap race. */
 export type MxKind = 'time' | 'tricks' | 'race';
 /** Time attack medals (s): gold, silver, bronze. */
-export const MX_TIMES = [62, 70, 85];
+export const MX_TIMES = [80, 92, 110];
 /** Trick contest medals (flips): gold, silver, bronze. */
 export const MX_TRICKS = [6, 4, 2];
 

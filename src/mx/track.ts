@@ -11,6 +11,8 @@
  * curvature turns right (the rider's right is +Z when riding along +X).
  */
 
+import { KIT_MODULES } from './kitData';
+
 const CTRL: [number, number][] = [
   [-90, 0], [-30, 0], [30, 0], [90, 0], // main straight (start / finish)
   [124, 24], [92, 50], // first hairpin (right)
@@ -111,42 +113,35 @@ export function loopAt(s: number): { x: number; z: number; th: number; k: number
   return { x: lerpArr(px, s), z: lerpArr(pz, s), th: a + (b - a) * f, k: lerpArr(kp, s) };
 }
 
-// ---------------------------------------------------------------- features (height profile)
+// ---------------------------------------------------------------- features: the kit's dirt mounds
 
-export type MxFeature = { kind: 'table' | 'double' | 'whoops' | 'rollers'; s0: number; len: number; h: number; lip: number };
+/**
+ * v2.27: every jump of the track is a piece of the dirt park kit (a pure dirt mound), laid
+ * across the track. The physics rides the measured profile of that very piece (kitData.ts),
+ * stretched like the piece is: `sx` along the track, `sy` in height.
+ */
+export interface MxFeature {
+  /** Index in KIT_MODULES. */
+  mod: number;
+  s0: number;
+  len: number;
+  /** Height of the piece on the track (m). */
+  h: number;
+  sx: number;
+  sy: number;
+}
 export const MX_FEATURES: MxFeature[] = [];
-const hgt = new Float32Array(MX_LEN);
-const ease = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/** Kit pieces that make a jump: dirt only, flat at both ends, wide enough. */
+export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
+  .filter(({ m }) => m.mats.length === 1 && m.mats[0] === 'Dirt' && Math.abs(m.profile[0]) < 0.3 && Math.abs(m.profile[48]) < 0.3 && Math.max(...m.profile) >= 0.9 && m.wid >= 6)
+  .map(({ i }) => i);
 
 function shape(f: MxFeature, t: number): number {
-  const H = f.h;
-  if (f.kind === 'table') {
-    const Lr = f.lip;
-    const Ld = H * 5.2;
-    const top = f.len - Lr - Ld;
-    if (t < Lr) return H * Math.pow(t / Lr, 1.3);
-    if (t < Lr + top) return H;
-    return H * (1 - ease((t - Lr - top) / Ld));
-  }
-  if (f.kind === 'double') {
-    const Lr = f.lip;
-    const fall = H * 1.3;
-    const gap = f.len - Lr - fall - H * 1.2 - 1.2 - H * 5;
-    const a = Lr;
-    const b = a + fall;
-    const c = b + gap;
-    const e = c + H * 1.2;
-    const g = e + 1.2;
-    if (t < a) return H * Math.pow(t / a, 1.3);
-    if (t < b) return H * (1 - ease((t - a) / fall));
-    if (t < c) return 0;
-    if (t < e) return H * 0.9 * ease((t - c) / (H * 1.2));
-    if (t < g) return H * 0.9;
-    return H * 0.9 * (1 - ease((t - g) / (H * 5)));
-  }
-  const lam = f.kind === 'whoops' ? 3.4 : 9;
-  const fade = Math.min(1, t / lam, (f.len - t) / lam);
-  return (H * (1 - Math.cos((2 * Math.PI * t) / lam)) * fade) / 2;
+  const prof = KIT_MODULES[f.mod].profile;
+  const u = Math.min(47.999, Math.max(0, (t / f.len) * 48));
+  const i = Math.floor(u);
+  return Math.max(0, prof[i] + (prof[i + 1] - prof[i]) * (u - i)) * f.sy;
 }
 
 /** The main straight: where the lap starts and where cruising joins and leaves the loop. */
@@ -154,60 +149,49 @@ export let MX_STRAIGHT: [number, number] = [0, 0];
 
 function place(): void {
   const straight = (i: number) => Math.abs(kp[wrap(i)]) < 0.012;
-  // stretches of straight track
-  const runs: [number, number][] = [];
-  let i0 = 0;
-  while (straight(i0)) i0--; // start scanning inside a turn
-  for (let i = i0 + 1; i < i0 + 1 + MX_LEN; ) {
-    if (!straight(i)) {
-      i++;
-      continue;
+  const gentle = (i: number) => Math.abs(kp[wrap(i)]) < 0.02;
+  const runsOf = (ok: (i: number) => boolean, min: number): [number, number][] => {
+    const runs: [number, number][] = [];
+    let i0 = 0;
+    while (ok(i0)) i0--; // start scanning inside a turn
+    for (let i = i0 + 1; i < i0 + 1 + MX_LEN; ) {
+      if (!ok(i)) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (ok(j) && j < i0 + 1 + MX_LEN) j++;
+      if (j - i >= min) runs.push([i, j]);
+      i = j;
     }
-    let j = i;
-    while (straight(j) && j < i0 + 1 + MX_LEN) j++;
-    if (j - i >= 22) runs.push([i, j]);
-    i = j;
-  }
-  // the main straight is the one the loop starts on
-  const mainRun = runs.find(([a, b]) => a <= 70 && b >= 70) ?? runs[0];
+    return runs;
+  };
+  const mainRun = runsOf(straight, 22).find(([a, b]) => a <= 70 && b >= 70)!;
   MX_STRAIGHT = [mainRun[0], mainRun[1]];
-  const kinds: MxFeature['kind'][] = ['table', 'whoops', 'double', 'rollers', 'table', 'double', 'whoops', 'table'];
+  // the pieces, in a fixed shuffled order (big and small alternate along the lap)
+  const order = KIT_JUMPS.slice().sort((a, b) => ((a * 7919) % 31) - ((b * 7919) % 31));
   let q = 0;
-  for (const [a, b] of runs.sort((x, y) => x[0] - y[0])) {
-    const main = a === MX_STRAIGHT[0];
-    let s = a + (main ? 42 : 7); // the start grid stays flat
-    const end = b - (main ? 26 : 7); // and so does the fork to the exit lane
-    while (s < end - 14) {
-      const kind = kinds[q % kinds.length];
-      const room = end - s;
-      let f: MxFeature | null = null;
-      if (kind === 'table') {
-        const h = Math.min(2.2, 1.3 + (q % 3) * 0.4);
-        const len = h * 4.4 + 8 + (q % 2) * 3 + h * 5.2;
-        if (len <= room) f = { kind, s0: s, len, h, lip: h * 4.4 };
-      } else if (kind === 'double') {
-        const h = 1.5 + (q % 2) * 0.3;
-        const len = h * 4.2 + h * 1.3 + 4.5 + h * 1.2 + 1.2 + h * 5;
-        if (len <= room) f = { kind, s0: s, len, h, lip: h * 4.2 };
-      } else if (kind === 'whoops') {
-        const len = Math.min(room, 3.4 * 7);
-        if (len >= 3.4 * 4) f = { kind, s0: s, len, h: 0.55, lip: 0 };
-      } else {
-        const len = Math.min(room, 9 * 3);
-        if (len >= 18) f = { kind, s0: s, len, h: 1.0, lip: 0 };
-      }
+  for (const [a, b] of runsOf(gentle, 16).sort((x, y) => x[0] - y[0])) {
+    const main = a <= MX_STRAIGHT[0] + 5 && b >= MX_STRAIGHT[1] - 5;
+    let s = a + (main ? 42 : 5); // the start grid stays flat
+    const end = b - (main ? 26 : 5); // and so does the fork to the exit lane
+    let tries = 0;
+    while (s < end - 9 && tries < order.length) {
+      const mod = order[q % order.length];
       q++;
-      if (!f) {
-        // nothing of this kind fits: try a row of whoops in what is left, then stop
-        if (room >= 18 && q % 2) MX_FEATURES.push({ kind: 'rollers', s0: s, len: Math.floor(room / 9) * 9, h: 0.9, lip: 0 });
-        else if (room >= 14) MX_FEATURES.push({ kind: 'whoops', s0: s, len: Math.floor(room / 3.4) * 3.4, h: 0.5, lip: 0 });
-        break;
+      const m = KIT_MODULES[mod];
+      const top = Math.max(...m.profile);
+      const h = Math.min(2.3, Math.max(0.6, top * 0.3));
+      const len = Math.max(m.len * 0.42, h * 8.5);
+      if (len > end - s) {
+        tries++;
+        continue;
       }
-      MX_FEATURES.push(f);
-      s += f.len + 9;
+      tries = 0;
+      MX_FEATURES.push({ mod, s0: s, len, h, sx: len / m.len, sy: h / top });
+      s += len + 8;
     }
   }
-  for (const f of MX_FEATURES) for (let t = 0; t <= f.len; t++) hgt[wrap(Math.round(f.s0 + t))] = 0;
 }
 place();
 

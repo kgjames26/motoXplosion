@@ -976,15 +976,14 @@ export class Generator {
         const laps = cruise ? 2 : 6;
         for (let lap = 0; lap < laps; lap++)
           for (const f of MX_FEATURES) {
-            if (f.kind !== 'table' && f.kind !== 'double') continue;
-            let u = ((f.s0 - MX_STRAIGHT[0]) % MX_LEN + MX_LEN) % MX_LEN + lap * MX_LEN + (cruise ? MX_ENTRY : 0);
+            if (f.h < 1) continue;
+            const u = ((f.s0 - MX_STRAIGHT[0]) % MX_LEN + MX_LEN) % MX_LEN + lap * MX_LEN + (cruise ? MX_ENTRY : 0);
             if (cruise && u + f.len > MX_ENTRY + MX_CRUISE_LOOP) continue;
             if (u + f.len > len) continue;
             for (let k = 0; k < 5; k++) {
-              const t = f.lip * 0.9 + (k / 4) * (f.len - f.lip) * 0.75;
-              this.world.coins.push({ x: x0 + u + t, y: h0 + f.h + 1.3 + Math.sin((k / 4) * Math.PI) * 1.1, taken: false, takenAt: 0 });
+              const t = f.len * (0.35 + (k / 4) * 0.55);
+              this.world.coins.push({ x: x0 + u + t, y: h0 + f.h + 1.2 + Math.sin((k / 4) * Math.PI) * 1.0, taken: false, takenAt: 0 });
             }
-            void u;
           }
       },
     };

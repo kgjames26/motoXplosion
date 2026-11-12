@@ -4,7 +4,9 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
-import { loopAt, loopHeight, MX_ENTRY, MX_EXIT, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, MX_STRAIGHT, mxPose } from './track';
+import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxPose } from './track';
+import { KIT_MODULES } from './kitData';
+import { assetsFor } from '../catalog';
 
 /**
  * v2.26 — the motocross track in 3D: the loop (dirt ribbon with its jumps, whoops and banked
@@ -19,11 +21,12 @@ import { loopAt, loopHeight, MX_ENTRY, MX_EXIT, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF
  */
 
 const KIT_URL = `${(import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/'}low-poly_dirt_park_modular_kit.glb`;
-const KIT_SCALE = 0.55;
+const BASE = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
 
 interface Module {
   group: THREE.Group;
-  r: number;
+  cx: number;
+  cz: number;
 }
 
 /** Height of the banking on the outside of a turn (m) at lateral offset n. */
@@ -38,7 +41,7 @@ export class MxScene {
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
   private sun = new THREE.DirectionalLight(0xfff2dc, 2.4);
   private dirt = new THREE.MeshLambertMaterial({ color: 0x9a6a44, side: THREE.DoubleSide });
-  private grass = new THREE.MeshLambertMaterial({ color: 0x5f9a3c });
+  private grass = new THREE.MeshLambertMaterial({ color: 0xb09070 });
   private carriers = new Map<Bike3D, THREE.Group>();
   private coins: THREE.InstancedMesh;
   private dust: THREE.Points;
@@ -57,7 +60,7 @@ export class MxScene {
   private fresh = true;
   private time = 0;
 
-  constructor(skyline?: THREE.Texture) {
+  constructor() {
     const s = this.scene;
     s.background = new THREE.Color(0x8fc6f4);
     s.fog = new THREE.Fog(0xcfe6f6, 140, 520);
@@ -77,16 +80,25 @@ export class MxScene {
     ground.position.set(0, -0.06, 80);
     ground.receiveShadow = true;
     s.add(ground);
-    // far skyline: the painted mountains all around
-    if (skyline) {
-      const t = skyline.clone();
-      t.wrapS = THREE.RepeatWrapping;
-      t.repeat.set(3, 1);
-      t.needsUpdate = true;
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(560, 560, 230, 48, 1, true), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false }));
-      ring.position.set(0, 60, 80);
+    // v2.27: plain dirt all around (same earth as the track, lighter), 2D forest trees, and one of
+    // the painted forest panoramas far away
+    const loader = new THREE.TextureLoader();
+    loader.load(`${BASE}res/tex-dirt.webp`, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      this.useMap(this.grass, t, 180);
+      this.grass.color.set(0xd8c8b0);
+      this.useMap(this.dirt, t, 1);
+      this.dirt.color.set(0x9a7a62);
+    });
+    loader.load(`${BASE}res/pano/foret.0.webp`, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = THREE.MirroredRepeatWrapping;
+      t.repeat.set(4, 1);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(600, 600, 300, 48, 1, true), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false }));
+      ring.position.set(0, 150 - 300 * 0.3, 80);
       s.add(ring);
-    }
+    });
+    this.plantForest();
     this.buildTrack();
     this.buildMarkers();
     // coins
@@ -150,7 +162,7 @@ export class MxScene {
 
   private buildTrack(): void {
     const loop = [];
-    for (let s = 0; s < MX_LEN; s++) loop.push({ ...loopAt(s), h: loopHeight(s) });
+    for (let s = 0; s < MX_LEN; s++) loop.push({ ...loopAt(s), h: 0 }); // flat: the jumps are the kit's pieces
     this.scene.add(this.ribbon(loop, true));
     // entry and exit lanes (cruising): straight, flat, a hair above the grass
     const out = MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0];
@@ -174,7 +186,7 @@ export class MxScene {
     let i = 0;
     for (let s = 0; s < MX_LEN; s += 8) {
       const p = loopAt(s);
-      const h = loopHeight(s);
+      const h = 0;
       for (const side of [-1, 1]) {
         const n = side * (MX_HALF_WIDTH + 0.5);
         m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + 0.3, p.z + Math.cos(p.th) * n);
@@ -240,11 +252,7 @@ export class MxScene {
         if (!mesh.isMesh) return;
         const src = mesh.material as THREE.MeshStandardMaterial;
         const name = src.name;
-        if (name === 'Grass') {
-          if (src.map) this.useMap(this.grass, src.map, 260);
-          return;
-        }
-        if (name === 'Dirt' && src.map) this.useMap(this.dirt, src.map, 1);
+        if (name === 'Grass') return;
         if (!mats.has(name)) {
           const lm = new THREE.MeshLambertMaterial({ map: src.map ?? null, color: src.map ? 0xffffff : 0xb0b0b0, side: THREE.DoubleSide });
           mats.set(name, lm);
@@ -321,9 +329,9 @@ export class MxScene {
           let o = 0;
           for (const p of ps) {
             for (let k = 0; k < p.pos.length; k += 3) {
-              pos[o + k] = (p.pos[k] - cx) * KIT_SCALE;
-              pos[o + k + 1] = (p.pos[k + 1] - box.min.y) * KIT_SCALE;
-              pos[o + k + 2] = (p.pos[k + 2] - cz) * KIT_SCALE;
+              pos[o + k] = p.pos[k] - cx;
+              pos[o + k + 1] = p.pos[k + 1] - box.min.y;
+              pos[o + k + 2] = p.pos[k + 2] - cz;
             }
             if (p.uv) uv.set(p.uv, (o / 3) * 2);
             o += p.pos.length;
@@ -337,7 +345,7 @@ export class MxScene {
           mesh.receiveShadow = true;
           group.add(mesh);
         }
-        modules.push({ group, r: (Math.hypot(size.x, size.z) / 2) * KIT_SCALE });
+        modules.push({ group, cx, cz });
       }
       this.placeModules(modules);
     });
@@ -354,38 +362,72 @@ export class MxScene {
     mat.needsUpdate = true;
   }
 
+  /**
+   * The jumps of the track are the kit's dirt mounds: each feature shows the very piece whose
+   * profile the physics rides, laid across the track and stretched the same way.
+   */
   private placeModules(modules: Module[]): void {
-    modules.sort((a, b) => b.r - a.r);
-    // the lines to keep clear: the loop and both lanes
+    const find = (i: number) => {
+      const k = KIT_MODULES[i];
+      return modules.find((m) => Math.abs(m.cx - k.cx) < 0.6 && Math.abs(m.cz - k.cz) < 0.6);
+    };
+    for (const f of MX_FEATURES) {
+      const k = KIT_MODULES[f.mod];
+      const src = find(f.mod);
+      if (!src) continue;
+      const g = src.group.clone();
+      const p = loopAt(f.s0 + f.len / 2);
+      const lat = (MX_HALF_WIDTH * 2 + 0.6) / k.wid;
+      g.position.set(p.x, 0.01, p.z);
+      // the piece's long axis along the track
+      g.rotation.y = k.alongX ? -p.th : Math.PI / 2 - p.th;
+      g.scale.set(k.alongX ? f.sx : lat, f.sy, k.alongX ? lat : f.sx);
+      this.scene.add(g);
+    }
+  }
+
+  /** 2D trees of the Grande Forêt (the game's own painted sprites) all around the track. */
+  private plantForest(): void {
+    const defs = assetsFor(['foret', 'green'], 'tree').slice(0, 60);
+    if (!defs.length) return;
+    const picks = [0, 7, 13, 21, 29, 34, 42, 51].map((i) => defs[i % defs.length]);
+    const mats = picks.map((d) => {
+      const sp = d.draw();
+      const tex = new THREE.CanvasTexture(sp.canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return { mat: new THREE.SpriteMaterial({ map: tex, alphaTest: 0.35 }), sp };
+    });
     const line: [number, number][] = [];
-    for (let s = 0; s < MX_LEN; s += 3) {
+    for (let s = 0; s < MX_LEN; s += 4) {
       const p = loopAt(s);
       line.push([p.x, p.z]);
     }
     const total = MX_ENTRY + (MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0]) + MX_EXIT;
-    for (let u = 0; u < total + 60; u += 3) {
+    for (let u = -40; u < total + 60; u += 4) {
       if (u > MX_ENTRY && u < total - MX_EXIT) continue;
       const p = mxPose(u, true);
       line.push([p.x, p.z]);
     }
-    const dist = (x: number, z: number) => {
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    let n = 0;
+    for (let tries = 0; tries < 2600 && n < 420; tries++) {
+      const x = -260 + rnd() * 520;
+      const z = -130 + rnd() * 420;
       let d = 1e9;
       for (const [lx, lz] of line) d = Math.min(d, (lx - x) ** 2 + (lz - z) ** 2);
-      return Math.sqrt(d);
-    };
-    const cand: { x: number; z: number; d: number }[] = [];
-    for (let x = -190; x <= 190; x += 5) for (let z = -60; z <= 215; z += 5) cand.push({ x, z, d: dist(x, z) });
-    cand.sort((a, b) => a.d - b.d);
-    const placed: { x: number; z: number; r: number }[] = [];
-    const clear = MX_HALF_WIDTH + MX_RUNOFF + 2.5;
-    modules.forEach((mod, i) => {
-      const spot = cand.find((c) => c.d >= clear + mod.r && placed.every((p) => Math.hypot(p.x - c.x, p.z - c.z) > p.r + mod.r + 1.5));
-      if (!spot) return;
-      placed.push({ x: spot.x, z: spot.z, r: mod.r });
-      mod.group.position.set(spot.x, 0, spot.z);
-      mod.group.rotation.y = (i * 2.399) % (Math.PI * 2);
-      this.scene.add(mod.group);
-    });
+      d = Math.sqrt(d);
+      // a clear strip along the track, then more and more trees
+      if (d < 13 || rnd() > Math.min(1, (d - 8) / 45)) continue;
+      const { mat, sp } = mats[Math.floor(rnd() * mats.length)];
+      const tree = new THREE.Sprite(mat);
+      const k = 1.1 + rnd() * 0.7;
+      tree.scale.set(sp.w * k, sp.h * k, 1);
+      tree.center.set(sp.ax / sp.w, 1 - sp.ay / sp.h);
+      tree.position.set(x, 0, z);
+      this.scene.add(tree);
+      n++;
+    }
   }
 
   // ---------------------------------------------------------------- bikes
