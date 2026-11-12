@@ -1,7 +1,7 @@
 import { aiInput, createOpponents, Opponent } from './ai';
 import type { PlayerState } from './net/multi';
 import { bikeById, BikeModel, BIKES } from './bikes';
-import { clamp, Rng, wrapAngle } from './core/math';
+import { clamp, GRAVITY_SCALE, Rng, wrapAngle } from './core/math';
 import { CircuitMode, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
 import { rockCapacity } from './climb';
@@ -105,8 +105,6 @@ export interface RunOptions {
 }
 
 const PHYSICS_DT = 1 / 300;
-/** Gravity on the motocross track (x real): short, heavy jumps instead of a lunar float. */
-const MX_GRAVITY = 1.55;
 export const CHECKPOINT_EVERY = 1000;
 const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
@@ -830,7 +828,7 @@ export class Game {
     this.mxAuto = z.cruise && (this.mxT < 1 || leaving);
     const pose = mxPose(u, z.cruise);
     const v = Math.max(0, b.forwardSpeed);
-    const G = 9.81;
+    const G = 9.81 * GRAVITY_SCALE;
     let stick = clamp(this.steer, -1, 1);
     if (this.mxAuto || this.crashTimer > 0 || this.finished || this.countdown > 0) {
       // follow the centre line: the yaw rate the track asks for, plus a pull back to the middle
@@ -842,9 +840,13 @@ export class Game {
     this.mxLean += (target - this.mxLean) * Math.min(1, dt * (Math.abs(target) < Math.abs(this.mxLean) ? 9 : 6.5));
     let slide = 0;
     if (b.grounded && v > 0.5) {
-      // tyres: lateral grip of the surface (loose dirt), a bit more in the banked turns
-      const banked = Math.abs(pose.k) > 0.03 && Math.sign(pose.k) === Math.sign(this.mxLean) ? 0.15 : 0;
-      const mu = (0.95 + banked) * this.world.gripK(Surface.Dirt, b.x) * this.tyreK;
+      // tyres: a knobby on packed dirt peaks at mu ~ 0.65 (SURFACES.Dirt x the track's gripK,
+      // x the bike's tyres), far below tarmac. The berms of the turns lean the ground into the
+      // turn by an angle `bank`, which adds its own support: mu_eff = (mu + tan b) / (1 - mu tan b).
+      const sameSide = Math.sign(pose.k) === Math.sign(this.mxLean);
+      const tb = sameSide ? 0.3 * clamp((Math.abs(pose.k) - 0.012) * 45, 0, 1) : 0;
+      const mu0 = SURFACES[Surface.Dirt].grip * this.world.gripK(Surface.Dirt, b.x) * b.grip;
+      const mu = (mu0 + tb) / (1 - mu0 * tb);
       let lat = Math.tan(this.mxLean);
       if (Math.abs(lat) > mu) {
         slide = Math.min(1, (Math.abs(lat) - mu) / 0.35);
@@ -894,13 +896,13 @@ export class Game {
     let k = 0;
     for (let d = 0; d <= look; d += 3) k = Math.max(k, Math.abs(mxPose(u + d, z.cruise).k));
     const here = mxPose(u, z.cruise);
-    const mu = 0.66 + o.level * 0.028;
-    const vmax = Math.sqrt((mu * 9.81) / Math.max(k, 0.004));
+    const mu = 0.45 + o.level * 0.02; // dirt: peak ~0.65, the best riders use most of it
+    const vmax = Math.sqrt((mu * 9.81 * GRAVITY_SCALE) / Math.max(k, 0.004));
     const idx = this.opponents.indexOf(o);
     const lane = ((idx % 4) - 1.5) * 1.5;
     const line = clamp(here.k * 70, -3, 3) * (0.5 + o.level * 0.05) + lane * (Math.abs(here.k) > 0.03 ? 0.5 : 1);
     o.mxN = (o.mxN ?? lane) + clamp(line - (o.mxN ?? lane), -2.5 * dt, 2.5 * dt);
-    const lean = clamp(Math.atan((here.k * v * v) / 9.81), -0.8, 0.8);
+    const lean = clamp(Math.atan((here.k * v * v) / (9.81 * GRAVITY_SCALE)), -0.8, 0.8);
     o.mxLean = (o.mxLean ?? 0) + (lean - (o.mxLean ?? 0)) * Math.min(1, dt * 6);
     if (v > vmax + 0.5 && o.bike.grounded) return { throttle: 0, brake: clamp((v - vmax) * 0.45, 0.2, 1), balance: inp.balance };
     if (v > vmax - 1) return { ...inp, throttle: Math.min(inp.throttle, 0.25) };
@@ -1098,8 +1100,6 @@ export class Game {
     this.acc += dt;
     let n = 0;
     while (this.acc >= PHYSICS_DT && n < 40) {
-      this.bike.gravityScale = this.world.mxAt(this.bike.x) ? MX_GRAVITY : 1;
-      for (const o of this.opponents) o.bike.gravityScale = this.world.mxAt(o.bike.x) ? MX_GRAVITY : 1;
       this.bike.step(this.world, inp, PHYSICS_DT);
       for (let i = 0; i < this.opponents.length; i++) if (!this.opponents[i].remote) this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
       this.acc -= PHYSICS_DT;

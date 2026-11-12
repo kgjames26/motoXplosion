@@ -1,4 +1,4 @@
-import { clamp, wrapAngle } from '../core/math';
+import { clamp, GRAVITY_SCALE, wrapAngle } from '../core/math';
 import { Surface, SURFACES } from '../world/types';
 import type { World } from '../world/world';
 import type { BikeSpec } from '../bikes';
@@ -119,8 +119,8 @@ export class Bike {
   /** Smoothed rider balance actually applied (-1..1). */
   lean = 0;
   airTime = 0;
-  /** Gravity multiplier (1 = real). The motocross track uses more: jumps feel heavy, not lunar. */
-  gravityScale = 1;
+  /** Gravity multiplier (1 = real): heavy jumps instead of a lunar float. */
+  gravityScale = GRAVITY_SCALE;
   grounded = false;
   crashed = false;
   rpm = 1200;

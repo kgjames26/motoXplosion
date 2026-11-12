@@ -98,3 +98,10 @@ export function ridge1(x: number, seed: number, octaves = 5): number {
   }
   return sum / norm;
 }
+
+/**
+ * Game gravity relative to real (9.81 m/s²). Everything heavy and ballistic uses it: the bike's
+ * weight (springs and tyres are scaled with it, so the sag stays the same), the jump windows of
+ * the generator and the cornering of the motocross track. 1.55 gives heavy, short jumps.
+ */
+export const GRAVITY_SCALE = 1.55;

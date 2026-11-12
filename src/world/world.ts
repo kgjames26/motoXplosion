@@ -131,8 +131,15 @@ export class World {
   /** Tyre sets owned (dynamic weather picks the right one on the fly). */
   tyres: string[] = [];
 
-  /** Grip multiplier of the weather (and fitted tyres) for a surface at x. */
+  /**
+   * Grip multiplier of a surface at x: weather and tyres, and the motocross track, whose dirt and
+   * grass are loose, rutted soil (peak friction ~0.65 instead of the 1.05 of the other dirt).
+   */
   gripK(s: Surface, x = 0): number {
+    const loose = this.mxAt(x) && (s === Surface.Dirt || s === Surface.Grass) ? 0.62 : 1;
+    return loose * this.weatherGripK(s, x);
+  }
+  private weatherGripK(s: Surface, x: number): number {
     if (!this.dynamic) return this.weather ? weatherGrip(this.weather, s) : 1;
     const w = this.weatherAt(x);
     let g = 1 + (weatherGrip(1, s) - 1) * w.wet;

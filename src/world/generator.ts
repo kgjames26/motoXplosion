@@ -1,4 +1,4 @@
-import { clamp, fbm1, noise1, Rng, smoothstep } from '../core/math';
+import { clamp, fbm1, GRAVITY_SCALE, noise1, Rng, smoothstep } from '../core/math';
 import { Biome, DX, PropKind, Surface } from './types';
 import type { World } from './world';
 import { BridgeKind, RegionDef } from './regions';
@@ -912,7 +912,7 @@ export class Generator {
    */
   private speedJump(d: number): Segment[] {
     const r = this.rng;
-    const g = 9.81;
+    const g = 9.81 * GRAVITY_SCALE;
     const width = ((22 - d * 8) * 1.1) / 3.6; // window width (m/s), narrower further on (v2.22: +10 %)
     const lo = r.range(38, 62) / 3.6; // approach speed (m/s) at the low end
     const hi = lo + width;
