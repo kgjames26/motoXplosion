@@ -119,6 +119,8 @@ export class Bike {
   /** Smoothed rider balance actually applied (-1..1). */
   lean = 0;
   airTime = 0;
+  /** Gravity multiplier (1 = real). The motocross track uses more: jumps feel heavy, not lunar. */
+  gravityScale = 1;
   grounded = false;
   crashed = false;
   rpm = 1200;
@@ -237,7 +239,8 @@ export class Bike {
     this.prevOmega = this.omega;
 
     let fx = 0;
-    let fy = -this.mass * G;
+    const gs = this.gravityScale;
+    let fy = -this.mass * G * gs;
     let torque = 0;
     const [cx, cy] = this.comShift();
 
@@ -297,6 +300,7 @@ export class Bike {
       const stopZone = w.travel * 0.15;
       if (w.s < stopZone) fs += ((stopZone - w.s) / stopZone) ** 2 * 9000;
       if (fs < 0 && w.s >= w.travel) fs = 0;
+      fs *= gs; // heavier world, same sag
 
       // ---- tyre contact
       let gx = 0;
@@ -316,7 +320,7 @@ export class Bike {
         const nx = hit.nx;
         const ny = hit.ny;
         const vn = wvx * nx + wvy * ny;
-        const kT = 70000;
+        const kT = 70000 * gs;
         const cT = 1400 * surf.tireDamp;
         let N = kT * hit.depth - cT * vn;
         if (N < 0) N = 0;
@@ -358,7 +362,7 @@ export class Bike {
       const gAlong = gx * axw + gy * ayw;
       const gpx = gx - axw * gAlong;
       const gpy = gy - ayw * gAlong;
-      const gravAlong = w.mass * -G * ayw;
+      const gravAlong = w.mass * -G * gs * ayw;
 
       // ---- wheel DOF along the axis (relative to the chassis)
       const aMx = ax - alpha * ry - this.omega * this.omega * rx;

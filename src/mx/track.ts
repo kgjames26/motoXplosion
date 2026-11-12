@@ -182,7 +182,11 @@ function place(): void {
       const m = KIT_MODULES[mod];
       const top = Math.max(...m.profile);
       const h = Math.min(2.3, Math.max(0.6, top * 0.3));
-      const len = Math.max(m.len * 0.42, h * 8.5);
+      // the face of a jump never steeper than ~0.42 (23°): a short steep ramp throws the bike up
+      // like a ski jump, which looks lunar. Longer ramps give long, flat, heavy trajectories.
+      let rise = 0;
+      for (let j = 0; j < 48; j++) rise = Math.max(rise, Math.abs(m.profile[j + 1] - m.profile[j]));
+      const len = Math.max(m.len * 0.42, h * 8.5, (48 * rise * (h / top)) / 0.42);
       if (len > end - s) {
         tries++;
         continue;

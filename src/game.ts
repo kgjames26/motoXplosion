@@ -105,6 +105,8 @@ export interface RunOptions {
 }
 
 const PHYSICS_DT = 1 / 300;
+/** Gravity on the motocross track (x real): short, heavy jumps instead of a lunar float. */
+const MX_GRAVITY = 1.55;
 export const CHECKPOINT_EVERY = 1000;
 const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
@@ -1096,6 +1098,8 @@ export class Game {
     this.acc += dt;
     let n = 0;
     while (this.acc >= PHYSICS_DT && n < 40) {
+      this.bike.gravityScale = this.world.mxAt(this.bike.x) ? MX_GRAVITY : 1;
+      for (const o of this.opponents) o.bike.gravityScale = this.world.mxAt(o.bike.x) ? MX_GRAVITY : 1;
       this.bike.step(this.world, inp, PHYSICS_DT);
       for (let i = 0; i < this.opponents.length; i++) if (!this.opponents[i].remote) this.opponents[i].bike.step(this.world, aiInputs[i], PHYSICS_DT);
       this.acc -= PHYSICS_DT;
