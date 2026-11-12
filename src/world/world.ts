@@ -81,7 +81,7 @@ export class World {
 
   // ---------------------------------------------------------------- cruising journey (v2.25)
   /**
-   * Cruising crosses all the worlds: 2000 m per world (1000 m of it alone, then 1000 m sliding
+   * Cruising crosses all the worlds: 1500 m per world (750 m of it alone, then 750 m sliding
    * into the next one), except the motocross track: 1000 m, entered and left all at once.
    */
   private stays: { x0: number; x1: number; id: RegionId }[] = [];
@@ -101,7 +101,7 @@ export class World {
           id = pool[(v >>> 8) % pool.length];
         }
         const x0 = prev ? prev.x1 : 0;
-        this.stays.push({ x0, x1: x0 + (id === 'cross' ? MX_ZONE_LEN : 2000), id });
+        this.stays.push({ x0, x1: x0 + (id === 'cross' ? MX_ZONE_LEN : 1500), id });
       }
       if (x < this.stays[i].x1) return i;
       i++;
@@ -116,8 +116,8 @@ export class World {
     this.stayAt(s.x1 + 1);
     const next = this.stays[i + 1];
     // progressive change over the last 1000 m (patches of the next world, denser and denser)
-    if (s.id !== 'cross' && next.id !== 'cross' && x > s.x1 - 1000) {
-      const t = (x - (s.x1 - 1000)) / 1000;
+    if (s.id !== 'cross' && next.id !== 'cross' && x > s.x1 - 750) {
+      const t = (x - (s.x1 - 750)) / 750;
       const cell = Math.floor(x / 36);
       let h = (this.seed ^ Math.imul(cell + 11, 0x27d4eb2d)) >>> 0;
       h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
@@ -154,7 +154,7 @@ export class World {
     v = Math.imul(v ^ (v >>> 15), 0x85ebca6b) >>> 0;
     v = Math.imul(v ^ (v >>> 13), 0xc2b2ae35) >>> 0;
     const p = ((v ^ (v >>> 16)) >>> 0) % 1000 / 1000;
-    const snow = this.regionAt(k * 2000 + 500).id === 'desert' ? 0 : 0.1;
+    const snow = this.regionAt(k * 1500 + 400).id === 'desert' ? 0 : 0.1;
     if (p < snow) return 2 as Weather;
     if (p < snow + 0.25) return 1 as Weather;
     return 0 as Weather;
@@ -180,7 +180,7 @@ export class World {
       const k = this.weather;
       return { rain: +(k === 1), snow: +(k === 2), wet: +(k === 1), snowGround: +(k === 2), kind: k };
     }
-    const P = 2000;
+    const P = 1500;
     const k = Math.max(0, Math.floor(x / P));
     const t = x - k * P;
     const cur = this.kindAt(k);

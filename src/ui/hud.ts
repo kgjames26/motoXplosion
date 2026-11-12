@@ -21,6 +21,7 @@ export class Hud {
   private progressMoto = $('progress-moto');
   private distance = $('distance');
   private distanceUnit = $('distance-unit');
+  private lapsN = $('laps500-n');
   private timer = $('timer');
   private timerBox = $('hud-timer');
   private zone = $('trial-zone');
@@ -179,6 +180,10 @@ export class Hud {
       case 'cruising':
         p = (game.distance % CHECKPOINT_EVERY) / CHECKPOINT_EVERY;
         text = Math.floor(game.distance).toLocaleString('fr-FR');
+        {
+          const n = String(Math.floor(game.distance / CHECKPOINT_EVERY));
+          if (n !== this.lapsN.textContent) this.lapsN.textContent = n;
+        }
         if (game.cruiseMult !== this.last.mult) {
           this.last.mult = game.cruiseMult;
           this.mult.textContent = '×' + fmtMult(game.cruiseMult);

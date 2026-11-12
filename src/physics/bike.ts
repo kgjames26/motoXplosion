@@ -128,6 +128,8 @@ export class Bike {
   crashed = false;
   /** Race start: the rider cannot fall (head contacts do not crash) and the bike cannot loop over. */
   invulnerable = false;
+  /** Size of the rider's head / back hit circles (cruising: smaller, so fewer falls). */
+  fatalScale = 1;
   rpm = 1200;
   private prevVx = 0;
   private prevVy = 0;
@@ -506,7 +508,7 @@ export class Bike {
     ];
     for (const [lx, ly, r, fatal] of pts) {
       const [px, py] = this.pointWorld(lx, ly);
-      const hit = world.circleContact(px, py, r);
+      const hit = world.circleContact(px, py, fatal ? r * this.fatalScale : r);
       if (!hit) continue;
       if (fatal && !this.crashed && !this.invulnerable) {
         this.crashed = true;

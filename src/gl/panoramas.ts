@@ -728,7 +728,7 @@ export function panoramaAt(world: string, seed: number, x: number, cruising = fa
       h = (h ^ (h >>> 13)) >>> 0;
       return h % list.length;
     };
-    const k = Math.floor((x - 200) / 1000);
+    const k = Math.floor((x - 200) / 750);
     let i = pick(k);
     if (k > 0 && i === pick(k - 1)) i = (i + 1 + (k % (list.length - 1))) % list.length;
     return list[i];

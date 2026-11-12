@@ -105,12 +105,12 @@ export interface RunOptions {
 }
 
 const PHYSICS_DT = 1 / 300;
-export const CHECKPOINT_EVERY = 1000;
+export const CHECKPOINT_EVERY = 500;
 const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
 export const TRIAL_PENALTY = 25;
 /** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
-export const CRUISE_STEP = 0.5;
+export const CRUISE_STEP = 0.25; // per 500 m (= +0.5 per km)
 export const CRUISE_MAX = 8;
 /** Cruising pays more (v2.14): coins and stunts, and distance. */
 // v2.21: doubled again — cruising is where the money is made
@@ -339,6 +339,7 @@ export class Game {
     this.countdown = this.mode === 'course' || (this.multi && this.mode !== 'cruising') ? 3.2 : 0;
     // motocross grid: riders spread across the track
     this.mxStartT = 0;
+    this.bike.fatalScale = this.mode === 'cruising' ? 0.7 : 1; // cruising: 30 % fewer falls
     if (this.mxKind === 'race') {
       // one row behind the gate: the 8 riders side by side, the player in the 4th slot
       const slotN = (k: number) => (k - 3.5) * 1.2;
@@ -481,7 +482,7 @@ export class Game {
       const misalign = ev.landingAngle;
       const loss = clamp((hard - 8.5) * 1.5 + Math.max(0, misalign - 0.6) * 8, 0, 14);
       // v2.21 cruising: a landing far too hard (flat from high up) or badly crooked is a fall
-      if (this.mode === 'cruising' && (hard > 13.2 || (misalign > 1.05 && hard > 5.5)) && !ev.crashed) {
+      if (this.mode === 'cruising' && (hard > 17.2 || (misalign > 1.37 && hard > 7.2)) && !ev.crashed) {
         this.crash();
       }
       if (loss > 1) {

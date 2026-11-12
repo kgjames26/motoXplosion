@@ -238,7 +238,7 @@ export class Generator {
     this.rng = new Rng(seed);
     if (mode === 'cruising') this.region = region = world.regionAt(0);
     this.biome = region.start;
-    this.biomeEnd = mode === 'cruising' ? 1000 : 380;
+    this.biomeEnd = mode === 'cruising' ? 750 : 380;
     const circ = circuit > 0 && isCircuitMode(mode);
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
@@ -332,7 +332,7 @@ export class Generator {
       const options = all.length > 1 ? all.filter((b) => b !== this.biome) : all;
       this.biome = this.rng.weighted(options, options.map((b) => this.region.biomes[b]!));
       const def = BIOMES[this.biome];
-      this.biomeEnd = this.mode === 'cruising' ? (Math.floor(x / 1000) + 1) * 1000 : x + this.rng.range(def.length[0], def.length[1]);
+      this.biomeEnd = this.mode === 'cruising' ? (Math.floor(x / 750) + 1) * 750 : x + this.rng.range(def.length[0], def.length[1]);
       // Smooth transition stretch.
       this.queue.push(this.base(this.rng.range(30, 45), 0.5));
     }
@@ -353,7 +353,9 @@ export class Generator {
     } else if (this.mode === 'cruising') {
       // v2.25: built like the first enduro circuits (hills with a steep pitch, technical
       // sections, big jumps), plus the speed-window jumps of v2.21
-      feats = { bigHill: 4, techHill: 2.5, tabletop: 1.5, double: 1.5, gap: 0.6, climb: 1.2, descent: 1.2, ford: 0.6, cruiseHill: 1.5, speedJump: 2.5 + d0 * 2 };
+      // v2.36: a ride, not a trap: round hills and long easy descents, jumps with a landing to aim for
+      // (no sudden drops, no gaps, no steep technical pitches)
+      feats = { cruiseHill: 5, bigHill: 2, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -370,7 +372,7 @@ export class Generator {
       if (mx ? f !== 'rollers' || this.rng.chance(0.5) : this.rng.chance(this.mode === 'course' ? 0.35 : 0.6)) main.coins = 'arc';
     }
     this.queue.push(...segs);
-    const every = this.mode === 'enduro' ? ENDURO_CP : 1000;
+    const every = this.mode === 'enduro' ? ENDURO_CP : 500;
     if (this.mode !== 'course' && x + 120 > this.nextCheckpoint && this.nextCheckpoint < this.world.finishX - 100) {
       const cx = this.nextCheckpoint;
       this.world.marks.push({ x0: cx, x1: cx + 2, kind: 'checkpoint', n: Math.round(cx / every) });
@@ -1460,10 +1462,11 @@ export class Generator {
     // v2.18: higher and steeper from the first circuits
     // v2.21: +20 % (height, steepness, bumps)
     const H = (r.range(9, 13) + g * 12) * HILL_SCALE[this.diff] * 1.2;
-    const su = (r.range(0.24, 0.3) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12;
-    const sd = (r.range(0.26, 0.32) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12;
+    const soft = this.mode === 'cruising' ? 0.6 : 1; // cruising: rounded hills, easy descents
+    const su = (r.range(0.24, 0.3) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12 * soft;
+    const sd = (r.range(0.26, 0.32) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12 * soft;
     const bump = (0.2 + g * 0.25) * 1.2;
-    const variant = r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
+    const variant = this.mode === 'cruising' ? r.weighted(['classic', 'longGentle', 'valley', 'ridge'], [3, 3, 1.5, 1.5]) : r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
     let pieces: [number, number][];
     switch (variant) {
       case 'camel':
@@ -1494,7 +1497,7 @@ export class Generator {
         pieces = [[H / su, su], [r.range(4, 9), 0], [H / sd, -sd]];
     }
     // a short steeper pitch inside the first climb, from the first circuits on
-    {
+    if (this.mode !== 'cruising') {
       const i = pieces.findIndex((p) => p[1] > 0.05);
       if (i >= 0) {
         const [L0, s0] = pieces[i];
@@ -1569,7 +1572,7 @@ export class Generator {
       const out: [number, number][] = [];
       const k = r.int(2, 4);
       for (let j = 0; j < k; j++) {
-        const s = r.range(0.07, 0.24) * (j === 0 ? 0.7 : 1);
+        const s = r.range(0.05, 0.16) * (j === 0 ? 0.7 : 1);
         out.push([total / k / s, sign * s]);
         if (r.chance(0.35)) out.push([r.range(8, 20), sign * 0.02]);
       }
@@ -1580,7 +1583,7 @@ export class Generator {
     else if (variant === 'descent') pieces = [...vary(-1, H * 1.3)];
     else if (variant === 'hill2') pieces = [...vary(1, H), [r.range(10, 20), 0], ...vary(-1, H * 0.5), [10, 0], ...vary(1, H * 0.5), [12, 0], ...vary(-1, H)];
     else pieces = [...vary(1, H), [r.range(10, 25), 0], ...vary(-1, H)];
-    const seg = this.slopeProfile(pieces, 0.04, r.int(0, 1e5), 8);
+    const seg = this.slopeProfile(pieces, 0.04, r.int(0, 1e5), 16);
     seg.props = 1.1;
     seg.coins = r.chance(0.4) ? 'line' : undefined;
     return [seg];

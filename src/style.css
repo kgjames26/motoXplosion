@@ -4383,3 +4383,20 @@ button.wallet {
 #btn-cruising.neon-sel small {
   font-size: calc(var(--u) * 2.1);
 }
+
+/* v2.36 : compteur de paliers de 500 m (cruising uniquement) */
+.laps500 {
+  display: none;
+  position: absolute;
+  right: 6px;
+  top: -22px;
+  font: 700 12px/1 var(--font, system-ui);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 7px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.laps500 b { font-size: 14px; margin: 0 2px; }
+.laps500 span { opacity: 0.75; font-weight: 600; font-size: 10px; }
+#hud[data-mode='cruising'] .laps500 { display: block; }
