@@ -110,8 +110,8 @@ const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
 export const TRIAL_PENALTY = 25;
 /** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
-export const CRUISE_STEP = 0.25;
-export const CRUISE_MAX = 4;
+export const CRUISE_STEP = 0.5;
+export const CRUISE_MAX = 8;
 /** Cruising pays more (v2.14): coins and stunts, and distance. */
 // v2.21: doubled again — cruising is where the money is made
 const CRUISE_PAY = 3.6; // v2.25: +20 %
@@ -228,6 +228,8 @@ export class Game {
   private mxLastX = 0;
   private mxLastN = 0;
   private mxOff = 0;
+  /** Seconds since the start of a motocross race (the grid is lowered at 0). */
+  mxStartT = 0;
   /** 0 = side view (2.5D), 1 = third-person 3D; in between: the camera swings round. */
   mxT = 0;
   /** The bike steers itself (entering / leaving the track in cruising). */
@@ -336,7 +338,13 @@ export class Game {
     this.opponents = this.mode === 'course' && !this.multi ? createOpponents(this.world, this.startX, this.difficulty, this.raceLevel, seed ^ 0x5bd1e995) : [];
     this.countdown = this.mode === 'course' || (this.multi && this.mode !== 'cruising') ? 3.2 : 0;
     // motocross grid: riders spread across the track
-    if (this.mxKind) this.opponents.forEach((o, i) => (o.mxN = ((i % 4) - 1.5) * 1.5));
+    this.mxStartT = 0;
+    if (this.mxKind === 'race') {
+      // one row behind the gate: the 8 riders side by side, the player in the 4th slot
+      const slotN = (k: number) => (k - 3.5) * 1.2;
+      this.mxN = this.mxLastN = slotN(3);
+      this.opponents.forEach((o, i) => (o.mxN = o.mxLane = slotN([0, 1, 2, 4, 5, 6, 7][i % 7])));
+    } else if (this.mxKind) this.opponents.forEach((o, i) => (o.mxN = ((i % 4) - 1.5) * 1.5));
     this.state = 'playing';
   }
 
@@ -376,6 +384,14 @@ export class Game {
       return;
     }
 
+    // ---- motocross race start: nobody can fall in the first seconds, riders may touch
+    if (this.mxKind === 'race') {
+      this.mxStartT += dt;
+      const grace = this.mxStartT < 6;
+      this.bike.invulnerable = grace;
+      for (const o of this.opponents) o.bike.invulnerable = grace;
+    }
+
     // ---- input after constraints
     const inp: BikeInput = { ...this.input };
     if (this.mxAuto && this.crashTimer <= 0) {
@@ -409,6 +425,7 @@ export class Game {
       inp.brake = 0;
     }
     this.stepPhysics(dt, inp, true);
+    if (this.mxKind === 'race') this.mxContacts(dt);
     this.mxStep(dt, inp);
     this.world.ensure(bike.x + 140);
     this.world.trim(Math.min(bike.x, this.trailingX()) - 120);
@@ -536,7 +553,7 @@ export class Game {
     return this.world.dynamic ? this.world.weatherAt(this.bike.x).kind : this.weather;
   }
 
-  /** Cruising distance multiplier (×1 → ×4). */
+  /** Cruising distance multiplier (×1 → ×8, +0.5 per kilometre). */
   /** Cruise control button: set the current speed, or switch it off. */
   toggleCruise(): void {
     if (!this.hasCruise || this.state !== 'playing') return;
@@ -957,6 +974,39 @@ export class Game {
     this.popup(b.x + 1, b.y + 2.4, 'RETOUR SUR LA PISTE', '#ffd8a0');
   }
 
+  /**
+   * Riders may touch in a motocross race: two bikes side by side that get closer than a bike's width
+   * are pushed apart, and the one behind loses a little speed to the one in front.
+   */
+  private mxContacts(dt: number): void {
+    type R = { b: Bike; n: () => number; set: (v: number) => void; down: boolean };
+    const all: R[] = [{ b: this.bike, n: () => this.mxN, set: (v) => (this.mxN = v), down: this.crashTimer > 0 }];
+    for (const o of this.opponents) if (!o.remote) all.push({ b: o.bike, n: () => o.mxN ?? 0, set: (v) => (o.mxN = v), down: o.crashTimer > 0 });
+    const W = 0.8; // lateral distance at which two bikes touch
+    const k = Math.min(1, dt * 8);
+    for (let i = 0; i < all.length; i++)
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i];
+        const c = all[j];
+        if (a.down || c.down) continue;
+        const dx = c.b.x - a.b.x;
+        const dn = c.n() - a.n();
+        if (Math.abs(dx) > 1.7 || Math.abs(dn) >= W) continue;
+        const push = (W - Math.abs(dn)) * 0.5;
+        const dir = dn !== 0 ? Math.sign(dn) : j % 2 ? 1 : -1;
+        a.set(a.n() - dir * push);
+        c.set(c.n() + dir * push);
+        // the rider behind brushes the one in front: both end at about the same speed
+        const behind = dx > 0 ? a : c;
+        const ahead = dx > 0 ? c : a;
+        const rv = behind.b.vx - ahead.b.vx;
+        if (rv > 0) {
+          behind.b.vx -= rv * 0.25 * k;
+          ahead.b.vx += rv * 0.1 * k;
+        }
+      }
+  }
+
   /** Opponents on the motocross track: brake for the turns, take the inside line, lean. */
   private mxAi(o: Opponent, inp: BikeInput, dt: number): BikeInput {
     const z = this.world.mxAt(o.bike.x);
@@ -971,7 +1021,7 @@ export class Game {
     const mu = 0.45 + o.level * 0.02; // dirt: peak ~0.65, the best riders use most of it
     const vmax = Math.sqrt((mu * 9.81 * GRAVITY_SCALE) / Math.max(k, 0.004));
     const idx = this.opponents.indexOf(o);
-    const lane = ((idx % 4) - 1.5) * 1.5;
+    const lane = o.mxLane ?? ((idx % 4) - 1.5) * 1.5;
     const line = clamp(here.k * 70, -3, 3) * (0.5 + o.level * 0.05) + lane * (Math.abs(here.k) > 0.03 ? 0.5 : 1);
     o.mxN = (o.mxN ?? lane) + clamp(line - (o.mxN ?? lane), -2.5 * dt, 2.5 * dt);
     const lean = clamp(Math.atan((here.k * v * v) / (9.81 * GRAVITY_SCALE)), -0.8, 0.8);
@@ -1026,8 +1076,8 @@ export class Game {
     const turns = Math.floor((Math.abs(this.airSpin) + 0.9) / (Math.PI * 2));
     if (turns < 1 || !this.tricksOn) return;
     this.mxFlips += turns;
-    const mult = 1 + 0.5 * (turns - 1);
-    const coins = Math.round(15 * turns * mult);
+    const mult = 1 + 1 * (turns - 1);
+    const coins = Math.round(20 * turns * mult);
     const name = this.airSpin > 0 ? 'SALTO ARRIÈRE' : 'SALTO AVANT';
     this.trick(coins, `${turns > 1 ? turns + ' × ' : ''}${name}${turns > 1 ? ' ×' + fmtMult(mult) : ''}`);
   }
@@ -1418,7 +1468,7 @@ export function fmtClock(s: number): string {
   return `${m}:${r.toFixed(1).padStart(4, '0')}`;
 }
 
-/** Wheelie multiplier: grows with the time on the back wheel (×1.25 per second, up to ×6). */
+/** Wheelie multiplier: grows with the time on the back wheel (+0.5 per second, up to ×8). */
 function wheelieMult(t: number): number {
-  return Math.min(6, 1 + 0.25 * Math.floor(t));
+  return Math.min(8, 1 + 0.5 * Math.floor(t));
 }

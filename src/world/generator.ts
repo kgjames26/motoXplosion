@@ -7,7 +7,7 @@ import { ENDURO_CP, ModeId, raceLength } from '../modes';
 import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
 import { rockKindFor } from '../catalog/rocks';
 import { HILL_SCALE } from '../weather';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxPathHeight } from '../mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxPathHeight } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
 /**
@@ -975,7 +975,7 @@ export class Generator {
         // coins in the air, on the ideal line of every jump
         const laps = cruise ? 2 : 6;
         for (let lap = 0; lap < laps; lap++)
-          for (const f of MX_FEATURES) {
+          for (const f of cruise ? MX_FEATURES_CRUISE : MX_FEATURES) {
             if (f.h < 1) continue;
             const u = ((f.s0 - MX_STRAIGHT[0]) % MX_LEN + MX_LEN) % MX_LEN + lap * MX_LEN + (cruise ? MX_ENTRY : 0);
             if (cruise && u + f.len > MX_ENTRY + MX_CRUISE_LOOP) continue;

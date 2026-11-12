@@ -186,9 +186,9 @@ function featureHeight(f: MxFeature, s: number, n: number): number {
 }
 
 /** Track height above the base level at loop arc length s, n metres off the centre line. */
-export function loopHeightN(s: number, n: number): number {
+export function loopHeightN(s: number, n: number, cruise = false): number {
   const w = wrap(s);
-  for (const f of MX_FEATURES) {
+  for (const f of cruise ? MX_FEATURES_CRUISE : MX_FEATURES) {
     let t = w - wrap(f.s0);
     if (t < 0) t += MX_LEN;
     if (t <= f.len) return featureHeight(f, s, n);
@@ -199,7 +199,34 @@ export function loopHeightN(s: number, n: number): number {
 /** The main straight: where the lap starts and where cruising joins and leaves the loop. */
 export let MX_STRAIGHT: [number, number] = [0, 0];
 
-function place(): void {
+/** Biggest gap tolerated between the track and a straight piece laid along it (m). */
+const MX_MAX_DRIFT = 0.8;
+/** How far the track strays sideways from a straight line through the middle of [s, s+len]. */
+function pathDrift(s: number, len: number): number {
+  const pm = loopAt(s + len / 2);
+  const c = Math.cos(pm.th);
+  const sn = Math.sin(pm.th);
+  let d = 0;
+  for (let t = 0; t <= len; t += 2) {
+    const p = loopAt(s + t);
+    d = Math.max(d, Math.abs(-(p.x - pm.x) * sn + (p.z - pm.z) * c));
+  }
+  return d;
+}
+
+interface PlaceCfg {
+  tableH: number;
+  jumpMax: number;
+  slope: number;
+  tableSlope: number;
+  gap: number;
+}
+/** The cross circuit: big tabletops and jumps. */
+const CFG_CROSS: PlaceCfg = { tableH: MX_TABLE_H, jumpMax: MX_JUMP_MAX, slope: 0.45, tableSlope: 0.36, gap: 8 };
+/** Cruising rolls through the same track at a ride's pace: low rollers, long and gentle, well spaced. */
+const CFG_CRUISE: PlaceCfg = { tableH: 1.3, jumpMax: 0.9, slope: 0.22, tableSlope: 0.2, gap: 30 };
+
+function place(out: MxFeature[], cfg: PlaceCfg): void {
   const straight = (i: number) => Math.abs(kp[wrap(i)]) < 0.012;
   const gentle = (i: number) => Math.abs(kp[wrap(i)]) < 0.02;
   const runsOf = (ok: (i: number) => boolean, min: number): [number, number][] => {
@@ -242,7 +269,7 @@ function place(): void {
       // tabletops: a ramp, a flat top at the height of the crest, then the inverted butte that lands
       // the jump. Those pieces (flat plateau, gentle faces) can be much bigger than the others.
       const table = MX_TABLES.includes(mod);
-      const hBig = table ? MX_TABLE_H * (0.7 + 0.15 * ((q * 5) % 3)) : Math.min(gentle ? MX_JUMP_MAX : 2.3, Math.max(0.9, top * (gentle ? 0.5 : 0.3)));
+      const hBig = table ? cfg.tableH * (0.7 + 0.15 * ((q * 5) % 3)) : Math.min(gentle ? cfg.jumpMax : Math.min(2.3, cfg.jumpMax), Math.max(0.9, top * (gentle ? 0.5 : 0.3)));
       // no face (up or down) steeper than ~0.45 (24°): a short steep ramp throws the bike up like
       // a ski jump (lunar) and a steep back face is a wall. So the height sets the length; take the
       // biggest version of the piece that fits in the stretch.
@@ -250,27 +277,40 @@ function place(): void {
       for (let j = 0; j < 48; j++) step = Math.max(step, Math.abs(m.profile[j + 1] - m.profile[j]));
       let h = hBig;
       let len = 0;
-      for (const k of [1, 0.88, 0.76, 0.66]) {
+      let fits = false;
+      for (const k of [1, 0.88, 0.76]) {
         h = Math.max(0.6, hBig * k);
-        len = Math.max(m.len * 0.42, h * 8.5, (48 * step * (h / top)) / (table ? 0.36 : 0.45));
-        if (len <= end - s) break;
+        len = Math.max(m.len * 0.42, h * 8.5, (48 * step * (h / top)) / (table ? cfg.tableSlope : cfg.slope));
+        // the piece is laid straight: the track must not curve away from it (it would leave the
+        // module and the bike would ride beside it)
+        if (len <= end - s && pathDrift(s, len) <= MX_MAX_DRIFT) {
+          fits = true;
+          break;
+        }
       }
-      if (len > end - s) {
+      if (!fits) {
         tries++;
+        if (tries >= order.length) {
+          s += 6; // slide along the stretch and try again further on
+          tries = 0;
+        }
         continue;
       }
       tries = 0;
       const pm = loopAt(s + len / 2);
-      MX_FEATURES.push({ mod, s0: s, len, h, sx: len / m.len, sy: h / top, px: pm.x, pz: pm.z, pth: pm.th });
-      s += len + 8;
+      out.push({ mod, s0: s, len, h, sx: len / m.len, sy: h / top, px: pm.x, pz: pm.z, pth: pm.th });
+      s += len + cfg.gap;
     }
   }
 }
-place();
+place(MX_FEATURES, CFG_CROSS);
+/** Cruising: the same track, with low gentle rollers instead of the big jumps. */
+export const MX_FEATURES_CRUISE: MxFeature[] = [];
+place(MX_FEATURES_CRUISE, CFG_CRUISE);
 
 /** Track height above the base level at loop arc length s (centre line). */
-export function loopHeight(s: number): number {
-  return loopHeightN(s, 0);
+export function loopHeight(s: number, cruise = false): number {
+  return loopHeightN(s, 0, cruise);
 }
 
 // ---------------------------------------------------------------- paths
@@ -300,7 +340,7 @@ export function mxPose(u: number, cruise: boolean): MxPose {
   if (!cruise) {
     const s = MX_STRAIGHT[0] + u;
     const p = loopAt(s);
-    return { ...p, h: loopHeight(s), s };
+    return { ...p, h: loopHeight(s, cruise), s };
   }
   if (u < MX_ENTRY) {
     const p = loopAt(MX_STRAIGHT[0]);
@@ -310,7 +350,7 @@ export function mxPose(u: number, cruise: boolean): MxPose {
   if (u < MX_ENTRY + MX_CRUISE_LOOP) {
     const s = MX_STRAIGHT[0] + (u - MX_ENTRY);
     const p = loopAt(s);
-    return { ...p, h: loopHeight(s), s };
+    return { ...p, h: loopHeight(s, cruise), s };
   }
   const p = loopAt(MX_STRAIGHT[1]);
   const d = u - MX_ENTRY - MX_CRUISE_LOOP;
@@ -321,7 +361,7 @@ export function mxPose(u: number, cruise: boolean): MxPose {
 export function mxPathHeight(u: number, cruise: boolean): number {
   if (!cruise) return loopHeight(MX_STRAIGHT[0] + u);
   if (u < MX_ENTRY || u >= MX_ENTRY + MX_CRUISE_LOOP) return 0;
-  return loopHeight(MX_STRAIGHT[0] + (u - MX_ENTRY));
+  return loopHeight(MX_STRAIGHT[0] + (u - MX_ENTRY), true);
 }
 
 /** How much higher (or lower) the ground is n metres off the centre line at distance u. */
@@ -330,5 +370,5 @@ export function mxLateralDelta(u: number, cruise: boolean, n: number): number {
   if (!cruise) s = MX_STRAIGHT[0] + u;
   else if (u < MX_ENTRY || u >= MX_ENTRY + MX_CRUISE_LOOP) return 0;
   else s = MX_STRAIGHT[0] + (u - MX_ENTRY);
-  return loopHeightN(s, n) - loopHeightN(s, 0);
+  return loopHeightN(s, n, cruise) - loopHeightN(s, 0, cruise);
 }

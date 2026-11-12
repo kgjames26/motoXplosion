@@ -126,6 +126,8 @@ export class Bike {
   gravityScale = GRAVITY_SCALE;
   grounded = false;
   crashed = false;
+  /** Race start: the rider cannot fall (head contacts do not crash) and the bike cannot loop over. */
+  invulnerable = false;
   rpm = 1200;
   private prevVx = 0;
   private prevVy = 0;
@@ -228,6 +230,11 @@ export class Bike {
   }
 
   step(world: World, input: BikeInput, dt: number): void {
+    if (this.invulnerable) {
+      // a wheelie that gets too high is brought back down, never over
+      const rel = wrapAngle(this.angle - world.slopeAt(this.x));
+      if (rel > 0.8 && this.omega > 0) this.omega *= Math.max(0, 1 - 7 * dt);
+    }
     // Rider weight transfer is not instantaneous.
     const leanRate = 7;
     this.lean += (input.balance - this.lean) * (1 - Math.exp(-leanRate * dt));
@@ -501,7 +508,7 @@ export class Bike {
       const [px, py] = this.pointWorld(lx, ly);
       const hit = world.circleContact(px, py, r);
       if (!hit) continue;
-      if (fatal && !this.crashed) {
+      if (fatal && !this.crashed && !this.invulnerable) {
         this.crashed = true;
         this.events.crashed = true;
       }

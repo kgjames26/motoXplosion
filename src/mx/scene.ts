@@ -4,7 +4,7 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
-import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxPose } from './track';
+import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxPose } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
 
@@ -45,11 +45,13 @@ export class MxScene {
   private carriers = new Map<Bike3D, THREE.Group>();
   private coins: THREE.InstancedMesh;
   private dust: THREE.Points;
-  private dustN = 260;
+  private dustN = 560;
   private dustP = new Float32Array(this.dustN * 3);
   private dustV = new Float32Array(this.dustN * 3);
   private dustL = new Float32Array(this.dustN); // life left (s)
   private dustA = new Float32Array(this.dustN);
+  /** How thick each puff is (it grows with the scuffing of the tyre). */
+  private dustS = new Float32Array(this.dustN);
   private dustI = 0;
   private dustAcc = 0;
   // camera state
@@ -116,7 +118,7 @@ export class MxScene {
         depthWrite: false,
         uniforms: { scale: { value: 600 } },
         vertexShader: 'attribute float alpha; varying float vA; uniform float scale; void main(){ vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(scale * (0.35 + (1.0 - alpha) * 1.1) / -mv.z, 90.0); gl_Position = projectionMatrix * mv; }',
-        fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.1, d) * vA * 0.3; gl_FragColor = vec4(0.80, 0.63, 0.44, a); }',
+        fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.1, d) * vA * 0.38; gl_FragColor = vec4(0.80, 0.63, 0.44, a); }',
       }),
     );
     this.dust.frustumCulled = false;
@@ -366,12 +368,58 @@ export class MxScene {
    * The jumps of the track are the kit's dirt mounds: each feature shows the very piece whose
    * profile the physics rides, laid across the track and stretched the same way.
    */
+  private gate: THREE.Group | null = null;
+  private gateBeam: THREE.Mesh | null = null;
+  private gateT = 0;
+
+  /** Race start: a gate across the track in front of the grid, lowered at the start signal. */
+  private updateGate(game: Game, zone: { cruise: boolean }, dt: number): void {
+    if (game.mxKind !== 'race' || zone.cruise) {
+      if (this.gate) this.gate.visible = false;
+      return;
+    }
+    if (!this.gate) {
+      const g = new THREE.Group();
+      const white = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 });
+      const red = new THREE.MeshLambertMaterial({ color: 0xd8321f });
+      const half = MX_HALF_WIDTH + 0.7;
+      for (const z of [-half, half]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.4, 0.14), red);
+        post.position.set(0, 0.7, z);
+        g.add(post);
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, half * 2), white);
+      for (let i = 0; i < 6; i++) {
+        const band = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.15, half / 3), red);
+        band.position.z = -half + (half / 6) * (2 * i + 1);
+        if (i % 2 === 0) beam.add(band);
+      }
+      g.add(beam);
+      this.gate = g;
+      this.gateBeam = beam;
+      this.scene.add(g);
+    }
+    if (game.countdown > 0 || game.mxStartT <= 0) this.gateT = 0;
+    else this.gateT += dt;
+    const pose = mxPose(1.8, false);
+    this.gate.position.set(pose.x, 0.01, pose.z);
+    this.gate.rotation.y = -pose.th;
+    const drop = clamp(this.gateT / 0.45, 0, 1);
+    this.gateBeam!.position.y = 1.15 - drop * 1.1;
+    this.gate.visible = this.gateT < 1;
+  }
+
+  /** The kit mounds of the cross circuit and the low rollers of the cruising version of the track. */
+  private crossMeshes: THREE.Object3D[] = [];
+  private cruiseMeshes: THREE.Object3D[] = [];
+  private cruiseView = false;
+
   private placeModules(modules: Module[]): void {
     const find = (i: number) => {
       const k = KIT_MODULES[i];
       return modules.find((m) => Math.abs(m.cx - k.cx) < 0.6 && Math.abs(m.cz - k.cz) < 0.6);
     };
-    for (const f of MX_FEATURES) {
+    for (const [list, cruise] of [[MX_FEATURES, false], [MX_FEATURES_CRUISE, true]] as const) for (const f of list) {
       const k = KIT_MODULES[f.mod];
       const src = find(f.mod);
       if (!src) continue;
@@ -382,6 +430,8 @@ export class MxScene {
       // the piece's long axis along the track
       g.rotation.y = k.alongX ? -p.th : Math.PI / 2 - p.th;
       g.scale.set(k.alongX ? f.sx : lat, f.sy, k.alongX ? lat : f.sx);
+      g.visible = cruise === this.cruiseView;
+      (cruise ? this.cruiseMeshes : this.crossMeshes).push(g);
       this.scene.add(g);
     }
   }
@@ -481,6 +531,12 @@ export class MxScene {
     const zone = w.mxAt(b.x) ?? w.mxZones[w.mxZones.length - 1];
     if (!zone) return;
     this.time += dt;
+    if (zone.cruise !== this.cruiseView) {
+      this.cruiseView = zone.cruise;
+      for (const g of this.crossMeshes) g.visible = !zone.cruise;
+      for (const g of this.cruiseMeshes) g.visible = zone.cruise;
+    }
+    this.updateGate(game, zone, dt);
     // ---- bikes
     const crashed = !!(game.ragdoll && game.crashTimer > 0);
     player.lane = 0;
@@ -581,7 +637,11 @@ export class MxScene {
   /** Dust thrown up by the rear wheel: more with speed, throttle and slides. */
   private updateDust(game: Game, dt: number, car: THREE.Group): void {
     const b = game.bike;
-    const rate = b.rear.contact && game.crashTimer <= 0 ? Math.min(80, Math.abs(b.forwardSpeed) * 1.1 + game.input.throttle * 12 + Math.abs(b.rear.slip) * 4 + game.mxSlide * 70) : 0;
+    // the rear tyre scuffs the dirt at `scuff` m/s (wheelspin, locked wheel, power slide): that is what
+    // throws the dust, on top of the plain rolling dust that grows with speed
+    const scuff = Math.abs(b.rear.slip) + game.mxSlide * 6;
+    const rate = b.rear.contact && game.crashTimer <= 0 ? Math.min(260, Math.abs(b.forwardSpeed) * 0.9 + scuff * 26 + game.input.throttle * 8) : 0;
+    const thick = Math.min(1.6, 0.35 + scuff / 5);
     this.dustAcc += rate * dt;
     const local = new THREE.Vector3();
     car.updateMatrixWorld(true);
@@ -591,11 +651,12 @@ export class MxScene {
       local.set(b.rear.x - 0.25, b.rear.y - 0.38, (Math.random() - 0.5) * 0.3);
       car.localToWorld(local);
       this.dustP.set([local.x, local.y, local.z], i * 3);
-      const back = -1.2 - Math.random() * 1.6 - game.input.throttle * 1.5;
+      const back = -1.2 - Math.random() * 1.6 - game.input.throttle * 1.5 - scuff * 0.5;
       const yaw = -car.rotation.y;
       const side = (Math.random() - 0.5) * 1.6 + Math.sign(game.mxLean) * game.mxSlide * 2.5;
-      this.dustV.set([Math.cos(yaw) * back - Math.sin(yaw) * side, 0.8 + Math.random() * 1.4, Math.sin(yaw) * back + Math.cos(yaw) * side], i * 3);
+      this.dustV.set([Math.cos(yaw) * back - Math.sin(yaw) * side, 0.8 + Math.random() * 1.4 + scuff * 0.25, Math.sin(yaw) * back + Math.cos(yaw) * side], i * 3);
       this.dustL[i] = 1;
+      this.dustS[i] = thick;
     }
     for (let i = 0; i < this.dustN; i++) {
       if (this.dustL[i] <= 0) {
@@ -607,7 +668,7 @@ export class MxScene {
       this.dustP[i * 3 + 1] += this.dustV[i * 3 + 1] * dt;
       this.dustP[i * 3 + 2] += this.dustV[i * 3 + 2] * dt;
       this.dustV[i * 3 + 1] -= 1.2 * dt;
-      this.dustA[i] = Math.max(0, this.dustL[i]);
+      this.dustA[i] = Math.max(0, this.dustL[i]) * this.dustS[i];
     }
     this.dust.geometry.attributes.position.needsUpdate = true;
     this.dust.geometry.attributes.alpha.needsUpdate = true;

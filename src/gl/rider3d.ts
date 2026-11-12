@@ -315,18 +315,19 @@ export class Rider {
     this.head = new THREE.Group();
     const shellG = new THREE.SphereGeometry(0.158, sg(40), sg(28));
     const shell = new THREE.Mesh(shellG, helmet);
-    shell.scale.set(1.14, 1.03, 0.98);
+    // proportions of a real MX helmet: longer than wide (local x ends up across, local z along)
+    shell.scale.set(0.98, 1.02, 1.12);
     shell.rotation.y = Math.PI / 2; // bands front → back
-    // chin bar: a horizontal arc in front of the mouth, joined to the shell on both sides
-    const chin = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.046, sg(14), sg(30), Math.PI * 1.02), helmetPlain);
-    chin.rotation.set(Math.PI / 2, 0, -Math.PI * 0.51); // arc centred on the front (+x)
-    chin.position.set(0.03, -0.085, 0);
-    chin.scale.set(1.22, 0.95, 1.25);
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.11), strap);
-    mouth.position.set(0.215, -0.085, 0);
-    for (const z of [-0.075, 0.075]) {
-      const sideVent = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.02), strap);
-      sideVent.position.set(0.17, -0.08, z * 1.6);
+    // chin bar: the lower front of the shell, pushed out a little (a sleeve of the same sphere, so it
+    // hugs the shell instead of sticking out like a bracket) with a mouth vent
+    const chin = new THREE.Mesh(new THREE.SphereGeometry(0.158, sg(30), sg(14), Math.PI - 1.0, 2.0, 1.6, 0.9), helmetPlain);
+    (chin.material as THREE.Material).side = THREE.DoubleSide;
+    chin.scale.set(1.19, 1.02, 1.0);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.034, 0.075), strap);
+    mouth.position.set(0.171, -0.072, 0);
+    for (const z of [-0.06, 0.06]) {
+      const sideVent = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.014, 0.022), strap);
+      sideVent.position.set(0.132, -0.1, z);
       this.head.add(sideVent);
     }
     // peak with a central ridge
@@ -348,7 +349,7 @@ export class Rider {
       this.head.add(tv);
     }
     const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 0.15), helmetPlain);
-    spoiler.position.set(-0.155, 0.06, 0);
+    spoiler.position.set(-0.17, 0.06, 0);
     spoiler.rotation.z = 0.9;
     // goggles: frame arc, curved mirrored lens, strap round the shell
     const frame = new THREE.Mesh(new THREE.TorusGeometry(0.163, 0.03, sg(10), sg(28), Math.PI * 0.62), strap);
@@ -359,7 +360,7 @@ export class Rider {
     lensM.position.set(0.02, 0.012, 0);
     const gStrap = new THREE.Mesh(new THREE.TorusGeometry(0.156, 0.017, sg(6), sg(36)).rotateX(Math.PI / 2), strap);
     gStrap.position.y = 0.015;
-    gStrap.scale.set(1.13, 1.3, 1.0);
+    gStrap.scale.set(1.17, 1.3, 1.05);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.014, sg(6), sg(30)).rotateX(Math.PI / 2), strap);
     rim.position.y = -0.125;
     rim.scale.set(1.1, 1, 0.95);

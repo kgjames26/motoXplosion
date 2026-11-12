@@ -26,6 +26,8 @@ export interface Opponent {
   finishTime: number;
   crashTimer: number;
   ai: AiState;
+  /** Motocross race grid: the lateral slot (m) this rider lines up on. */
+  mxLane?: number;
   /** Multiplayer: a real player whose bike is driven by the network. */
   remote?: boolean;
   /** v2.26 motocross track: lateral offset (m, + = right) and lean (rad). */
