@@ -39,10 +39,11 @@ import {
 const $ = (id: string) => document.getElementById(id)!;
 
 const settings = loadSettings();
-if ((settings.layout as string) === 'centre') settings.layout = 'gauche';
+settings.layout = 'gauche'; // v2.31: no left-handed layout any more
 const profile = loadProfile();
-// v2.21: the game always opens on cruising, first world
-profile.mode = 'cruising';
+// the home screen opens on a circuit mode (cruising has its own big button)
+if (profile.mode === 'cruising') profile.mode = 'enduro';
+let lastCircuitMode: ModeId = profile.mode;
 settings.region = 'alpes';
 const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
@@ -188,6 +189,7 @@ function updateBest(): void {
 }
 
 function refreshTitle(): void {
+  if (profile.mode === 'cruising') profile.mode = lastCircuitMode; // back on the home screen
   const cross = onCross();
   // the motocross track has its own events instead of the usual modes
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card')) {
@@ -205,7 +207,7 @@ function refreshTitle(): void {
 
 function buildModes(): void {
   $('modes').innerHTML =
-    MODES.map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
+    MODES.filter((m) => m.id !== 'cruising').map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
     MX_EVENTS.map((e) => `<button class="mode-card mx hidden" data-mx="${e.id}">${e.icon}<b>${e.name}</b><span class="medals"></span></button>`).join('') +
     `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>`;
   $('mode-multi').addEventListener('click', () => {
@@ -221,6 +223,7 @@ function buildModes(): void {
   for (const el of $('modes').querySelectorAll('.mode-card[data-mode]'))
     el.addEventListener('click', () => {
       profile.mode = (el as HTMLElement).dataset.mode as ModeId;
+      lastCircuitMode = profile.mode;
       saveP();
       refreshTitle();
       closePickers();
@@ -372,7 +375,6 @@ function applyQuality(q: Quality): void {
 function applyLayout(l: Layout): void {
   controlsEl.classList.remove('layout-gauche', 'layout-centre', 'layout-inverse');
   controlsEl.classList.add('layout-' + l);
-  for (const b of $('set-layouts').querySelectorAll('.layout-opt')) b.classList.toggle('selected', (b as HTMLElement).dataset.layout === l);
 }
 
 function openSettings(from: ScreenName): void {
@@ -404,13 +406,6 @@ function bindSettings(): void {
   };
   m.addEventListener('input', onVol);
   s.addEventListener('input', onVol);
-  for (const b of $('set-layouts').querySelectorAll('.layout-opt')) {
-    b.addEventListener('click', () => {
-      settings.layout = (b as HTMLElement).dataset.layout as Layout;
-      applyLayout(settings.layout);
-      saveSettings(settings);
-    });
-  }
   for (const b of $('set-quality').querySelectorAll('.layout-opt')) {
     b.addEventListener('click', () => {
       settings.quality = (b as HTMLElement).dataset.quality as Quality;
@@ -813,6 +808,12 @@ garage.onChange = () => {
 };
 
 $('btn-play').addEventListener('click', play);
+/** Cruising: a big button on the home screen, it starts the ride at once. */
+$('btn-cruising').addEventListener('click', () => {
+  profile.mode = 'cruising';
+  saveP();
+  start();
+});
 $('btn-fs-title').addEventListener('click', () => void toggleFullscreen());
 $('btn-fs-settings').addEventListener('click', () => void toggleFullscreen());
 $('btn-fs-pause').addEventListener('click', () => void toggleFullscreen());

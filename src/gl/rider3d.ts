@@ -20,6 +20,9 @@ type V2 = [number, number];
 /** Key points of the chassis shared with the bike model. */
 export const PEG: V2 = [-0.1, -0.4];
 export const GRIP: V2 = [0.36, 0.43];
+/** Steering head and axis of the bike (hands follow the turned bars). */
+const HEAD_POINT = new THREE.Vector3(0.7, -0.235, 0);
+const HEAD_AXIS = new THREE.Vector3(Math.sin((27 * Math.PI) / 180), -Math.cos((27 * Math.PI) / 180), 0);
 
 const SPINE = 5; // torso vertebrae
 const SEG = 0.12; // length of one (m)
@@ -78,6 +81,8 @@ function torsoSlice(i: number): THREE.BufferGeometry {
 
 export class Rider {
   readonly group = new THREE.Group();
+  /** Handlebar angle (rad): the hands follow it. */
+  steer = 0;
   /** Every material of the rider (for the environment map). */
   readonly materials: THREE.Material[] = [];
   private limbs: Record<string, THREE.Object3D> = {};
@@ -481,6 +486,7 @@ export class Rider {
       // arms: shoulder → elbow → grip, elbows up and out ("attack position")
       const shoulder = chestBase.clone().addScaledVector(up, 0.0).add(new THREE.Vector3(0, 0, side * 0.2));
       const hand = new THREE.Vector3(GRIP[0], GRIP[1], side * 0.3);
+      if (this.steer) hand.sub(HEAD_POINT).applyAxisAngle(HEAD_AXIS, this.steer).add(HEAD_POINT); // the hands stay on the grips
       const elbow = ik(shoulder, hand, 0.33, 0.32, new THREE.Vector3(-0.3, 0.2, side * 1));
       this.span('upper' + n, shoulder, elbow);
       this.span('fore' + n, elbow, hand);

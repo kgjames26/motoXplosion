@@ -49,6 +49,8 @@ export interface Wheel {
   y: number;
   contact: boolean;
   normalForce: number;
+  /** Longitudinal tyre force (N, + = pushes the bike forward): drive or brake. */
+  traction: number;
   slip: number;
   surface: Surface;
   compression: number; // 0..1 for rendering
@@ -96,6 +98,7 @@ function makeWheel(front: boolean, spec?: BikeSpec): Wheel {
     y: 0,
     contact: false,
     normalForce: 0,
+    traction: 0,
     slip: 0,
     surface: Surface.Dirt,
     compression: 0,
@@ -307,6 +310,7 @@ export class Bike {
       let gy = 0;
       w.contact = false;
       w.normalForce = 0;
+      w.traction = 0;
       w.slip = 0;
       const hit = world.circleContact(wx, wy, w.radius);
       let wheelTorque = isRear ? drive : 0;
@@ -334,6 +338,7 @@ export class Bike {
         w.slip = slipV;
         const mu = surf.grip * this.grip * world.gripK(hit.surface, hit.px);
         let Ft = -mu * N * Math.tanh(slipV / 1.2);
+        w.traction = Ft;
         // rolling resistance
         Ft -= surf.rolling * N * Math.tanh(vt * 2);
         gx = nx * N + tx * Ft;

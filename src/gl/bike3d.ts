@@ -313,6 +313,10 @@ function seatBump(): THREE.Texture {
 
 // ---------------------------------------------------------------- bike
 
+/** Steering head (chassis frame) and steering axis (the fork's, pointing down and forward). */
+const HEAD = new THREE.Vector3(0.7, -0.235, 0);
+const STEER_AXIS = new THREE.Vector3(Math.sin((27 * Math.PI) / 180), -Math.cos((27 * Math.PI) / 180), 0);
+
 export class Bike3D {
   readonly group = new THREE.Group();
   private chassis = new THREE.Group();
@@ -320,6 +324,10 @@ export class Bike3D {
   private frontWheel: THREE.Group;
   private swingArm = new THREE.Group();
   private forkLowers = new THREE.Group();
+  /** Everything that turns with the handlebars (fork, bars, grips, front wheel); origin at the steering head. */
+  private steerHead = new THREE.Group();
+  /** Handlebar angle (rad, + = to the side the bike leans on the 3D track). */
+  steer = 0;
   private shocks: { group: THREE.Group; coil: THREE.Mesh; body: THREE.Mesh; z: number }[] = [];
   private rider: Rider;
   private riderHolder = new THREE.Group();
@@ -369,7 +377,9 @@ export class Bike3D {
     if (!lite) this.buildDetails(model);
     this.rearWheel = buildWheel(0.43, mats, false, lite);
     this.frontWheel = buildWheel(0.43, mats, true, lite);
-    this.chassis.add(this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers);
+    this.steerHead.position.copy(HEAD);
+    this.steerHead.add(this.frontWheel, this.forkLowers);
+    this.chassis.add(this.rearWheel, this.swingArm, this.steerHead);
     this.buildSwingArm();
     this.buildForkLowers();
     this.buildShocks(scrambler ? [-0.13, 0.13] : [0]);
@@ -377,11 +387,11 @@ export class Bike3D {
     this.riderHolder.add(this.rider.group);
     this.chassis.add(this.riderHolder);
     // one mesh per material for the fixed parts of the chassis and of each moving assembly
-    const moving = [this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers, this.riderHolder, ...this.shocks.map((sh) => sh.group)];
+    const moving = [this.rearWheel, this.swingArm, this.steerHead, this.riderHolder, ...this.shocks.map((sh) => sh.group)];
     for (const o of moving) this.chassis.remove(o);
     mergeByMaterial(this.chassis);
     for (const o of moving) this.chassis.add(o);
-    for (const o of [this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers]) mergeByMaterial(o);
+    for (const o of [this.rearWheel, this.frontWheel, this.swingArm, this.forkLowers, this.steerHead]) mergeByMaterial(o);
     this.group.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = true;
     });
@@ -496,35 +506,36 @@ export class Bike3D {
   /** Fork stanchions, triple clamps, bars and grips (all styles), front plate (scrambler). */
   private buildFront(model: BikeModel): void {
     const m = this.mats;
-    const c = this.chassis;
+    const c = this.steerHead;
+    const H = HEAD;
     // fork stanchions + clamps + bars + front plate
     const rake = (27 * Math.PI) / 180;
     const axis = new THREE.Vector3(Math.sin(rake), -Math.cos(rake), 0);
     const mount = new THREE.Vector3(0.7, -0.235, 0);
     for (const z of [-0.1, 0.1]) {
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1, 18), m.chrome);
-      const a = mount.clone().addScaledVector(axis, -0.52).setZ(z);
-      const b = mount.clone().addScaledVector(axis, 0.02).setZ(z);
+      const a = mount.clone().addScaledVector(axis, -0.52).setZ(z).sub(H);
+      const b = mount.clone().addScaledVector(axis, 0.02).setZ(z).sub(H);
       between(st, a, b);
       st.scale.x = st.scale.z = 1;
       c.add(st);
     }
     for (const t of [-0.52, -0.34]) {
       const clamp3 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.28), m.frame);
-      clamp3.position.copy(mount.clone().addScaledVector(axis, t));
+      clamp3.position.copy(mount.clone().addScaledVector(axis, t)).sub(H);
       clamp3.rotation.z = rake;
       c.add(clamp3);
     }
     const barBase = mount.clone().addScaledVector(axis, -0.55);
-    c.add(tube([[barBase.x, barBase.y, -0.32], [barBase.x - 0.03, barBase.y + 0.05, -0.2], [barBase.x, barBase.y + 0.02, 0], [barBase.x - 0.03, barBase.y + 0.05, 0.2], [GRIP[0], GRIP[1], 0.32]], 0.013, m.chrome));
+    c.add(tube([[barBase.x - H.x, barBase.y - H.y, -0.32], [barBase.x - 0.03 - H.x, barBase.y + 0.05 - H.y, -0.2], [barBase.x - H.x, barBase.y + 0.02 - H.y, 0], [barBase.x - 0.03 - H.x, barBase.y + 0.05 - H.y, 0.2], [GRIP[0] - H.x, GRIP[1] - H.y, 0.32]], 0.013, m.chrome));
     for (const z of [-0.3, 0.3]) {
       const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.1, 8).rotateX(Math.PI / 2), m.dark);
-      grip.position.set(GRIP[0], GRIP[1], z);
+      grip.position.set(GRIP[0] - H.x, GRIP[1] - H.y, z);
       c.add(grip);
     }
     if (model.style !== 'scrambler') return;
     const fplate = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.2), new THREE.MeshStandardMaterial({ map: plateTexture('98', '#e2d6b2', '#22402a'), transparent: true, roughness: 0.6, side: THREE.DoubleSide }));
-    fplate.position.copy(mount.clone().addScaledVector(axis, -0.42)).add(new THREE.Vector3(0.09, 0, 0.0));
+    fplate.position.copy(mount.clone().addScaledVector(axis, -0.42)).add(new THREE.Vector3(0.09, 0, 0.0)).sub(H);
     fplate.rotation.set(0, Math.PI / 2 - 0.9, rake * 0.6);
     c.add(fplate);
   }
@@ -933,7 +944,7 @@ export class Bike3D {
     const F = local(b.front);
     this.rearWheel.position.set(R[0], R[1], 0);
     this.rearWheel.rotation.z = b.rear.angle;
-    this.frontWheel.position.set(F[0], F[1], 0);
+    this.frontWheel.position.set(F[0] - HEAD.x, F[1] - HEAD.y, 0);
     this.frontWheel.rotation.z = b.front.angle;
     // swing arm from the pivot to the rear axle
     const dx = R[0] - PIVOT[0];
@@ -953,7 +964,9 @@ export class Bike3D {
     }
     // fork lower legs + fender follow the front axle along the fork axis
     const rake = (27 * Math.PI) / 180;
-    this.forkLowers.position.set(F[0], F[1], 0);
+    this.forkLowers.position.set(F[0] - HEAD.x, F[1] - HEAD.y, 0);
+    this.steerHead.setRotationFromAxisAngle(STEER_AXIS, this.steer);
+    this.rider.steer = this.steer;
     this.forkLowers.rotation.z = rake;
 
     // rider: chassis-frame acceleration (smoothed) drives the body's inertia

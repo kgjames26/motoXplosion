@@ -460,6 +460,7 @@ export class MxScene {
     for (const [b3, car] of this.carriers) {
       if (b3.group.parent === car) {
         b3.group.rotation.x = 0;
+        b3.steer = 0;
         main.add(b3.group);
       }
       this.scene.remove(car);
@@ -483,6 +484,7 @@ export class MxScene {
     // ---- bikes
     const crashed = !!(game.ragdoll && game.crashTimer > 0);
     player.lane = 0;
+    player.steer = crashed ? 0 : game.mxBar;
     player.update(b, dt, crashed);
     const car = this.place(player, b, zone, game.mxN, game.mxPsi, game.mxLean);
     if (crashed) player.setRiderDetached(true, game.ragdoll!.x, game.ragdoll!.y, game.ragdoll!.angle, car);
@@ -494,6 +496,8 @@ export class MxScene {
       b3.group.visible = near;
       if (!near) continue;
       b3.lane = 0;
+      const ov = Math.max(3, o.bike.forwardSpeed);
+      b3.steer = o.crashTimer > 0 ? 0 : Math.atan((1.48 * 9.81 * 1.55 * Math.tan(o.mxLean ?? 0)) / (ov * ov));
       b3.update(o.bike, dt, o.crashTimer > 0);
       this.place(b3, o.bike, zone, o.mxN ?? 0, 0, o.mxLean ?? 0);
     }

@@ -4283,8 +4283,8 @@ button.wallet {
   position: absolute;
   left: calc(var(--u) * 5 + var(--safe-l));
   bottom: calc(var(--u) * 4 + var(--safe-b));
-  width: calc(var(--u) * 34);
-  height: calc(var(--u) * 34);
+  width: calc(var(--u) * 46);
+  height: calc(var(--u) * 46);
   border-radius: 50%;
   pointer-events: auto;
   touch-action: none;
@@ -4347,4 +4347,39 @@ button.wallet {
 }
 .mode-strip .mode-card.mx {
   border-color: rgba(255, 190, 80, 0.6);
+}
+
+/* ---- v2.31 home screen: garage right under the coins, a big Cruising button below it */
+.title-menu {
+  top: calc(var(--u) * 14.5);
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 2);
+}
+#screen-title .title-menu {
+  top: calc(var(--u) * 14.5);
+  transform: none;
+}
+#btn-garage.neon-sel {
+  margin-top: 0;
+}
+#btn-cruising.neon-sel {
+  margin-top: 0;
+  min-width: calc(var(--u) * 58);
+  min-height: calc(var(--u) * 17);
+  grid-template-columns: calc(var(--u) * 11) 1fr calc(var(--u) * 4.6);
+  gap: calc(var(--u) * 1.8);
+  border-radius: calc(var(--u) * 3.4);
+}
+#btn-cruising.neon-sel .ns-ico {
+  width: calc(var(--u) * 11);
+  height: calc(var(--u) * 11);
+  background: radial-gradient(circle at 35% 30%, #c8f3ff, #3fb6ff 55%, #0b5fa8);
+}
+#btn-cruising.neon-sel b {
+  font-size: calc(var(--u) * 5.4);
+}
+#btn-cruising.neon-sel small {
+  font-size: calc(var(--u) * 2.1);
 }
