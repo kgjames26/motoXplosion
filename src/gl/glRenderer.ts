@@ -339,7 +339,7 @@ export class GLRenderer {
       let b3 = this.rivals.get(o);
       if (!b3) {
         // other players wear the outfit they bought in solo
-        b3 = new Bike3D(o.model, o.look, o.outfit && o.outfit !== 'moto' ? outfitById(o.outfit) : undefined);
+        b3 = new Bike3D(o.model, o.look, o.outfit && o.outfit !== 'moto' ? outfitById(o.outfit) : undefined, true);
         b3.lane = -0.25 + o.lane;
         b3.setEnvironment(this.renderer);
         this.scene.add(b3.group);
