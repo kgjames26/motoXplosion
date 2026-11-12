@@ -4,7 +4,7 @@
  * - Hashed build assets (/assets/*) and icons: cache first (immutable).
  * Bump CACHE whenever files in public/assets change (their names are not hashed).
  */
-const CACHE = 'motoxplosion-v30';
+const CACHE = 'motoxplosion-v31';
 const SHELL = [
   '/',
   '/index.html',
