@@ -48,7 +48,14 @@ const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
-const runOpts = () => ({ region: profile.mode === 'cruising' ? ('alpes' as RegionId) : settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf(), cruiseControl: profile.gear.includes('cruise') });
+/** The motocross track is its own world with its own three events. */
+const onCross = () => settings.region === 'cross' && profile.mode !== 'cruising';
+const MX_EVENTS: { id: 'time' | 'tricks' | 'race'; name: string; icon: string; desc: string }[] = [
+  { id: 'time', name: 'Time attack', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="24" cy="20" r="12"/><path d="M24 20v-7M24 20l5 3M20 4h8M24 4v4"/></svg>', desc: 'Un seul tour, départ arrêté : bats ton propre chrono. Or, argent ou bronze selon le temps.' },
+  { id: 'tricks', name: 'Figures', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M8 26a16 12 0 1 1 30 2"/><path d="M38 28l-7-1M38 28l1-7"/><circle cx="24" cy="18" r="3"/></svg>', desc: 'Un demi-tour pour poser le plus de saltos. Doubles et triples comptent double et triple. Un salto raté en enlève deux.' },
+  { id: 'race', name: 'Course', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M10 32V4M10 6h26l-5 7 5 7H10"/><path d="M18 6v14M26 6v14M10 13h24"/></svg>', desc: 'Deux tours contre 7 pilotes qui freinent, se penchent et prennent la corde. Monte sur le podium.' },
+];
+const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: profile.mode === 'cruising' ? ('alpes' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? (profile.mxKind === 'tricks' ? 2 : 1) : circuitOf(), cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -146,7 +153,13 @@ const medalIco = (m: number) => `<i class="medal-ico" style="--m:${MEDAL_COLORS[
 
 function updateBest(): void {
   const mode = profile.mode;
-  if (isCircuitMode(mode)) {
+  if (onCross()) {
+    const k = profile.mxKind;
+    const r = profile.circuits[circuitKey(k === 'race' ? 'course' : 'enduro', 'cross', k === 'tricks' ? 2 : 1, 'facile')];
+    const txt = k === 'time' ? (r?.time !== undefined ? fmtTime(r.time) : '—') : k === 'tricks' ? (profile.best.mxtricks ? `${profile.best.mxtricks} saltos` : '—') : r?.place ? `${r.place}${r.place === 1 ? 're' : 'e'} place` : '—';
+    $('best-title').innerHTML = `${r?.medal ? medalIco(r.medal) + ' ' : ''}${txt}`;
+    $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
+  } else if (isCircuitMode(mode)) {
     const c = medalCounts(mode);
     $('best-title').innerHTML = `${c.done}/${CIRCUITS} · ${medalIco(3)} ${c.gold}`;
     $('best-title').parentElement!.firstChild!.textContent = 'CIRCUITS ';
@@ -175,23 +188,36 @@ function updateBest(): void {
 }
 
 function refreshTitle(): void {
-  for (const el of $('modes').querySelectorAll('.mode-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.mode === profile.mode);
+  const cross = onCross();
+  // the motocross track has its own events instead of the usual modes
+  for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card')) {
+    const isMx = !!el.dataset.mx;
+    el.classList.toggle('hidden', isMx !== cross);
+    el.classList.toggle('selected', isMx ? el.dataset.mx === profile.mxKind : el.dataset.mode === profile.mode);
+  }
   const m = MODES.find((x) => x.id === profile.mode)!;
-  // worlds are chosen for the circuit modes only: cruising crosses them all
-  $('regions').classList.toggle('hidden', m.id === 'cruising');
+  // cruising crosses every world: no world is picked (a tap on one goes to its circuits)
+  for (const el of $('regions').querySelectorAll<HTMLElement>('.world-card')) el.classList.toggle('selected', profile.mode !== 'cruising' && el.dataset.region === settings.region);
   $('world-all').classList.toggle('hidden', m.id !== 'cruising');
-  $('mode-desc').textContent = m.description;
+  $('mode-desc').textContent = cross ? MX_EVENTS.find((e) => e.id === profile.mxKind)!.desc : m.description;
   updateBest();
 }
 
 function buildModes(): void {
   $('modes').innerHTML =
     MODES.map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
+    MX_EVENTS.map((e) => `<button class="mode-card mx hidden" data-mx="${e.id}">${e.icon}<b>${e.name}</b><span class="medals"></span></button>`).join('') +
     `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>`;
   $('mode-multi').addEventListener('click', () => {
     closePickers();
     mp.open();
   });
+  for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card[data-mx]'))
+    el.addEventListener('click', () => {
+      profile.mxKind = el.dataset.mx as 'time' | 'tricks' | 'race';
+      saveP();
+      refreshTitle();
+    });
   for (const el of $('modes').querySelectorAll('.mode-card[data-mode]'))
     el.addEventListener('click', () => {
       profile.mode = (el as HTMLElement).dataset.mode as ModeId;
@@ -325,6 +351,10 @@ function buildRegions(): void {
     b.title = r.subtitle;
     b.addEventListener('click', () => {
       settings.region = id as RegionId;
+      // worlds are for the circuits: leaving cruising when one is picked
+      if (profile.mode === 'cruising') profile.mode = 'enduro';
+      saveP();
+      refreshTitle();
       saveSettings(settings);
       for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
       updateBest();
@@ -627,6 +657,7 @@ $('sleep-settings').addEventListener('click', () => openSettings('sleep'));
 
 function play(): void {
   if (asleep()) return show('sleep');
+  if (onCross()) return start();
   if (isCircuitMode(profile.mode)) openCircuits();
   else start();
 }
@@ -692,8 +723,15 @@ function finishRun(display: boolean): void {
     const old = profile.circuits[key] ?? { medal: 0, done: false };
     if (r.reason === 'finish') {
       const di = diffIndex(game.difficulty);
-      if (!old.done && di < 2) unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué sur ce circuit : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
+      if (!old.done && di < 2 && !r.mx) unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué sur ce circuit : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
       const nr: CircuitRecord = { ...old, done: true };
+      if (r.mx === 'tricks') {
+        r.time = undefined;
+        if ((r.tricks ?? 0) > (profile.best.mxtricks ?? 0)) {
+          r.newRecord = (profile.best.mxtricks ?? 0) > 0;
+          profile.best.mxtricks = r.tricks ?? 0;
+        }
+      }
       if (r.time !== undefined && (old.time === undefined || r.time < old.time)) {
         r.newRecord = old.time !== undefined;
         nr.time = r.time;
@@ -708,10 +746,10 @@ function finishRun(display: boolean): void {
       }
       profile.circuits[key] = nr;
       // the next circuit becomes the selection
-      if (r.circuit < CIRCUITS) profile.circuitSel[`${mode}:${game.region}`] = r.circuit + 1;
+      if (r.circuit < CIRCUITS && !r.mx) profile.circuitSel[`${mode}:${game.region}`] = r.circuit + 1;
     }
     const cur = profile.circuits[key];
-    bestText = cur?.time !== undefined ? `Record : ${fmtTime(cur.time)}` : cur?.place ? `Meilleure place : ${cur.place}${cur.place === 1 ? 're' : 'e'}` : '';
+    bestText = r.mx === 'tricks' ? `Record : ${profile.best.mxtricks ?? 0} saltos` : cur?.time !== undefined ? `Record : ${fmtTime(cur.time)}` : cur?.place ? `Meilleure place : ${cur.place}${cur.place === 1 ? 're' : 'e'}` : '';
   } else {
     const key = bestKey(mode, game.region);
     const di = diffIndex(game.difficulty);
@@ -735,7 +773,7 @@ function finishRun(display: boolean): void {
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
   }
   $('over-title').textContent = title;
-  $('over-score-label').textContent = mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
+  $('over-score-label').textContent = r.mx ? `Circuit de cross · ${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;
   $('over-best').textContent = bestText;
   $('over-record').classList.toggle('hidden', !r.newRecord);
@@ -748,10 +786,10 @@ function finishRun(display: boolean): void {
   $('over-lines').innerHTML = r.lines.map((l) => `<li><span>${l.label}</span><b>+${l.coins}</b></li>`).join('') || '<li><span>Rien cette fois</span><b>0</b></li>';
   $('over-total').textContent = `+${r.total}`;
   $('over-wallet').textContent = profile.coins.toLocaleString('fr-FR');
-  const canNext = isCircuitMode(mode) && r.reason === 'finish' && !!r.circuit && r.circuit < CIRCUITS;
+  const canNext = !r.mx && isCircuitMode(mode) && r.reason === 'finish' && !!r.circuit && r.circuit < CIRCUITS;
   // same level again, under another weather (the ones already open)
   const ow = $('over-weather');
-  const others = isCircuitMode(mode) && r.reason === 'finish' && r.circuit ? DIFF_ORDER.filter((d) => d !== game.difficulty && diffUnlocked(mode, r.circuit!, d)) : [];
+  const others = !r.mx && isCircuitMode(mode) && r.reason === 'finish' && r.circuit ? DIFF_ORDER.filter((d) => d !== game.difficulty && diffUnlocked(mode, r.circuit!, d)) : [];
   ow.classList.toggle('hidden', !others.length);
   ow.innerHTML = others.map((d) => `<button class="btn-secondary wx-retry" data-d="${d}">${WEATHER_ICONS[diffIndex(d)]} REJOUER · ${WEATHER_NAMES[diffIndex(d)].toUpperCase()}</button>`).join('');
   $('btn-next').classList.toggle('hidden', !canNext);
@@ -1027,6 +1065,8 @@ function frame(now: number): void {
   game.input.throttle = controls.throttle;
   game.input.brake = controls.brake;
   game.input.balance = controls.balance;
+  game.steer = controls.steer;
+  controls.setStickMode(game.mxT >= 0.5 && game.state !== 'title');
   game.update(dt);
   tickTimers(dt);
   const ev = game.consumeEvents();

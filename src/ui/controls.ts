@@ -10,6 +10,13 @@ export class Controls {
   throttle = 0;
   brake = 0;
   balance = 0;
+  /** v2.26 motocross track: stick left / right (the stick's up / down is the balance). */
+  steer = 0;
+  /** Joystick instead of the balance bar (3D track). */
+  stickMode = false;
+  private stickTouch = false;
+  private stickEl = document.getElementById('ctl-stick')!;
+  private stickKnob = document.getElementById('stick-knob')!;
   private balTouch = false;
   private thrTouch = false;
   private keys = new Set<string>();
@@ -31,6 +38,7 @@ export class Controls {
     this.bindThrottle();
     this.bindBalance();
     this.bindBrake();
+    this.bindStick();
     window.addEventListener('keydown', (e) => {
       // typing in a text field (pseudo) never drives the bike
       if (e.repeat || (e.target as HTMLElement | null)?.tagName === 'INPUT') return;
@@ -101,6 +109,46 @@ export class Controls {
     this.balEl.addEventListener('pointercancel', end);
   }
 
+  private bindStick(): void {
+    const update = (e: PointerEvent) => {
+      const r = this.stickEl.getBoundingClientRect();
+      const R = r.width / 2;
+      let dx = (e.clientX - (r.left + R)) / (R * 0.72);
+      let dy = (e.clientY - (r.top + R)) / (R * 0.72);
+      const m = Math.hypot(dx, dy);
+      if (m > 1) {
+        dx /= m;
+        dy /= m;
+      }
+      this.steer = dx;
+      this.balance = -dy; // up = weight forward, down = weight back
+    };
+    this.stickEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.stickEl.setPointerCapture(e.pointerId);
+      this.stickTouch = true;
+      update(e);
+    });
+    this.stickEl.addEventListener('pointermove', (e) => {
+      if (this.stickTouch) update(e);
+    });
+    const end = () => {
+      this.stickTouch = false;
+    };
+    this.stickEl.addEventListener('pointerup', end);
+    this.stickEl.addEventListener('pointercancel', end);
+  }
+
+  /** Switch between the balance bar (2.5D) and the joystick (3D track). */
+  setStickMode(on: boolean): void {
+    if (on === this.stickMode) return;
+    this.stickMode = on;
+    this.stickTouch = this.balTouch = false;
+    this.steer = 0;
+    this.stickEl.classList.toggle('hidden', !on);
+    this.balEl.classList.toggle('hidden', on);
+  }
+
   private bindBrake(): void {
     const on = (e: PointerEvent) => {
       e.preventDefault();
@@ -121,15 +169,28 @@ export class Controls {
   update(dt: number): void {
     const k = this.keys;
     // keyboard: Space = throttle, Ctrl or AltGr = brake, arrows = rider balance
-    const up = k.has('Space') || k.has('ArrowUp');
-    const down = k.has('ControlLeft') || k.has('ControlRight') || k.has('AltRight') || k.has('ArrowDown');
+    const st = this.stickMode;
+    const up = k.has('Space') || (!st && k.has('ArrowUp'));
+    const down = k.has('ControlLeft') || k.has('ControlRight') || k.has('AltRight') || (!st && k.has('ArrowDown'));
     const left = k.has('ArrowLeft') || k.has('KeyA');
     const right = k.has('ArrowRight') || k.has('KeyD');
     // keyboard throttle ramps like a twist grip
     this.kbThrottle = clamp(this.kbThrottle + (up ? 3 : -6) * dt, 0, 1);
     if (!this.thrTouch) this.throttle = this.kbThrottle;
     if (!this.brakeEl.classList.contains('on')) this.brake = down ? 1 : 0;
-    if (!this.balTouch) {
+    if (st) {
+      // 3D track: ← → steer, ↑ ↓ shift the rider's weight
+      if (!this.stickTouch) {
+        const ts = left ? -1 : right ? 1 : 0;
+        const tb = k.has('ArrowUp') ? 1 : k.has('ArrowDown') ? -1 : 0;
+        this.steer += (ts - this.steer) * (1 - Math.exp(-(ts === 0 ? 10 : 6) * dt));
+        this.balance += (tb - this.balance) * (1 - Math.exp(-(tb === 0 ? 9 : 5) * dt));
+        if (Math.abs(this.steer) < 0.002) this.steer = 0;
+        if (Math.abs(this.balance) < 0.002) this.balance = 0;
+      }
+      const R = this.stickEl.clientWidth * 0.5 * 0.5;
+      this.stickKnob.style.transform = `translate(${this.steer * R}px, ${-this.balance * R}px)`;
+    } else if (!this.balTouch) {
       const target = left ? -1 : right ? 1 : 0;
       const rate = target === 0 ? 9 : 5;
       this.balance += (target - this.balance) * (1 - Math.exp(-rate * dt));

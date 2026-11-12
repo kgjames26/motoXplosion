@@ -177,7 +177,11 @@ export class Hud {
         break;
       }
     }
-    const key = Math.floor(p * 400) + text.length * 1000 + (mode !== 'cruising' ? Math.round(game.bike.x) * 7 : 0) + game.sectionsCleared * 13;
+    if (game.mxKind === 'tricks') {
+      text = String(game.mxScore);
+      unit = game.mxScore > 1 ? 'saltos' : 'salto';
+    }
+    const key = game.mxFlips * 31 + game.mxFails * 57 + Math.floor(p * 400) + text.length * 1000 + (mode !== 'cruising' ? Math.round(game.bike.x) * 7 : 0) + game.sectionsCleared * 13;
     if (key !== this.last.dist) {
       this.last.dist = key;
       this.distance.textContent = text;

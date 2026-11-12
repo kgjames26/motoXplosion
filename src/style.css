@@ -4277,3 +4277,74 @@ button.wallet {
 #screen-settings h2 {
   margin: 0 0 calc(var(--u) * 1);
 }
+
+/* ------------------------------------------------------------------ v2.26 motocross track: joystick */
+.stick {
+  position: absolute;
+  left: calc(var(--u) * 5 + var(--safe-l));
+  bottom: calc(var(--u) * 4 + var(--safe-b));
+  width: calc(var(--u) * 34);
+  height: calc(var(--u) * 34);
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  background: radial-gradient(circle, rgba(20, 30, 60, 0.55), rgba(10, 16, 36, 0.8));
+  border: calc(var(--u) * 0.6) solid #ffb23a;
+  box-shadow: 0 calc(var(--u) * 0.8) 0 rgba(0, 0, 0, 0.4);
+}
+.stick.hidden {
+  display: none;
+}
+#controls.layout-inverse .stick {
+  left: auto;
+  right: calc(var(--u) * 5 + var(--safe-r));
+}
+.stick-ring {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+}
+.stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40%;
+  height: 40%;
+  margin: -20% 0 0 -20%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #f0e6d0 45%, #c8b890);
+  border: calc(var(--u) * 0.5) solid var(--ink);
+  box-shadow: 0 calc(var(--u) * 0.6) calc(var(--u) * 1) rgba(0, 0, 0, 0.5);
+}
+.stick span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-weight: 900;
+  font-style: italic;
+  font-size: calc(var(--u) * 1.7);
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+.stick .s-up {
+  top: 5%;
+}
+.stick .s-down {
+  bottom: 5%;
+}
+.mx-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: #e9d3b0;
+  opacity: 0;
+}
+.mode-strip .mode-card.hidden {
+  display: none;
+}
+.mode-strip .mode-card.mx {
+  border-color: rgba(255, 190, 80, 0.6);
+}

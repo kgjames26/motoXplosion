@@ -33,6 +33,8 @@ export interface Profile {
   /** Tyre sets owned (sec, pluie, neige). */
   tyres: string[];
   /** v2.25 statistics: seconds spent riding, metres ridden, falls. */
+  /** v2.26: event picked on the motocross track. */
+  mxKind: 'time' | 'tricks' | 'race';
   playTime: number;
   totalDist: number;
   /** v2.15 gadgets bought in the garage (cruise control). */
@@ -40,7 +42,7 @@ export interface Profile {
 }
 
 const KEY = 'mx.profile.v1';
-const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [], gear: [], playTime: 0, totalDist: 0 };
+const DEFAULT: Profile = { coins: 0, owned: ['explorer'], bike: 'explorer', mode: 'cruising', difficulty: 'normal', raceLevel: 1, racePoints: 0, best: {}, totalEarned: 0, outfit: 'moto', outfits: ['moto'], circuits: {}, circuitSel: {}, cruiseUnlock: {}, upgrades: {}, tyres: [], gear: [], mxKind: 'time', playTime: 0, totalDist: 0 };
 
 export function loadProfile(): Profile {
   try {

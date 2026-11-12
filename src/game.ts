@@ -12,6 +12,14 @@ import { Particles } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose } from './mx/track';
+
+/** v2.26 motocross events: one lap against the clock, flips on half a lap, 2-lap race. */
+export type MxKind = 'time' | 'tricks' | 'race';
+/** Time attack medals (s): gold, silver, bronze. */
+export const MX_TIMES = [62, 70, 85];
+/** Trick contest medals (flips): gold, silver, bronze. */
+export const MX_TRICKS = [6, 4, 2];
 
 export type GameState = 'title' | 'playing' | 'paused' | 'over';
 export type OverReason = 'fuel' | 'stamina' | 'time' | 'lives' | 'finish' | 'quit';
@@ -70,6 +78,9 @@ export interface RunResult {
   time?: number;
   medal?: Medal;
   circuit?: number;
+  /** v2.26 motocross event and trick score. */
+  mx?: MxKind;
+  tricks?: number;
 }
 
 export interface RunOptions {
@@ -89,6 +100,8 @@ export interface RunOptions {
   calm?: boolean;
   /** Cruise control bought in the garage (cruising only). */
   cruiseControl?: boolean;
+  /** v2.26: event on the motocross track (region 'cross'). */
+  mx?: MxKind | null;
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -192,6 +205,22 @@ export class Game {
   private finishWheelie = false;
   private finishSeen = false;
   private events: GameEvents = {};
+  // ---- v2.26 motocross track (ridden in 3D)
+  mxKind: MxKind | null = null;
+  /** Stick left / right (-1..1, + = right). */
+  steer = 0;
+  /** Lateral state of the player on the track: offset from the centre line (m, + = right),
+   * heading relative to the track (rad), lean (rad, + = right), sliding (0..1). */
+  mxN = 0;
+  mxPsi = 0;
+  mxLean = 0;
+  mxSlide = 0;
+  /** 0 = side view (2.5D), 1 = third-person 3D; in between: the camera swings round. */
+  mxT = 0;
+  /** The bike steers itself (entering / leaving the track in cruising). */
+  mxAuto = false;
+  mxFlips = 0;
+  mxFails = 0;
   /** Cruise control: owned, target speed (m/s, 0 = off) and its integrated throttle. */
   hasCruise = false;
   private ownsCruise = false;
@@ -215,6 +244,8 @@ export class Game {
     this.circuit = isCircuitMode(this.mode) ? Math.max(1, opts.circuit ?? this.circuit) : 0;
     const cm = this.mode as CircuitMode;
     this.raceLevel = this.circuit ? circuitRaceLevel(this.circuit) : 1;
+    this.mxKind = this.region === 'cross' && this.mode !== 'cruising' ? (opts.mx ?? this.mxKind ?? 'time') : null;
+    if (this.mxKind === 'race') this.raceLevel = 5;
     const seed = this.circuit ? circuitSeed(cm, this.region, this.circuit) : (Math.random() * 2 ** 31) | 0;
     this.weather = weatherFor(this.difficulty);
     this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.mode === 'cruising' ? 0 : this.weather);
@@ -274,10 +305,22 @@ export class Game {
     this.place = 0;
     this.result = null;
     this.raceLen = this.circuit && this.mode !== 'trial' ? circuitLength(cm, this.circuit) : raceLength(this.raceLevel);
+    if (this.mxKind) {
+      // one lap (time attack), half a lap (tricks) or two laps (race)
+      this.raceLen = this.mxKind === 'tricks' ? MX_LEN / 2 : this.mxKind === 'race' ? MX_LEN * 2 : MX_LEN;
+      this.world.finishX = this.startX + this.raceLen;
+    }
     this.finishX = this.startX + this.raceLen;
+    this.mxN = this.mxPsi = this.mxLean = this.mxSlide = 0;
+    this.mxFlips = this.mxFails = 0;
+    this.mxAuto = false;
+    this.mxT = this.world.mxAt(this.bike.x) ? 1 : 0;
+    this.steer = 0;
     this.multi = !!opts.multi;
     this.opponents = this.mode === 'course' && !this.multi ? createOpponents(this.world, this.startX, this.difficulty, this.raceLevel, seed ^ 0x5bd1e995) : [];
     this.countdown = this.mode === 'course' || (this.multi && this.mode !== 'cruising') ? 3.2 : 0;
+    // motocross grid: riders spread across the track
+    if (this.mxKind) this.opponents.forEach((o, i) => (o.mxN = ((i % 4) - 1.5) * 1.5));
     this.state = 'playing';
   }
 
@@ -319,6 +362,13 @@ export class Game {
 
     // ---- input after constraints
     const inp: BikeInput = { ...this.input };
+    if (this.mxAuto && this.crashTimer <= 0) {
+      // entering / leaving the motocross track: the bike rides by itself for a moment
+      const err = wrapAngle(bike.angle - (bike.grounded ? this.world.slopeAt(bike.x) : this.world.slopeAt(bike.x + Math.max(1, bike.vx * 0.4))));
+      inp.throttle = bike.grounded ? clamp((13 - bike.speed) * 0.4 + 0.3, 0, 1) : 0.15;
+      inp.brake = 0;
+      inp.balance = clamp(err * 2.5 + bike.omega * 0.35, -1, 1);
+    }
     if (this.usesEnergy && this.fuel <= 0) inp.throttle = 0;
     if (this.crashTimer > 0 || this.finished) {
       inp.throttle = this.finished ? 0.15 : 0;
@@ -343,6 +393,7 @@ export class Game {
       inp.brake = 0;
     }
     this.stepPhysics(dt, inp, true);
+    this.mxStep(dt, inp);
     this.world.ensure(bike.x + 140);
     this.world.trim(Math.min(bike.x, this.trailingX()) - 120);
 
@@ -731,6 +782,7 @@ export class Game {
     const bike = this.bike;
     for (const c of this.world.coins) {
       if (c.taken || Math.abs(c.x - bike.x) > 1.6) continue;
+      if (this.mxT > 0.5 && Math.abs(this.mxN) > 2.2) continue; // on the track: ride the line
       const dy = c.y - bike.y;
       if (dy > -1.4 && dy < 2.2) {
         c.taken = true;
@@ -740,6 +792,117 @@ export class Game {
         this.events.coin = (this.events.coin ?? 0) + 1;
       }
     }
+  }
+
+  // ---------------------------------------------------------------- motocross track (v2.26)
+
+  /** Trick contest score: flips landed, minus two for each one missed (never below zero). */
+  get mxScore(): number {
+    return Math.max(0, this.mxFlips - 2 * this.mxFails);
+  }
+
+  /**
+   * Lateral dynamics on the motocross track. The 2D physics keeps doing everything along the
+   * track (drive, suspension, jumps, pitch); this adds what a top view needs: the rider leans
+   * (stick left / right), a leaned bike turns — yaw rate = g·tan(lean) / v, so the same lean
+   * gives a tight turn when slow and a wide one when fast — the tyres only hold so much
+   * (beyond, the bike slides wide and scrubs speed), and riding off line costs distance.
+   */
+  private mxStep(dt: number, inp: BikeInput): void {
+    const b = this.bike;
+    const z = this.world.mxAt(b.x);
+    if (!z) {
+      this.mxT = Math.max(0, this.mxT - dt / 1.1);
+      this.mxAuto = this.mxT > 0;
+      this.mxN *= Math.max(0, 1 - dt * 3);
+      this.mxPsi = this.mxLean = this.mxSlide = 0;
+      return;
+    }
+    const u = b.x - z.x0;
+    const len = z.x1 - z.x0;
+    // view: swing to 3D just after the mouth of the entry lane, back before the end of the exit lane
+    const in3d = !z.cruise || (u > 10 && u < len - 34);
+    this.mxT = clamp(this.mxT + (in3d ? dt : -dt) / 1.1, 0, 1);
+    if (!z.cruise) this.mxT = 1;
+    const leaving = z.cruise && u > MX_ENTRY + MX_CRUISE_LOOP - 12;
+    this.mxAuto = z.cruise && (this.mxT < 1 || leaving);
+    const pose = mxPose(u, z.cruise);
+    const v = Math.max(0, b.forwardSpeed);
+    const G = 9.81;
+    let stick = clamp(this.steer, -1, 1);
+    if (this.mxAuto || this.crashTimer > 0 || this.finished || this.countdown > 0) {
+      // follow the centre line: the yaw rate the track asks for, plus a pull back to the middle
+      const want = pose.k * v + (-this.mxPsi * 2.4 - this.mxN * 0.35) * Math.min(1, v / 4);
+      stick = clamp(Math.atan((want * Math.max(v, 3)) / G) / 0.8, -1, 1);
+    }
+    // lean follows the stick (quicker to pick the bike up than to throw it in)
+    const target = stick * 0.8;
+    this.mxLean += (target - this.mxLean) * Math.min(1, dt * (Math.abs(target) < Math.abs(this.mxLean) ? 9 : 6.5));
+    let slide = 0;
+    if (b.grounded && v > 0.5) {
+      // tyres: lateral grip of the surface (loose dirt), a bit more in the banked turns
+      const banked = Math.abs(pose.k) > 0.03 && Math.sign(pose.k) === Math.sign(this.mxLean) ? 0.15 : 0;
+      const mu = (0.95 + banked) * this.world.gripK(Surface.Dirt, b.x) * this.tyreK;
+      let lat = Math.tan(this.mxLean);
+      if (Math.abs(lat) > mu) {
+        slide = Math.min(1, (Math.abs(lat) - mu) / 0.35);
+        lat = Math.sign(lat) * mu * (1 - 0.18 * slide);
+        b.vx *= 1 - 0.9 * slide * dt; // sliding scrubs speed
+      }
+      // leaning costs a little drive: pick the bike up to accelerate out of the turn
+      b.vx *= 1 - 0.1 * Math.abs(Math.sin(this.mxLean)) * dt;
+      const yaw = (G * lat) / Math.max(v, 3);
+      const ds = (v * Math.cos(this.mxPsi)) / Math.max(0.4, 1 - this.mxN * pose.k);
+      this.mxPsi += (yaw - pose.k * ds) * dt;
+      // spinning the rear with the bike leaned steps the back out (power slide)
+      if (inp.throttle > 0.7 && Math.abs(this.mxLean) > 0.45 && Math.abs(b.rear.slip) > 2) slide = Math.max(slide, 0.5);
+    } else if (!b.grounded) {
+      // in the air the bike keeps its line; the track may turn under it
+      this.mxPsi -= pose.k * v * Math.cos(this.mxPsi) * dt;
+    }
+    this.mxPsi = clamp(this.mxPsi, -1.1, 1.1);
+    this.mxSlide += (slide - this.mxSlide) * Math.min(1, dt * 8);
+    this.mxN += v * Math.sin(this.mxPsi) * dt;
+    // riding off line or across the track covers less of it
+    const f = clamp(Math.cos(this.mxPsi) / Math.max(0.4, 1 - this.mxN * pose.k), 0.3, 1.25);
+    b.x += b.vx * dt * (f - 1);
+    b.updateWheelPositions();
+    // off the track: grass drags, then the fence
+    const over = Math.abs(this.mxN) - MX_HALF_WIDTH;
+    if (over > 0 && b.grounded) b.vx *= 1 - Math.min(1, over / 2) * 1.6 * dt;
+    const lim = MX_HALF_WIDTH + MX_RUNOFF;
+    if (Math.abs(this.mxN) > lim) {
+      this.mxN = Math.sign(this.mxN) * lim;
+      if (Math.sign(this.mxPsi) === Math.sign(this.mxN)) {
+        this.mxPsi *= -0.3;
+        b.vx *= 0.75;
+        this.shake = Math.min(1, this.shake + 0.3);
+      }
+    }
+  }
+
+  /** Opponents on the motocross track: brake for the turns, take the inside line, lean. */
+  private mxAi(o: Opponent, inp: BikeInput, dt: number): BikeInput {
+    const z = this.world.mxAt(o.bike.x);
+    if (!z) return inp;
+    const u = o.bike.x - z.x0;
+    const v = Math.max(0, o.bike.forwardSpeed);
+    // the tightest part of the next metres decides the speed (better riders brake later)
+    const look = 6 + v * (1.25 - o.level * 0.04);
+    let k = 0;
+    for (let d = 0; d <= look; d += 3) k = Math.max(k, Math.abs(mxPose(u + d, z.cruise).k));
+    const here = mxPose(u, z.cruise);
+    const mu = 0.66 + o.level * 0.028;
+    const vmax = Math.sqrt((mu * 9.81) / Math.max(k, 0.004));
+    const idx = this.opponents.indexOf(o);
+    const lane = ((idx % 4) - 1.5) * 1.5;
+    const line = clamp(here.k * 70, -3, 3) * (0.5 + o.level * 0.05) + lane * (Math.abs(here.k) > 0.03 ? 0.5 : 1);
+    o.mxN = (o.mxN ?? lane) + clamp(line - (o.mxN ?? lane), -2.5 * dt, 2.5 * dt);
+    const lean = clamp(Math.atan((here.k * v * v) / 9.81), -0.8, 0.8);
+    o.mxLean = (o.mxLean ?? 0) + (lean - (o.mxLean ?? 0)) * Math.min(1, dt * 6);
+    if (v > vmax + 0.5 && o.bike.grounded) return { throttle: 0, brake: clamp((v - vmax) * 0.45, 0.2, 1), balance: inp.balance };
+    if (v > vmax - 1) return { ...inp, throttle: Math.min(inp.throttle, 0.25) };
+    return inp;
   }
 
   /** Tricks pay everywhere except in multiplayer. */
@@ -786,6 +949,7 @@ export class Game {
   private landFlip(): void {
     const turns = Math.floor((Math.abs(this.airSpin) + 0.9) / (Math.PI * 2));
     if (turns < 1 || !this.tricksOn) return;
+    this.mxFlips += turns;
     const mult = 1 + 0.5 * (turns - 1);
     const coins = Math.round(15 * turns * mult);
     const name = this.airSpin > 0 ? 'SALTO ARRIÈRE' : 'SALTO AVANT';
@@ -835,9 +999,17 @@ export class Game {
         if (done) {
           time = this.chrono;
           medal = medalForTime(this.mode, this.circuit, time, diffIndex(this.difficulty));
+          if (this.mxKind === 'time') medal = (time <= MX_TIMES[0] ? 3 : time <= MX_TIMES[1] ? 2 : time <= MX_TIMES[2] ? 1 : 0) as Medal;
           score = Math.round(time * 10);
           scoreLabel = fmtClock(time) + (this.falls ? ` · ${this.falls} chute${this.falls > 1 ? 's' : ''}` : '');
-          lines.push({ label: 'Circuit terminé', coins: Math.round(((this.mode === 'trial' ? 25 : 35) + g * 40) * dm) });
+          lines.push({ label: this.mxKind ? 'Tour bouclé' : 'Circuit terminé', coins: Math.round(((this.mode === 'trial' ? 25 : 35) + g * 40) * dm) });
+          if (this.mxKind === 'tricks') {
+            const sc = this.mxScore;
+            medal = (sc >= MX_TRICKS[0] ? 3 : sc >= MX_TRICKS[1] ? 2 : sc >= MX_TRICKS[2] ? 1 : 0) as Medal;
+            score = sc;
+            scoreLabel = `${sc} salto${sc > 1 ? 's' : ''}${this.mxFails ? ` · ${this.mxFails} raté${this.mxFails > 1 ? 's' : ''}` : ''}`;
+            lines.push({ label: 'Saltos', coins: sc * 20 });
+          }
         } else {
           scoreLabel = 'Abandon';
           if (this.mode === 'enduro') lines.push({ label: 'Distance', coins: Math.floor(this.distance / 40) });
@@ -865,7 +1037,7 @@ export class Game {
       lines.push({ label: 'Arrivée en wheeling (+10 %)', coins: Math.max(1, Math.round(base * 0.1)) });
     }
     const total = lines.reduce((a, l) => a + l.coins, 0);
-    return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place, time, medal, circuit: this.circuit || undefined };
+    return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place, time, medal, circuit: this.circuit || undefined, mx: this.mxKind ?? undefined, tricks: this.mxKind === 'tricks' ? this.mxScore : undefined };
   }
 
   private endRun(reason: OverReason): void {
@@ -918,7 +1090,7 @@ export class Game {
       if (o.remote) return { throttle: 0, brake: 0, balance: 0 };
       if (!withAi || o.finished) return { throttle: o.finished ? 0.1 : 0, brake: o.finished ? 0.4 : 1, balance: 0 };
       if (o.crashTimer > 0) return { throttle: 0, brake: 0, balance: 0 };
-      return aiInput(o, this.world, dt, o.bike.x - this.bike.x);
+      return this.mxAi(o, aiInput(o, this.world, dt, o.bike.x - this.bike.x), dt);
     });
     void lead;
     this.acc += dt;
@@ -983,6 +1155,12 @@ export class Game {
   private crash(): void {
     const bike = this.bike;
     this.crashTimer = 2.0;
+    // trick contest: a flip that ends on the head takes two off the score
+    if (this.mxKind === 'tricks' && Math.abs(this.airSpin) > 1.2) {
+      this.mxFails++;
+      this.popup(bike.x, bike.y + 3.2, 'SALTO RATÉ  −2', '#ff6b5a');
+    }
+    this.mxPsi = 0;
     if (this.usesEnergy) this.stamina -= 15;
     this.shake = 1;
     const [hx, hy] = bike.pointWorld(-0.1, 0.5);

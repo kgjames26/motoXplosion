@@ -10,6 +10,7 @@ import type { Pickup } from '../world/types';
 import { Biome, Bridge, CHUNK_SAMPLES, DX } from '../world/types';
 import type { World } from '../world/world';
 import { Bike3D, disposeObject } from './bike3d';
+import { MxScene } from '../mx/scene';
 import type { BikeModel } from '../bikes';
 import type { Opponent } from '../ai';
 import { BridgeBuilder } from './bridges';
@@ -316,7 +317,9 @@ export class GLRenderer {
   /** The player's bike (garage choice). */
   setPlayerModel(model: BikeModel, outfit?: Outfit): void {
     if (this.bike3d.model.id === model.id && this.bike3d.outfit === (outfit?.id ?? 'moto')) return;
-    this.scene.remove(this.bike3d.group);
+    this.mx?.release(this.scene);
+    this.mxOn = false;
+    this.bike3d.group.removeFromParent();
     disposeObject(this.bike3d.group);
     this.bike3d = new Bike3D(model, undefined, outfit);
     this.bike3d.setEnvironment(this.renderer);
@@ -324,10 +327,10 @@ export class GLRenderer {
   }
 
   /** Race opponents: one 3D bike each, on its own lane. */
-  private syncRivals(game: Game, dt: number): void {
+  private syncRivals(game: Game, dt: number, createOnly = false, tagsOnly = false): void {
     for (const [o, b3] of this.rivals) {
       if (!game.opponents.includes(o)) {
-        this.scene.remove(b3.group);
+        b3.group.removeFromParent();
         disposeObject(b3.group);
         this.rivals.delete(o);
         this.tags.get(o)?.remove();
@@ -352,13 +355,17 @@ export class GLRenderer {
         this.tagLayer.appendChild(tag);
         this.tags.set(o, tag);
       }
-      const near = Math.abs(o.bike.x - this.camX) < 40;
-      b3.group.visible = near;
-      if (near) b3.update(o.bike, dt, o.crashTimer > 0);
+      if (createOnly) continue;
+      const near = tagsOnly ? Math.abs(o.bike.x - game.bike.x) < 60 : Math.abs(o.bike.x - this.camX) < 40;
+      if (!tagsOnly) {
+        b3.group.visible = near;
+        if (near) b3.update(o.bike, dt, o.crashTimer > 0);
+      }
       const tag = this.tags.get(o)!;
       if (near && game.state === 'playing') {
         const [ox, oy] = o.bike.pointWorld(0, 0);
-        v.set(ox, oy + 1.7, b3.lane).project(this.camera);
+        this.toScreen(game, ox, oy + 1.7, b3.lane, v);
+        if (v.z > 1) v.set(9, 9, 0);
         tag.style.display = 'block';
         tag.style.transform = `translate(${((v.x + 1) / 2) * this.W}px, ${((1 - v.y) / 2) * this.H}px) translate(-50%, -50%)`;
       } else tag.style.display = 'none';
@@ -374,7 +381,7 @@ export class GLRenderer {
     if (showYou) {
       if (this.youTag.textContent !== game.pseudo) this.youTag.textContent = game.pseudo;
       const [px, py] = game.bike.pointWorld(0, 0);
-      v.set(px, py + 1.7, -0.25).project(this.camera);
+      this.toScreen(game, px, py + 1.7, -0.25, v);
       this.youTag.style.transform = `translate(${((v.x + 1) / 2) * this.W}px, ${((1 - v.y) / 2) * this.H}px) translate(-50%, -50%)`;
     }
   }
@@ -470,12 +477,46 @@ export class GLRenderer {
 
   // ---------------------------------------------------------------- frame
 
+  /** v2.26: the motocross track, drawn in 3D with its own scene and chase camera. */
+  private mx: MxScene | null = null;
+  private mxOn = false;
+  private mxFade: HTMLElement | null = null;
+  /** Projects a point of the 2D world to the screen (the 3D track has its own camera). */
+  private toScreen(game: Game, x: number, y: number, z: number, v: THREE.Vector3): THREE.Vector3 {
+    return this.mxOn && this.mx ? this.mx.project(game, x, y, v) : v.set(x, y, z).project(this.camera);
+  }
+
   render(game: Game, dt: number, snap = false): void {
     this.time += dt;
     this.frameDt = dt;
     const w = game.world;
     if (w !== this.world) this.setWorld(w);
     const b = game.bike;
+    // ---- motocross track: 3D view once the camera has swung half-way round
+    const mxT = game.state === 'title' ? 0 : game.mxT;
+    const use3d = mxT >= 0.5;
+    if (!this.mxFade) {
+      this.mxFade = document.createElement('div');
+      this.mxFade.className = 'mx-fade';
+      document.body.appendChild(this.mxFade);
+    }
+    this.mxFade.style.opacity = String(clamp(1 - Math.abs(mxT - 0.5) * 4.5, 0, 1) * (mxT > 0 && mxT < 1 ? 1 : 0));
+    if (use3d) {
+      if (!this.mx) this.mx = new MxScene(this.backdropTex['alps-forest']?.tex);
+      this.mxOn = true;
+      this.syncRivals(game, 0, true);
+      this.mx.render(this.renderer, game, dt, this.bike3d, this.rivals, this.W / this.H, (1 - mxT) * 2);
+      this.syncRivals(game, dt, false, true);
+      this.updatePopups(game);
+      return;
+    }
+    if (this.mxOn) {
+      this.mxOn = false;
+      this.mx?.release(this.scene);
+      this.bike3d.lane = -0.25;
+      for (const [o, b3] of this.rivals) b3.lane = -0.25 + o.lane;
+      snap = true;
+    }
 
     // ---- camera: follows the bike with look-ahead, zooms out with speed and air time
     const speedZoom = clamp(b.speed / 25, 0, 1) * 0.15 + clamp(b.airTime / 1.0, 0, 1) * 0.12;
@@ -525,7 +566,9 @@ export class GLRenderer {
       sx = (Math.random() - 0.5) * game.shake * game.shake * 0.25;
       sy = (Math.random() - 0.5) * game.shake * game.shake * 0.25;
     }
-    this.camera.position.set(this.camX + sx, this.camY + D * 0.1 + sy, D);
+    // entering / leaving the motocross track: the side camera swings towards the rear
+    const al = mxT > 0 ? (mxT * 2) ** 2 * (3 - 4 * mxT) * 0.55 : 0;
+    this.camera.position.set(this.camX + sx - Math.sin(al) * D, this.camY + D * 0.1 + sy, Math.cos(al) * D);
     this.camera.lookAt(this.camX + sx, this.camY + sy, 0);
     this.camera.updateMatrixWorld();
 
@@ -873,7 +916,8 @@ export class GLRenderer {
         el.style.display = 'none';
         return;
       }
-      v.set(p.x, p.y, 0).project(this.camera);
+      this.toScreen(game, p.x, p.y, 0, v);
+      if (v.z > 1) v.set(9, 9, 0);
       el.style.display = 'block';
       el.textContent = p.text;
       el.style.color = p.color;

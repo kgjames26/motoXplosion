@@ -7,6 +7,7 @@ import { ENDURO_CP, ModeId, raceLength } from '../modes';
 import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
 import { rockKindFor } from '../catalog/rocks';
 import { HILL_SCALE } from '../weather';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxPathHeight } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
 /**
@@ -245,6 +246,12 @@ export class Generator {
     this.hard = (mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
+    if (region.id === 'cross' && mode !== 'cruising') {
+      // v2.26: the motocross circuit itself (the game sets the finish line: laps)
+      this.queue.push(this.mxSegment(false, MX_LEN * 6));
+      this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
+      return;
+    }
     // A calm start straight.
     this.queue.push(this.flat(mode === 'trial' ? 20 : 60, Surface.Dirt));
     this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
@@ -307,6 +314,17 @@ export class Generator {
         const all = (Object.keys(reg.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
         if (!all.includes(this.biome)) this.biome = this.rng.weighted(all, all.map((b) => reg.biomes[b]!));
       }
+      if (reg.id === 'cross' && !this.world.mxAt(x - 1)) {
+        // v2.26: the track is ridden in 3D: entry lane, a lap and the main straight, exit lane
+        this.queue.push(this.mxSegment(true, MX_ZONE_LEN));
+        this.biomeEnd = Math.max(this.biomeEnd, x + MX_ZONE_LEN);
+        return;
+      }
+      if (reg.id === 'cross') {
+        // (the visit is over but the journey still says "cross" for a few metres)
+        this.queue.push(this.flat(40, Surface.Dirt));
+        return;
+      }
     }
     if (x >= this.biomeEnd) {
       // stay in the region: pick another of its environments
@@ -322,7 +340,7 @@ export class Generator {
       this.planTrial();
       return;
     }
-    const mx = this.region.id === 'cross'; // motocross track: one bump after the other
+    const mx = false as boolean; // (v2.25 random motocross stretch, replaced by the real track in v2.26)
     const baseSeg = this.base(mx ? this.rng.range(5, 10) : this.rng.range(this.mode === 'course' ? 10 : 18, this.mode === 'course' ? 28 : 50), mx ? 0.3 : this.mode === 'course' ? 0.6 : 1);
     if (this.mode !== 'course' && this.rng.chance(0.3)) baseSeg.coins = 'line';
     this.queue.push(baseSeg);
@@ -942,6 +960,34 @@ export class Generator {
         props: 0.3,
       },
     ];
+  }
+
+  /** v2.26: the motocross track as one segment of the 2D world (height along its path). */
+  private mxSegment(cruise: boolean, len: number): Segment {
+    return {
+      len,
+      shape: (t) => (t >= len ? 0 : mxPathHeight(t, cruise)),
+      surface: () => Surface.Dirt,
+      noPickup: [[0, len]],
+      props: 0,
+      onStart: (x0, h0) => {
+        this.world.mxZones.push({ x0, x1: x0 + len, h0, cruise });
+        // coins in the air, on the ideal line of every jump
+        const laps = cruise ? 2 : 6;
+        for (let lap = 0; lap < laps; lap++)
+          for (const f of MX_FEATURES) {
+            if (f.kind !== 'table' && f.kind !== 'double') continue;
+            let u = ((f.s0 - MX_STRAIGHT[0]) % MX_LEN + MX_LEN) % MX_LEN + lap * MX_LEN + (cruise ? MX_ENTRY : 0);
+            if (cruise && u + f.len > MX_ENTRY + MX_CRUISE_LOOP) continue;
+            if (u + f.len > len) continue;
+            for (let k = 0; k < 5; k++) {
+              const t = f.lip * 0.9 + (k / 4) * (f.len - f.lip) * 0.75;
+              this.world.coins.push({ x: x0 + u + t, y: h0 + f.h + 1.3 + Math.sin((k / 4) * Math.PI) * 1.1, taken: false, takenAt: 0 });
+            }
+            void u;
+          }
+      },
+    };
   }
 
   /** Natural ground: biome undulation plus a gentle trend that keeps altitude bounded. */

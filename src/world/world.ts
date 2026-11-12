@@ -1,6 +1,7 @@
 import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
+import { MX_ZONE_LEN } from '../mx/track';
 import type { ModeId } from '../modes';
 import { tyreBonus, Weather, weatherGrip } from '../weather';
 import {
@@ -67,6 +68,17 @@ export class World {
     this.gen = new Generator(this, seed, this.region, mode, level, circuit, weather);
   }
 
+  // ---------------------------------------------------------------- motocross track (v2.26)
+  /**
+   * Stretches of the world that are the 3D motocross track: x range, base height, and whether
+   * it is the cruising visit (entry lane, lap, exit lane) or the circuit itself (laps).
+   */
+  mxZones: { x0: number; x1: number; h0: number; cruise: boolean }[] = [];
+  mxAt(x: number): { x0: number; x1: number; h0: number; cruise: boolean } | null {
+    for (const z of this.mxZones) if (x >= z.x0 && x < z.x1) return z;
+    return null;
+  }
+
   // ---------------------------------------------------------------- cruising journey (v2.25)
   /**
    * Cruising crosses all the worlds: 2000 m per world (1000 m of it alone, then 1000 m sliding
@@ -89,7 +101,7 @@ export class World {
           id = pool[(v >>> 8) % pool.length];
         }
         const x0 = prev ? prev.x1 : 0;
-        this.stays.push({ x0, x1: x0 + (id === 'cross' ? 1000 : 2000), id });
+        this.stays.push({ x0, x1: x0 + (id === 'cross' ? MX_ZONE_LEN : 2000), id });
       }
       if (x < this.stays[i].x1) return i;
       i++;

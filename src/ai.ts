@@ -28,6 +28,9 @@ export interface Opponent {
   ai: AiState;
   /** Multiplayer: a real player whose bike is driven by the network. */
   remote?: boolean;
+  /** v2.26 motocross track: lateral offset (m, + = right) and lean (rad). */
+  mxN?: number;
+  mxLean?: number;
   netId?: string;
   outfit?: string;
 }
