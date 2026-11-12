@@ -131,6 +131,8 @@ export interface MxFeature {
   sy: number;
 }
 export const MX_FEATURES: MxFeature[] = [];
+/** Height of the biggest jumps of the track (m). */
+const MX_JUMP_MAX = 3.2;
 
 /** Kit pieces that make a jump: dirt only, flat at both ends, wide enough. */
 export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
@@ -181,12 +183,25 @@ function place(): void {
       q++;
       const m = KIT_MODULES[mod];
       const top = Math.max(...m.profile);
-      const h = Math.min(2.3, Math.max(0.6, top * 0.3));
-      // the face of a jump never steeper than ~0.42 (23°): a short steep ramp throws the bike up
-      // like a ski jump, which looks lunar. Longer ramps give long, flat, heavy trajectories.
-      let rise = 0;
-      for (let j = 0; j < 48; j++) rise = Math.max(rise, Math.abs(m.profile[j + 1] - m.profile[j]));
-      const len = Math.max(m.len * 0.42, h * 8.5, (48 * rise * (h / top)) / 0.42);
+      const ipk = m.profile.indexOf(top);
+      // pieces with a gentle back face (real landing ramps) can be big; the ones that drop like a
+      // cliff behind the crest stay smaller
+      let drop = 0;
+      for (let j = ipk; j < 48; j++) drop = Math.max(drop, m.profile[j] - m.profile[j + 1]);
+      const gentle = (drop * 48) / m.len < 1.3;
+      const hBig = Math.min(gentle ? MX_JUMP_MAX : 2.3, Math.max(0.9, top * (gentle ? 0.5 : 0.3)));
+      // no face (up or down) steeper than ~0.45 (24°): a short steep ramp throws the bike up like
+      // a ski jump (lunar) and a steep back face is a wall. So the height sets the length; take the
+      // biggest version of the piece that fits in the stretch.
+      let step = 0;
+      for (let j = 0; j < 48; j++) step = Math.max(step, Math.abs(m.profile[j + 1] - m.profile[j]));
+      let h = hBig;
+      let len = 0;
+      for (const k of [1, 0.8, 0.62, 0.48, 0.36]) {
+        h = Math.max(0.6, hBig * k);
+        len = Math.max(m.len * 0.42, h * 8.5, (48 * step * (h / top)) / 0.45);
+        if (len <= end - s) break;
+      }
       if (len > end - s) {
         tries++;
         continue;
