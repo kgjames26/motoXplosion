@@ -13,25 +13,25 @@ export const MODES: ModeDef[] = [
     id: 'cruising',
     name: 'Cruising',
     short: 'Balade infinie',
-    description: 'Balade sans fin : la météo change toute seule en route. Plus tu roules longtemps, plus tu gagnes : c’est ici qu’on gagne le plus !',
+    description: 'Un grand voyage sans fin à travers tous les mondes : le décor, le terrain et la météo changent en route. Dose ta vitesse sur les sauts. Plus tu roules longtemps, plus tu gagnes !',
   },
   {
     id: 'trial',
     name: 'Trial',
     short: 'Chrono d’obstacles',
-    description: '25 circuits de gros obstacles par monde. Arrive au bout le plus vite possible : chaque chute ajoute 15 secondes.',
+    description: 'Franchis de gros obstacles, zone après zone, le plus vite possible. Chaque chute ajoute 25 secondes.',
   },
   {
     id: 'enduro',
     name: 'Enduro',
     short: 'Grosses collines',
-    description: '25 circuits par monde avec de grosses collines à monter et à descendre sans tomber. Le chrono décide de la médaille.',
+    description: 'De grosses collines raides, des passages techniques et de gros sauts. Arrive au bout sans tomber : le chrono décide de la médaille.',
   },
   {
     id: 'course',
     name: 'Course',
     short: '8 pilotes',
-    description: '25 circuits par monde contre 7 pilotes, en facile, moyen ou difficile. Monte sur le podium pour gagner une médaille.',
+    description: 'Départ arrêté contre 7 pilotes. Monte sur le podium pour gagner une médaille.',
   },
 ];
 

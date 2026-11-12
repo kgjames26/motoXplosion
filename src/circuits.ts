@@ -21,7 +21,7 @@ export function circuitGrade(n: number): number {
 }
 
 const MODE_SALT: Record<CircuitMode, number> = { trial: 0x7a11, enduro: 0x3d0e, course: 0x9c3b };
-const REGION_SALT: Record<RegionId, number> = { alpes: 11, foret: 23, canyon: 37, desert: 51, sf: 67 };
+const REGION_SALT: Record<RegionId, number> = { alpes: 11, foret: 23, canyon: 37, desert: 51, sf: 67, cross: 83 };
 
 /** Same circuit = same track every time. */
 export function circuitSeed(mode: CircuitMode, region: RegionId, n: number): number {

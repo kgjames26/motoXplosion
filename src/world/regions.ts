@@ -6,7 +6,7 @@ import { Biome } from './types';
  * bridge styles and backdrop art.
  */
 export type BridgeKind = 'wood' | 'stone' | 'iron' | 'viaduct' | 'urban';
-export type RegionId = 'alpes' | 'canyon' | 'foret' | 'desert' | 'sf';
+export type RegionId = 'alpes' | 'canyon' | 'foret' | 'desert' | 'sf' | 'cross';
 
 export interface RegionDef {
   id: RegionId;
@@ -22,7 +22,7 @@ export interface RegionDef {
   tint: string;
 }
 
-export const REGIONS: Record<RegionId, RegionDef> = {
+export const REGIONS = {
   alpes: {
     id: 'alpes',
     name: 'Alpes',
@@ -78,6 +78,18 @@ export const REGIONS: Record<RegionId, RegionDef> = {
     backdrop: {},
     tint: '#fff2e4',
   },
+} as Record<RegionId, RegionDef>;
+
+/** v2.25: the motocross track — an outdoor MX circuit, bump after bump. */
+REGIONS.cross = {
+  id: 'cross',
+  name: 'Circuit de cross',
+  subtitle: 'Buttes à enchaîner, whoops et tables : un vrai terrain de motocross',
+  biomes: { [Biome.Meadow]: 1 },
+  start: Biome.Meadow,
+  bridges: { wood: 1 },
+  backdrop: { [Biome.Meadow]: 'alps-forest' },
+  tint: '#ffffff',
 };
 
-export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon', 'desert', 'sf'];
+export const REGION_ORDER: RegionId[] = ['alpes', 'foret', 'canyon', 'desert', 'sf', 'cross'];

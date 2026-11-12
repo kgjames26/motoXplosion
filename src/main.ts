@@ -12,8 +12,8 @@ import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
 import { bikeById, BIKES, MULTI_BIKE, rockClimb } from './bikes';
 import { Difficulty, DIFFICULTIES, MODES, ModeId } from './modes';
 import { bestKey, loadProfile, saveProfile } from './profile';
-import { outfitById } from './outfits';
-import { upgradedSpec } from './upgrades';
+import { outfitById, OUTFITS } from './outfits';
+import { MAX_LEVEL, PARTS, upgradedSpec } from './upgrades';
 import { rockCapacity } from './climb';
 import { DIFF_ORDER, diffIndex, tyreBonus, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import {
@@ -39,6 +39,7 @@ import {
 const $ = (id: string) => document.getElementById(id)!;
 
 const settings = loadSettings();
+if ((settings.layout as string) === 'centre') settings.layout = 'gauche';
 const profile = loadProfile();
 // v2.21: the game always opens on cruising, first world
 profile.mode = 'cruising';
@@ -47,7 +48,7 @@ const saveP = () => saveProfile(profile);
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
-const runOpts = () => ({ region: settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf(), cruiseControl: profile.gear.includes('cruise') });
+const runOpts = () => ({ region: profile.mode === 'cruising' ? ('alpes' as RegionId) : settings.region, mode: profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: profile.difficulty, circuit: circuitOf(), cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -57,7 +58,7 @@ const hud = new Hud();
 const audio = new Audio();
 audio.setVolumes(settings.music, settings.sfx);
 
-type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'none';
+type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'stats' | 'sleep' | 'none';
 const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   title: $('screen-title'),
   circuits: $('screen-circuits'),
@@ -68,6 +69,8 @@ const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   over: $('screen-over'),
   settings: $('screen-settings'),
   garage: $('screen-garage'),
+  stats: $('screen-stats'),
+  sleep: $('screen-sleep'),
 };
 let garageReturn: ScreenName = 'title';
 const hudEl = $('hud');
@@ -102,6 +105,7 @@ const WORLD_ICONS: Record<RegionId, string> = {
   canyon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 20V9h6v4h3V6h6v8h5v6z"/></svg>',
   desert: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="6" r="2.5"/><path d="M2 19c4-5 8-5 12-1 3-3 5-3 8-1"/><path d="M7 19v-7M5 14v-2h2M9 15v-2H7"/></svg>',
   sf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 18h20M5 18V8M17 18V8M5 9c3 4 9 4 12 0M2 14l3-5M22 14l-3-5"/></svg>',
+  cross: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 19c2 0 3-6 5-6s3 6 5 6 3-9 5-9 3 9 5 9"/><path d="M12 3v5M12 3l4 1.5L12 6"/></svg>',
 };
 
 const MODE_SHORT: Record<ModeId, string> = {
@@ -147,7 +151,7 @@ function updateBest(): void {
     $('best-title').innerHTML = `${c.done}/${CIRCUITS} · ${medalIco(3)} ${c.gold}`;
     $('best-title').parentElement!.firstChild!.textContent = 'CIRCUITS ';
   } else {
-    const v = profile.best[bestKey(mode, settings.region)] ?? 0;
+    const v = Math.max(0, ...REGION_ORDER.map((r) => profile.best[bestKey(mode, r)] ?? 0));
     $('best-title').textContent = v ? `${v.toLocaleString('fr-FR')} m` : '—';
     $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
   }
@@ -173,10 +177,9 @@ function updateBest(): void {
 function refreshTitle(): void {
   for (const el of $('modes').querySelectorAll('.mode-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.mode === profile.mode);
   const m = MODES.find((x) => x.id === profile.mode)!;
-  $('sel-mode-name').textContent = m.name;
-  $('sel-world-name').textContent = REGIONS[settings.region].name;
-  $('sel-mode-ico').innerHTML = MODE_ICONS[m.id];
-  $('sel-world-ico').innerHTML = WORLD_ICONS[settings.region];
+  // worlds are chosen for the circuit modes only: cruising crosses them all
+  $('regions').classList.toggle('hidden', m.id === 'cruising');
+  $('world-all').classList.toggle('hidden', m.id !== 'cruising');
   $('mode-desc').textContent = m.description;
   updateBest();
 }
@@ -211,19 +214,8 @@ function buildModes(): void {
 
 /** The home screen only shows the chosen mode and world as words; a tap opens the choice. */
 function closePickers(): void {
-  $('picker-mode').classList.add('hidden');
-  $('picker-world').classList.add('hidden');
+  /* v2.25: modes and worlds are always on the home screen, nothing to close */
 }
-for (const [btn, pick] of [['sel-mode', 'picker-mode'], ['sel-world', 'picker-world']])
-  $(btn).addEventListener('click', () => {
-    const open = $(pick).classList.contains('hidden');
-    closePickers();
-    $(pick).classList.toggle('hidden', !open);
-  });
-for (const pick of ['picker-mode', 'picker-world'])
-  $(pick).addEventListener('click', (e) => {
-    if (e.target === $(pick)) closePickers();
-  });
 
 // ---------------------------------------------------------------- circuits screen
 
@@ -327,19 +319,15 @@ function buildRegions(): void {
           ? 'linear-gradient(180deg,#5aa2f0 0%,#ffd9a8 45%,#d9824a 46%,#a8552f 75%,#7a3b22 100%)'
           : `url(/res/backdrop-alps-forest.webp)`;
     const photo = id === 'alpes' || id === 'foret';
-    b.innerHTML = `<i class="thumb${photo ? ' photo' : ''}" style="background-image:${thumb};${id === 'foret' ? 'filter:hue-rotate(-12deg) saturate(1.2) brightness(0.9);background-position:78% 96%' : ''}"></i><span>${r.name}</span>`;
+    void thumb;
+    void photo;
+    b.innerHTML = `<i class="w-ico">${WORLD_ICONS[id]}</i><span>${r.name}</span>`;
     b.title = r.subtitle;
     b.addEventListener('click', () => {
       settings.region = id as RegionId;
       saveSettings(settings);
       for (const el of box.querySelectorAll('.world-card')) el.classList.toggle('selected', (el as HTMLElement).dataset.region === id);
-      $('sel-world-name').textContent = r.name;
-      $('sel-world-ico').innerHTML = WORLD_ICONS[id];
-      closePickers();
-      game.newRun({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
-      game.state = 'title';
       updateBest();
-      renderer.render(game, 0, true);
     });
     box.appendChild(b);
   }
@@ -369,6 +357,7 @@ function openSettings(from: ScreenName): void {
   ($('set-pseudo') as HTMLInputElement).value = settings.pseudo;
   applyLayout(settings.layout);
   applyQuality(settings.quality);
+  syncTimerUI();
   show('settings');
 }
 
@@ -410,7 +399,7 @@ function bindSettings(): void {
     settings.vibration = (e.target as HTMLInputElement).checked;
     saveSettings(settings);
   });
-  $('btn-settings-back').addEventListener('click', () => show(settingsReturn));
+  $('btn-settings-back').addEventListener('click', () => show(settingsReturn === 'sleep' && !asleep() ? 'title' : settingsReturn));
   $('btn-settings-title').addEventListener('click', () => {
     audio.unlock();
     openSettings('title');
@@ -483,6 +472,7 @@ function vibrate(p: number | number[], minGap = 0): void {
 }
 
 function start(): void {
+  if (asleep()) return show('sleep');
   audio.unlock();
   void immersive();
   controls.reset();
@@ -496,7 +486,147 @@ function start(): void {
 }
 
 /** JOUER: cruising starts at once, circuit modes open the circuit picker. */
+// ---------------------------------------------------------------- statistics (v2.25)
+
+function fmtDuration(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+/** "Mon parcours": time played, coins, and a clear view of what is left to do. */
+function renderStats(): void {
+  const card = (v: string, label: string) => `<div class="st-card panel"><b>${v}</b><span>${label}</span></div>`;
+  const best = Math.max(0, ...REGION_ORDER.map((r) => profile.best[bestKey('cruising', r)] ?? 0));
+  $('stats-cards').innerHTML =
+    card(fmtDuration(profile.playTime), 'de jeu') +
+    card(`<i class="coin-ico"></i>${profile.totalEarned.toLocaleString('fr-FR')}`, 'pièces récoltées') +
+    card(`${(profile.totalDist / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`, 'parcourus') +
+    card(best ? `${best.toLocaleString('fr-FR')} m` : '—', 'record en cruising');
+  const row = (label: string, done: number, total: number, extra = '') =>
+    `<div class="st-row${done >= total ? ' full' : ''}"><span>${label}</span><i><u style="width:${Math.min(100, (done / total) * 100)}%"></u></i><b>${done}/${total}</b>${extra}</div>`;
+  let html = '<h3>Ce qu’il reste à accomplir</h3>';
+  for (const mode of ['trial', 'enduro', 'course'] as CircuitMode[]) {
+    let done = 0;
+    let gold = 0;
+    const per: string[] = [];
+    for (const r of REGION_ORDER) {
+      let d = 0;
+      for (let n = 1; n <= CIRCUITS; n++) {
+        const recs = DIFF_ORDER.map((df) => profile.circuits[circuitKey(mode, r, n, df)]);
+        if (recs.some((x) => x?.done)) d++;
+        if (recs.some((x) => x?.medal === 3)) gold++;
+      }
+      done += d;
+      per.push(`<em class="${d >= CIRCUITS ? 'ok' : ''}">${REGIONS[r].name} ${d}/${CIRCUITS}</em>`);
+    }
+    const total = CIRCUITS * REGION_ORDER.length;
+    html += row(MODES.find((m) => m.id === mode)!.name, done, total, `<small>${medalIco(3)} ${gold}/${total} en or</small>`) + `<div class="st-worlds">${per.join('')}</div>`;
+  }
+  html += row('Motos', profile.owned.length, BIKES.length);
+  html += row('Tenues', profile.outfits.length, OUTFITS.length);
+  const parts = Object.values(profile.upgrades).reduce((a, lv) => a + Object.values(lv).reduce((x, y) => x + y, 0), 0);
+  html += row('Pièces montées', parts, BIKES.length * PARTS.length * MAX_LEVEL);
+  html += row('Pneus et régulateur', profile.tyres.length + profile.gear.length, 4);
+  $('stats-todo').innerHTML = html;
+}
+$('title-wallet').addEventListener('click', () => {
+  renderStats();
+  show('stats');
+});
+$('stats-back').addEventListener('click', () => show('title'));
+
+// ---------------------------------------------------------------- parental timer (v2.25)
+
+/** Time is up: the current run may be finished, then the rider sleeps. */
+const asleep = () => settings.timerMin > 0 && settings.timerUsed >= settings.timerMin * 60;
+let timerSave = 0;
+let timerClock = performance.now();
+let timerWarned = false;
+function tickTimers(dt: number): void {
+  if (game.state === 'playing') {
+    profile.playTime += dt;
+    if (game.mode !== 'cruising' || true) profile.totalDist += Math.max(0, game.bike.vx) * dt;
+  }
+  const el = $('kid-timer');
+  if (settings.timerMin <= 0) {
+    el.classList.add('hidden');
+    return;
+  }
+  // real time (the game step is capped when the frame rate drops)
+  const nowT = performance.now();
+  const real = Math.min(1, Math.max(0, (nowT - timerClock) / 1000));
+  timerClock = nowT;
+  if (document.visibilityState === 'visible' && !asleep()) settings.timerUsed += real;
+  timerSave += real;
+  if (timerSave > 10) {
+    timerSave = 0;
+    saveSettings(settings);
+    saveP();
+  }
+  const left = Math.max(0, settings.timerMin * 60 - settings.timerUsed);
+  el.classList.remove('hidden');
+  el.classList.toggle('soon', left < 120);
+  el.classList.toggle('done', left <= 0);
+  $('kid-timer-v').textContent = left <= 0 ? 'zzz' : String(Math.ceil(left / 60));
+  if (left <= 0 && !timerWarned) {
+    timerWarned = true;
+    saveSettings(settings);
+    // not in a run: straight to bed; in a run: it may be finished first
+    if (game.state !== 'playing' && game.state !== 'paused' && !mp.active) show('sleep');
+  }
+  if (left > 0) timerWarned = false;
+}
+function syncTimerUI(): void {
+  for (const b of $('set-timer').querySelectorAll<HTMLButtonElement>('.layout-opt')) {
+    b.classList.toggle('selected', Number(b.dataset.min) === settings.timerMin);
+    // once a timer runs, only the long press below can change it
+    b.disabled = settings.timerMin > 0;
+  }
+  $('timer-reset').classList.toggle('hidden', settings.timerMin <= 0);
+}
+for (const b of $('set-timer').querySelectorAll<HTMLButtonElement>('.layout-opt'))
+  b.addEventListener('click', () => {
+    if (settings.timerMin > 0) return;
+    settings.timerMin = Number(b.dataset.min);
+    settings.timerUsed = 0;
+    saveSettings(settings);
+    syncTimerUI();
+  });
+{
+  // parents: keep the button pressed 3 s to switch the timer off (then set a new one)
+  const btn = $('timer-reset');
+  let t0 = 0;
+  let raf = 0;
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    t0 = 0;
+    $('timer-reset-fill').style.width = '0%';
+  };
+  const step = () => {
+    const k = (performance.now() - t0) / 3000;
+    $('timer-reset-fill').style.width = `${Math.min(100, k * 100)}%`;
+    if (k >= 1) {
+      stop();
+      settings.timerMin = 0;
+      settings.timerUsed = 0;
+      saveSettings(settings);
+      syncTimerUI();
+      return;
+    }
+    raf = requestAnimationFrame(step);
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    t0 = performance.now();
+    raf = requestAnimationFrame(step);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+}
+$('sleep-settings').addEventListener('click', () => openSettings('sleep'));
+
 function play(): void {
+  if (asleep()) return show('sleep');
   if (isCircuitMode(profile.mode)) openCircuits();
   else start();
 }
@@ -874,7 +1004,9 @@ function flashSplash(): void {
 // fullscreen as soon as possible: browsers only allow it on a touch, so the first touch on the
 // launch screen (anywhere) switches it on
 splash.addEventListener('pointerdown', () => void immersive(), { once: true });
-$('splash-play').addEventListener('click', () => {
+// v2.25: a tap anywhere on the poster is the JOUER button
+splash.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('#splash-settings')) return;
   audio.unlock();
   void immersive();
   leaveSplash();
@@ -896,6 +1028,7 @@ function frame(now: number): void {
   game.input.brake = controls.brake;
   game.input.balance = controls.balance;
   game.update(dt);
+  tickTimers(dt);
   const ev = game.consumeEvents();
   syncCruise();
   if (ev.cruise !== undefined) vibrate(ev.cruise ? [20, 30, 40] : 30);

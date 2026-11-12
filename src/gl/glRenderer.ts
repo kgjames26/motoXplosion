@@ -421,8 +421,10 @@ export class GLRenderer {
     this.pickups.clear();
     if (!this.bank) return;
     this.terrain?.dispose();
+    for (const t of this.terrains.values()) if (t !== this.terrain) t.dispose();
+    this.terrains.clear();
     this.bridgeBuilder?.dispose();
-    this.terrain = new TerrainBuilder(this.bank, { kind: w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? 'desert' : w.region.id === 'sf' ? 'city' : 'green', treeDensity: PRESETS[this.quality].trees, wet: w.weather });
+    this.terrain = this.terrainFor(w, 0);
     this.bridgeBuilder = new BridgeBuilder(this.bank, this.terrain.waterMaterial);
   }
 
@@ -563,6 +565,19 @@ export class GLRenderer {
     this.updatePopups(game);
   }
 
+  /** v2.25: cruising crosses several worlds: one ground builder per kind of world. */
+  private terrains = new Map<string, TerrainBuilder>();
+  private terrainFor(w: World, x: number): TerrainBuilder {
+    const id = w.regionAt(x).id;
+    const kind = id === 'canyon' ? 'canyon' : id === 'desert' ? 'desert' : id === 'sf' ? 'city' : 'green';
+    let t = this.terrains.get(kind);
+    if (!t) {
+      t = new TerrainBuilder(this.bank!, { kind, treeDensity: PRESETS[this.quality].trees, wet: w.weather });
+      this.terrains.set(kind, t);
+    }
+    return t;
+  }
+
   private updateChunks(w: World): void {
     if (!this.terrain) return;
     const first = Math.floor((this.camX - 70) / CHUNK_M);
@@ -578,7 +593,7 @@ export class GLRenderer {
       if (this.chunks.has(ci)) continue;
       if (built > 0 && ci > Math.floor(this.camX / CHUNK_M)) break; // spread the work over frames
       w.ensure((ci + 1) * CHUNK_M + 90);
-      const v = this.terrain.build(w, ci);
+      const v = this.terrainFor(w, (ci + 0.5) * CHUNK_M).build(w, ci);
       this.scene.add(v.group);
       this.chunks.set(ci, v);
       built++;
@@ -602,13 +617,13 @@ export class GLRenderer {
   }
 
   private updateBackdrop(w: World, D: number, visH: number): void {
-    const base = w.region.id === 'canyon' ? 'canyon' : w.region.id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.region.id === 'sf' ? 'sf.0' : w.region.backdrop[w.biomeAt(this.camX)] || 'alps-forest';
+    const base = w.regionAt(this.camX).id === 'canyon' ? 'canyon' : w.regionAt(this.camX).id === 'desert' ? (w.biomeAt(this.camX) === Biome.Canyon ? 'canyon' : 'desert') : w.regionAt(this.camX).id === 'sf' ? 'sf.0' : w.regionAt(this.camX).backdrop[w.biomeAt(this.camX)] || 'alps-forest';
     // v2.8: painted panoramas take turns while riding (not behind the home screen)
-    const pano = this.sunset < 0.5 || w.region.id === 'sf' ? panoramaAt(w.region.id, w.seed, Math.max(this.camX, w.region.id === 'sf' ? 250 : 0), w.mode === 'cruising') : null;
+    const pano = this.sunset < 0.5 || w.regionAt(this.camX).id === 'sf' ? panoramaAt(w.regionAt(this.camX).id, w.seed, Math.max(this.camX, w.regionAt(this.camX).id === 'sf' ? 250 : 0), w.mode === 'cruising') : null;
     let key = pano ? pano.id : base;
     // paint (or load) the next panorama a little before it is needed (no hitch at the switch)
     if (pano) {
-      const ahead = panoramaAt(w.region.id, w.seed, this.camX + 250, w.mode === 'cruising');
+      const ahead = panoramaAt(w.regionAt(this.camX).id, w.seed, this.camX + 250, w.mode === 'cruising');
       if (ahead && ahead.id !== pano.id) paintPanorama(ahead);
     }
     let bd: Backdrop | undefined = pano ? paintPanorama(pano) : this.backdropTex[key];

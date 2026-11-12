@@ -18,10 +18,13 @@ export interface Settings {
   quality: Quality;
   /** Player name shown in races and on the home screen. */
   pseudo: string;
+  /** v2.25 parental timer: minutes allowed (0 = off) and seconds already used. */
+  timerMin: number;
+  timerUsed: number;
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '' };
+const DEFAULTS: Settings = { music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 };
 
 export function loadSettings(): Settings {
   try {

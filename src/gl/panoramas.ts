@@ -213,6 +213,8 @@ export const PANORAMAS: Record<string, PanoSpec[]> = {
   desert: painted('desert', 0, 20),
   sf: painted('sf', 0, 20),
 };
+// the motocross track lies in the mountains
+PANORAMAS.cross = PANORAMAS.alpes;
 
 const PANO_BASE = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
 /** Real colours of the painted panoramas (index.json), for the sky and the band under them. */

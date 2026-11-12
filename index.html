@@ -79,6 +79,8 @@
         </button>
       </div>
 
+      <div class="kid-timer hidden" id="kid-timer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3a8 8 0 1 0 5 13A7 7 0 0 1 16 3z" /></svg><b id="kid-timer-v">30</b><small>min</small></div>
+
       <!-- Touch controls -->
       <div id="controls" class="hidden layout-gauche">
         <button class="brake" id="ctl-brake" aria-label="Frein">
@@ -148,18 +150,20 @@
           <div class="word"><span class="w1">moto</span><span class="wx">X</span><span class="w2">plosion</span></div>
           <div class="tag">CRUISING MOTOCROSS ADVENTURE</div>
         </div>
-        <div class="wallet panel" id="title-wallet"><span class="pseudo" id="title-pseudo"></span><i class="coin-ico"></i><b id="title-coins">0</b></div>
+        <button class="wallet panel" id="title-wallet" aria-label="Statistiques"><span class="pseudo" id="title-pseudo"></span><i class="coin-ico"></i><b id="title-coins">0</b></button>
         <button class="icon-btn fs-btn" id="btn-fs-title" aria-label="Plein écran"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fs-on" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /><path class="fs-off" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg></button>
         <button class="icon-btn" id="btn-settings-title" aria-label="Options">
           <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg>
         </button>
         <div class="title-menu">
-          <button class="neon-sel" id="sel-mode"><i class="ns-ico" id="sel-mode-ico"></i><span><small>MODE</small><b id="sel-mode-name">Cruising</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
-          <button class="neon-sel" id="sel-world"><i class="ns-ico world" id="sel-world-ico"></i><span><small>MONDE</small><b id="sel-world-name">Alpes</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
           <button class="neon-sel garage" id="btn-garage"><i class="ns-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 4l9 6.5V20H3z" /><path d="M6.5 20v-6.5h11V20M6.5 16h11" /><path d="M14.8 9.2a1.9 1.9 0 1 0-2.4 2.4l-1.6 1.6.9.9 1.6-1.6a1.9 1.9 0 0 0 2.4-2.4l-1 1-.9-.9z" /></svg></i><span><b>Garage</b></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
         </div>
-        <div class="picker hidden" id="picker-mode"><div class="pick-box"><div class="pick-label">MODE</div><div class="mode-cards" id="modes"></div></div></div>
-        <div class="picker hidden" id="picker-world"><div class="pick-box"><div class="pick-label">MONDE</div><div class="world-cards" id="regions"></div></div></div>
+        <!-- v2.25: everything is chosen in one tap: modes in a row, worlds as chips above (circuit modes) -->
+        <div class="title-select">
+          <div class="world-strip" id="regions"></div>
+          <div class="world-all" id="world-all"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></svg>Tous les mondes, au hasard</div>
+          <div class="mode-strip" id="modes"></div>
+        </div>
         <div class="title-bottom">
           <div class="title-info"><div class="diffs cruise-diffs hidden" id="cruise-diffs"></div><div class="mode-desc" id="mode-desc"></div><div class="best">RECORD <b id="best-title">0</b></div></div>
           <button class="neon-play" id="btn-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" /></svg>JOUER</button>
@@ -233,7 +237,14 @@
           <h2 class="mp-title">MULTIJOUEUR</h2>
           <div class="mp-code hidden" id="mp-code"></div>
         </div>
-        <div class="mp-home" id="mp-home">
+        <div class="mp-notice panel" id="mp-notice">
+          <svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 14c11-11 29-11 40 0M11 21c7-7 19-7 26 0M18 28c3-3 9-3 12 0" /><circle cx="24" cy="32" r="2" /></svg>
+          <h3>Avant de jouer à plusieurs</h3>
+          <p>Tous les joueurs doivent être sur le <b>même réseau Wi-Fi privé</b> (celui de la maison), ou connectés au <b>partage de connexion Wi-Fi</b> d’un même appareil.</p>
+          <p class="small">Sur des réseaux différents (4G/5G, Wi-Fi public…), le salon peut rester introuvable.</p>
+          <button class="neon-play" id="mp-notice-ok">OK</button>
+        </div>
+        <div class="mp-home hidden" id="mp-home">
           <p class="mp-intro">Jusqu’à 4 pilotes, en mini-championnat. Gratuit, de navigateur à navigateur.</p>
           <div class="mp-choices">
             <button class="neon-play mp-big" id="mp-create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Créer un salon</button>
@@ -303,6 +314,26 @@
         <div class="garage-dots" id="garage-dots"></div>
       </div>
 
+      <div id="screen-stats" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="stats-back">‹ RETOUR</button>
+          <h2 class="mp-title">MON PARCOURS</h2>
+        </div>
+        <div class="stats-body">
+          <div class="stats-cards" id="stats-cards"></div>
+          <div class="stats-todo panel" id="stats-todo"></div>
+        </div>
+      </div>
+
+      <div id="screen-sleep" class="screen hidden">
+        <div class="sleep-box">
+          <div class="sleep-art"><svg viewBox="0 0 120 90" aria-hidden="true"><path class="moon" d="M88 14a26 26 0 1 0 18 44A22 22 0 0 1 88 14z" /><ellipse class="helm" cx="48" cy="56" rx="26" ry="22" /><path class="visor" d="M30 54q18 10 36 0" /><path class="peak" d="M58 38l22-6-2 8-18 6z" /><text x="84" y="34" class="z z1">z</text><text x="94" y="24" class="z z2">z</text><text x="104" y="14" class="z z3">Z</text></svg></div>
+          <h2>Le pilote dort maintenant</h2>
+          <p>Le temps de jeu est terminé pour aujourd’hui. À bientôt !</p>
+          <button class="btn-secondary" id="sleep-settings">Paramètres (parents)</button>
+        </div>
+      </div>
+
       <div id="screen-settings" class="screen hidden">
         <h2>PARAMÈTRES</h2>
         <div class="settings panel">
@@ -321,11 +352,7 @@
             <div class="layouts" id="set-layouts">
               <button data-layout="gauche" class="layout-opt">
                 <i class="mini"><b class="m-bal" style="left:4%"></b><b class="m-brk" style="right:22%"></b><b class="m-thr" style="right:4%"></b></i>
-                Balance à gauche
-              </button>
-              <button data-layout="centre" class="layout-opt">
-                <i class="mini"><b class="m-brk" style="left:4%"></b><b class="m-bal" style="left:34%"></b><b class="m-thr" style="right:4%"></b></i>
-                Balance au centre
+                Droitier
               </button>
               <button data-layout="inverse" class="layout-opt">
                 <i class="mini"><b class="m-thr" style="left:4%"></b><b class="m-brk" style="left:22%"></b><b class="m-bal" style="right:4%"></b></i>
@@ -349,6 +376,18 @@
             <span>Pseudo</span>
             <input type="text" id="set-pseudo" maxlength="14" placeholder="Ton nom de pilote" autocomplete="off" spellcheck="false" />
           </label>
+          <div class="set-row layout-row timer-row">
+            <span>Minuteur parents</span>
+            <div class="layouts quality" id="set-timer">
+              <button data-min="0" class="layout-opt">Non</button>
+              <button data-min="15" class="layout-opt">15 min</button>
+              <button data-min="30" class="layout-opt">30 min</button>
+              <button data-min="45" class="layout-opt">45 min</button>
+              <button data-min="60" class="layout-opt">1 h</button>
+              <button data-min="90" class="layout-opt">1 h 30</button>
+            </div>
+            <button class="btn-secondary timer-reset hidden" id="timer-reset"><i id="timer-reset-fill"></i><b id="timer-reset-label">Garder appuyé pour remettre à zéro</b></button>
+          </div>
           <label class="set-row check">
             <span>Vibrations</span>
             <input type="checkbox" id="set-vibration" />

@@ -235,8 +235,9 @@ export class Generator {
     private diff = 0,
   ) {
     this.rng = new Rng(seed);
+    if (mode === 'cruising') this.region = region = world.regionAt(0);
     this.biome = region.start;
-    this.biomeEnd = 380;
+    this.biomeEnd = mode === 'cruising' ? 1000 : 380;
     const circ = circuit > 0 && isCircuitMode(mode);
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
@@ -297,13 +298,23 @@ export class Generator {
       this.queue.push(this.flat(300, Surface.Dirt));
       return;
     }
+    if (this.mode === 'cruising') {
+      // v2.25: the journey decides the world; a new environment of it every 1000 m
+      const reg = this.world.regionAt(x);
+      if (reg !== this.region) {
+        this.region = reg;
+        this.paletteEnd = 0;
+        const all = (Object.keys(reg.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
+        if (!all.includes(this.biome)) this.biome = this.rng.weighted(all, all.map((b) => reg.biomes[b]!));
+      }
+    }
     if (x >= this.biomeEnd) {
       // stay in the region: pick another of its environments
       const all = (Object.keys(this.region.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
       const options = all.length > 1 ? all.filter((b) => b !== this.biome) : all;
       this.biome = this.rng.weighted(options, options.map((b) => this.region.biomes[b]!));
       const def = BIOMES[this.biome];
-      this.biomeEnd = x + this.rng.range(def.length[0], def.length[1]);
+      this.biomeEnd = this.mode === 'cruising' ? (Math.floor(x / 1000) + 1) * 1000 : x + this.rng.range(def.length[0], def.length[1]);
       // Smooth transition stretch.
       this.queue.push(this.base(this.rng.range(30, 45), 0.5));
     }
@@ -311,7 +322,8 @@ export class Generator {
       this.planTrial();
       return;
     }
-    const baseSeg = this.base(this.rng.range(this.mode === 'course' ? 10 : 18, this.mode === 'course' ? 28 : 50), this.mode === 'course' ? 0.6 : 1);
+    const mx = this.region.id === 'cross'; // motocross track: one bump after the other
+    const baseSeg = this.base(mx ? this.rng.range(5, 10) : this.rng.range(this.mode === 'course' ? 10 : 18, this.mode === 'course' ? 28 : 50), mx ? 0.3 : this.mode === 'course' ? 0.6 : 1);
     if (this.mode !== 'course' && this.rng.chance(0.3)) baseSeg.coins = 'line';
     this.queue.push(baseSeg);
     const def = BIOMES[this.biome];
@@ -321,20 +333,23 @@ export class Generator {
       // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
       feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
     } else if (this.mode === 'cruising') {
-      // a journey through the world: big hills and long descents between the jumps
-      // v2.21: jumps that only land at the right speed (full throttle overshoots)
-      feats = { ...def.features, cruiseHill: 3.5, speedJump: 3.5 + d0 * 2.5 };
+      // v2.25: built like the first enduro circuits (hills with a steep pitch, technical
+      // sections, big jumps), plus the speed-window jumps of v2.21
+      feats = { bigHill: 4, techHill: 2.5, tabletop: 1.5, double: 1.5, gap: 0.6, climb: 1.2, descent: 1.2, ford: 0.6, cruiseHill: 1.5, speedJump: 2.5 + d0 * 2 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
     }
+    // the motocross track (its own world, and 1000 m of it now and then in cruising)
+    if (mx) feats = { tabletop: 4, double: 4, whoops: 3.5, rollers: 3.5, stepUp: 1.5, berm: 2 };
     const names = Object.keys(feats) as FeatureName[];
     const weights = names.map((n) => feats[n]!);
     const f = this.rng.weighted(names, weights);
     const segs = this.feature(f, this.difficulty(x));
     if (f === 'tabletop' || f === 'double' || f === 'rollers' || f === 'dunes') {
       const main = segs.reduce((a, b) => (b.len > a.len ? b : a));
-      if (this.rng.chance(this.mode === 'course' ? 0.35 : 0.6)) main.coins = 'arc';
+      // on the motocross track the coins hang in the air, on the ideal line of every jump
+      if (mx ? f !== 'rollers' || this.rng.chance(0.5) : this.rng.chance(this.mode === 'course' ? 0.35 : 0.6)) main.coins = 'arc';
     }
     this.queue.push(...segs);
     const every = this.mode === 'enduro' ? ENDURO_CP : 1000;
@@ -1396,7 +1411,7 @@ export class Generator {
    */
   private bigHill(d: number): Segment[] {
     const r = this.rng;
-    const g = this.circuit ? this.grade : d * 0.5;
+    const g = this.circuit ? this.grade : Math.min(0.12, d * 0.25); // cruising: like the first enduro circuits
     // v2.18: higher and steeper from the first circuits
     // v2.21: +20 % (height, steepness, bumps)
     const H = (r.range(9, 13) + g * 12) * HILL_SCALE[this.diff] * 1.2;
@@ -1598,6 +1613,7 @@ export class Generator {
     if (this.region.id === 'sf') return ['sf'];
     if (this.region.id === 'alpes') return ['green', 'alpes'];
     if (this.region.id === 'foret') return ['green', 'foret'];
+    if (this.region.id === 'cross') return ['green', 'alpes'];
     return ['green'];
   }
 
@@ -1619,7 +1635,7 @@ export class Generator {
       const city = this.region.id === 'sf';
       this.palette = { tree: pick('tree', 6), bush: pick('bush', 5), ground: pick('ground', 6), structure: pick('structure', city ? 14 : 2), animal: pick('animal', city ? 5 : 2) };
       if (this.mode === 'enduro') this.palette.trackside = assetsFor(['enduro'], 'trackside');
-      if (this.mode === 'course') this.palette.trackside = assetsFor(['course'], 'trackside');
+      if (this.mode === 'course' || this.region.id === 'cross') this.palette.trackside = assetsFor(['course'], 'trackside');
       // San Francisco: cheering supporters along the street in every mode
       if (this.region.id === 'sf') this.palette.trackside = [...(this.palette.trackside ?? []), ...pick('trackside', 10)];
       this.paletteEnd = x0 + r.range(100, 150);
@@ -1655,7 +1671,7 @@ export class Generator {
     for (let x = x0 + r.range(0, 50); x < x1; x += r.range(60, 120)) put('animal', x, r.range(0.3, 0.9), 1);
     for (let x = x0; x < x1; x += r.range(5, 11) * (this.mode === 'trial' ? 2.5 : this.region.id === 'sf' ? 2.2 : 1.6)) put('ground', x, -r.range(this.mode === 'trial' ? 0.5 : 0.2, 0.9), r.range(0.9, 1.3));
     // mode decor along the track
-    if (this.mode === 'course' || this.mode === 'enduro' || this.region.id === 'sf') {
+    if (this.mode === 'course' || this.mode === 'enduro' || this.region.id === 'sf' || this.region.id === 'cross') {
       const dense = (x: number) => this.mode === 'course' && (x < 120 || Math.abs(x - (this.raceLen + 5)) < 80);
       for (let x = x0; x < x1; x += dense(x) ? r.range(2.5, 5) : r.range(12, 24)) put('trackside', x, r.range(0.04, 0.4), 1);
       if (this.mode === 'course' && x0 <= this.raceLen + 5 && x1 > this.raceLen + 5) this.decor(this.raceLen + 6, 'course', 'c.finish.' + r.int(0, 3), 0.02);

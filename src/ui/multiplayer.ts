@@ -37,6 +37,10 @@ export class MultiUI {
   constructor(private h: MultiHost) {
     $('mp-create').addEventListener('click', () => this.create());
     $('mp-join').addEventListener('click', () => this.join());
+    $('mp-notice-ok').addEventListener('click', () => {
+      this.noticed = true;
+      this.render();
+    });
     $('mp-code-input').addEventListener('keydown', (e) => {
       if ((e as KeyboardEvent).key === 'Enter') this.join();
     });
@@ -55,8 +59,11 @@ export class MultiUI {
     return !!this.multi;
   }
 
+  /** The network notice has been read (OK) for this visit. */
+  private noticed = false;
   open(): void {
     this.h.show('multi');
+    if (!this.multi) this.noticed = false;
     this.render();
   }
 
@@ -130,7 +137,9 @@ export class MultiUI {
 
   private render(): void {
     const m = this.multi;
-    $('mp-home').classList.toggle('hidden', !!m);
+    // first the notice (same private Wi-Fi), then create / join
+    $('mp-notice').classList.toggle('hidden', !!m || this.noticed);
+    $('mp-home').classList.toggle('hidden', !!m || !this.noticed);
     $('mp-lobby').classList.toggle('hidden', !m);
     $('mp-code').classList.toggle('hidden', !m);
     if (!m || !m.lobby) return;

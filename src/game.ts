@@ -101,8 +101,8 @@ export const CRUISE_STEP = 0.25;
 export const CRUISE_MAX = 4;
 /** Cruising pays more (v2.14): coins and stunts, and distance. */
 // v2.21: doubled again — cruising is where the money is made
-const CRUISE_PAY = 3;
-const CRUISE_DIST_PAY = 3.6;
+const CRUISE_PAY = 3.6; // v2.25: +20 %
+const CRUISE_DIST_PAY = 4.32;
 
 /**
  * Game rules for every mode: energies, pickups and coins, crashes and respawns, trial sections,
