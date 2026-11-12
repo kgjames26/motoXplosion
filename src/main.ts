@@ -47,16 +47,19 @@ if (profile.mxKind === 'tricks') profile.mxKind = 'time'; // the Figures event i
 let lastCircuitMode: ModeId = profile.mode;
 settings.region = 'alpes';
 const saveP = () => saveProfile(profile);
+import { MX_CIRCUITS } from './mx/track';
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
 const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
 /** The motocross track is its own world with its own three events. */
+/** Motocross circuit picked (1..5). */
+const mxCircuitOf = () => profile.circuitSel['mx:cross'] ?? 1;
 const onCross = () => settings.region === 'cross' && profile.mode !== 'cruising';
 const MX_EVENTS: { id: 'time' | 'tricks' | 'race'; name: string; icon: string; desc: string }[] = [
   { id: 'time', name: 'Time attack', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="24" cy="20" r="12"/><path d="M24 20v-7M24 20l5 3M20 4h8M24 4v4"/></svg>', desc: 'Un seul tour, départ arrêté : bats ton propre chrono. Or, argent ou bronze selon le temps.' },
   { id: 'race', name: 'Course', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M10 32V4M10 6h26l-5 7 5 7H10"/><path d="M18 6v14M26 6v14M10 13h24"/></svg>', desc: 'Deux tours contre 7 pilotes qui freinent, se penchent et prennent la corde. Monte sur le podium.' },
 ];
-const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: profile.mode === 'cruising' ? ('alpes' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? (profile.mxKind === 'tricks' ? 2 : 1) : circuitOf(), cruiseControl: profile.gear.includes('cruise') });
+const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: profile.mode === 'cruising' ? ('alpes' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? mxCircuitOf() : circuitOf(), mxCircuit: onCross() ? mxCircuitOf() - 1 : 0, cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -156,7 +159,7 @@ function updateBest(): void {
   const mode = profile.mode;
   if (onCross()) {
     const k = profile.mxKind;
-    const r = profile.circuits[circuitKey(k === 'race' ? 'course' : 'enduro', 'cross', k === 'tricks' ? 2 : 1, 'facile')];
+    const r = profile.circuits[circuitKey(k === 'race' ? 'course' : 'enduro', 'cross', mxCircuitOf(), 'facile')];
     const txt = k === 'time' ? (r?.time !== undefined ? fmtTime(r.time) : '—') : k === 'tricks' ? (profile.best.mxtricks ? `${profile.best.mxtricks} saltos` : '—') : r?.place ? `${r.place}${r.place === 1 ? 're' : 'e'} place` : '—';
     $('best-title').innerHTML = `${r?.medal ? medalIco(r.medal) + ' ' : ''}${txt}`;
     $('best-title').parentElement!.firstChild!.textContent = 'RECORD ';
@@ -202,7 +205,26 @@ function refreshTitle(): void {
   for (const el of $('regions').querySelectorAll<HTMLElement>('.world-card')) el.classList.toggle('selected', profile.mode !== 'cruising' && el.dataset.region === settings.region);
   $('world-all').classList.toggle('hidden', m.id !== 'cruising');
   $('mode-desc').textContent = cross ? MX_EVENTS.find((e) => e.id === profile.mxKind)!.desc : m.description;
+  buildMxCircuits(cross);
   updateBest();
+}
+
+/** The five motocross circuits, one chip each (medal of the selected event shown on it). */
+function buildMxCircuits(show: boolean): void {
+  const box = $('mx-circuits');
+  box.classList.toggle('hidden', !show);
+  if (!show) return;
+  const kind = profile.mxKind === 'race' ? 'course' : 'enduro';
+  box.innerHTML = MX_CIRCUITS.map((c, i) => {
+    const r = profile.circuits[circuitKey(kind, 'cross', i + 1, 'facile')];
+    return `<button class="mxc${mxCircuitOf() === i + 1 ? ' selected' : ''}" data-i="${i + 1}" data-world="${c.world}"><b>${c.name}</b>${r?.medal ? `<i class="medal-ico" style="--m:${MEDAL_COLORS[r.medal] || '#666'}"></i>` : ''}</button>`;
+  }).join('');
+  for (const el of box.querySelectorAll<HTMLElement>('.mxc'))
+    el.addEventListener('click', () => {
+      profile.circuitSel['mx:cross'] = Number(el.dataset.i);
+      saveP();
+      refreshTitle();
+    });
 }
 
 function buildModes(): void {

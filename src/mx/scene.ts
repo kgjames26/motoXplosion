@@ -4,9 +4,11 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
-import { loopAt, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
+import { loopAt, MX_CIRCUITS, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
+import type { MxWorld } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
+import type { AssetDef, AssetGroup } from '../catalog';
 
 /**
  * v2.26 — the motocross track in 3D: the loop (dirt ribbon with its jumps, whoops and banked
@@ -36,6 +38,68 @@ export function bankAt(k: number, n: number): number {
   return out > 0 ? B * Math.pow(Math.min(1.4, out), 1.6) : 0;
 }
 
+/**
+ * v2.37: each circuit takes the look of one world: its ground and track textures, its painted
+ * panorama, its decor sprites. San Francisco: asphalt all around, street furniture near the
+ * track, houses only far away.
+ */
+interface Theme {
+  pano: string;
+  bg: number;
+  fog: number;
+  hemiGround: number;
+  ground: { tex: string; tint: number; rep: number };
+  track: { tex: string; tint: number };
+  /** Groups of the sprites planted around (trees, bushes) and the far scenery (structures). */
+  groups: AssetGroup[];
+  far: AssetGroup[];
+  /** Street furniture beside the track (city). */
+  trackside: boolean;
+  /** Share of the planting spots kept (1 = full forest). */
+  density: number;
+}
+const THEMES: Record<MxWorld, Theme> = {
+  foret: { pano: 'foret.0', bg: 0x8fc6f4, fog: 0xcfe6f6, hemiGround: 0x7a6a4a, ground: { tex: 'tex-dirt', tint: 0xd8c8b0, rep: 180 }, track: { tex: 'tex-dirt', tint: 0x9a7a62 }, groups: ['foret', 'green'], far: [], trackside: false, density: 1 },
+  alpes: { pano: 'alpes.0', bg: 0x7fb4ee, fog: 0xd4e4f2, hemiGround: 0x6a7a58, ground: { tex: 'tex-grass', tint: 0xc4d4b0, rep: 150 }, track: { tex: 'tex-dirt', tint: 0x8a7664 }, groups: ['alpes', 'green'], far: ['alpes'], trackside: false, density: 0.8 },
+  canyon: { pano: 'canyon.p2', bg: 0x6aa6ea, fog: 0xe8d2bc, hemiGround: 0x9a5a3a, ground: { tex: 'tex-rock-warm', tint: 0xe6b894, rep: 120 }, track: { tex: 'tex-sand', tint: 0xc0704a }, groups: ['canyon'], far: ['canyon'], trackside: false, density: 0.45 },
+  desert: { pano: 'desert.p1', bg: 0x74aef0, fog: 0xf0dfc4, hemiGround: 0xb08a5a, ground: { tex: 'tex-sand', tint: 0xf0d6a4, rep: 140 }, track: { tex: 'tex-sand', tint: 0xb88a56 }, groups: ['desert'], far: ['desert'], trackside: false, density: 0.35 },
+  sf: { pano: 'sf.p2', bg: 0x6aa6ea, fog: 0xdfe5ec, hemiGround: 0x6a6c70, ground: { tex: 'asphalt', tint: 0xffffff, rep: 130 }, track: { tex: 'tex-dirt', tint: 0x86705e }, groups: ['sf'], far: ['sf'], trackside: true, density: 0.22 },
+};
+
+/** A procedural asphalt (no photo needed): dark grey with grain, patches and the odd crack. */
+function asphaltTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#4b4d52';
+  g.fillRect(0, 0, 256, 256);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < 70; i++) {
+    const v = 60 + Math.floor(rnd() * 26);
+    g.fillStyle = `rgba(${v},${v},${v + 4},0.28)`;
+    g.fillRect(rnd() * 256, rnd() * 256, 20 + rnd() * 60, 14 + rnd() * 40);
+  }
+  for (let i = 0; i < 3200; i++) {
+    const v = 40 + Math.floor(rnd() * 90);
+    g.fillStyle = `rgba(${v},${v},${v},0.55)`;
+    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
+  }
+  g.strokeStyle = 'rgba(25,25,28,0.7)';
+  g.lineWidth = 1.2;
+  for (let i = 0; i < 3; i++) {
+    g.beginPath();
+    let x = rnd() * 256;
+    let y = rnd() * 256;
+    g.moveTo(x, y);
+    for (let k = 0; k < 6; k++) g.lineTo((x += (rnd() - 0.4) * 30), (y += (rnd() - 0.5) * 30));
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export class MxScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
@@ -62,11 +126,26 @@ export class MxScene {
   private fresh = true;
   private time = 0;
 
-  constructor() {
+  private theme: Theme;
+  /** Middle of the circuit (the ground and the panorama are centred on it). */
+  private cx = 0;
+  private cz = 80;
+
+  constructor(readonly circuit = 0) {
     const s = this.scene;
-    s.background = new THREE.Color(0x8fc6f4);
-    s.fog = new THREE.Fog(0xcfe6f6, 140, 520);
-    s.add(new THREE.HemisphereLight(0xdcefff, 0x7a6a4a, 1.25));
+    const th = (this.theme = THEMES[MX_CIRCUITS[circuit].world]);
+    {
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (let i = 0; i < MX_LEN; i += 6) {
+        const p = loopAt(i);
+        x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z);
+      }
+      this.cx = (x0 + x1) / 2;
+      this.cz = (z0 + z1) / 2;
+    }
+    s.background = new THREE.Color(th.bg);
+    s.fog = new THREE.Fog(th.fog, 140, 520);
+    s.add(new THREE.HemisphereLight(0xdcefff, th.hemiGround, 1.25));
     this.sun.position.set(-40, 70, 30);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -77,30 +156,35 @@ export class MxScene {
     sc.far = 220;
     this.sun.shadow.bias = -0.0006;
     s.add(this.sun, this.sun.target);
-    // ground
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900).rotateX(-Math.PI / 2), this.grass);
-    ground.position.set(0, -0.06, 80);
+    // ground: the world's own texture (asphalt in the city), the track in the world's earth
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1500, 1500).rotateX(-Math.PI / 2), this.grass);
+    ground.position.set(this.cx, -0.06, this.cz);
     ground.receiveShadow = true;
     s.add(ground);
-    // v2.27: plain dirt all around (same earth as the track, lighter), 2D forest trees, and one of
-    // the painted forest panoramas far away
     const loader = new THREE.TextureLoader();
-    loader.load(`${BASE}res/tex-dirt.webp`, (t) => {
+    if (th.ground.tex === 'asphalt') {
+      this.useMap(this.grass, asphaltTexture(), th.ground.rep);
+      this.grass.color.set(th.ground.tint);
+    } else
+      loader.load(`${BASE}res/${th.ground.tex}.webp`, (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        this.useMap(this.grass, t, th.ground.rep);
+        this.grass.color.set(th.ground.tint);
+      });
+    loader.load(`${BASE}res/${th.track.tex}.webp`, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
-      this.useMap(this.grass, t, 180);
-      this.grass.color.set(0xd8c8b0);
       this.useMap(this.dirt, t, 1);
-      this.dirt.color.set(0x9a7a62);
+      this.dirt.color.set(th.track.tint);
     });
-    loader.load(`${BASE}res/pano/foret.0.webp`, (t) => {
+    loader.load(`${BASE}res/pano/${th.pano}.webp`, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;
       t.wrapS = THREE.MirroredRepeatWrapping;
       t.repeat.set(4, 1);
       const ring = new THREE.Mesh(new THREE.CylinderGeometry(600, 600, 300, 48, 1, true), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false }));
-      ring.position.set(0, 150 - 300 * 0.3, 80);
+      ring.position.set(this.cx, 150 - 300 * 0.3, this.cz);
       s.add(ring);
     });
-    this.plantForest();
+    this.plantDecor();
     this.buildTrack();
     this.buildMarkers();
     // coins
@@ -436,17 +520,26 @@ export class MxScene {
     }
   }
 
-  /** 2D trees of the Grande Forêt (the game's own painted sprites) all around the track. */
-  private plantForest(): void {
-    const defs = assetsFor(['foret', 'green'], 'tree').slice(0, 60);
-    if (!defs.length) return;
-    const picks = [0, 7, 13, 21, 29, 34, 42, 51].map((i) => defs[i % defs.length]);
-    const mats = picks.map((d) => {
-      const sp = d.draw();
-      const tex = new THREE.CanvasTexture(sp.canvas);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      return { mat: new THREE.SpriteMaterial({ map: tex, alphaTest: 0.35 }), sp };
-    });
+  /** The 2D sprites of the circuit's world (the game's own painted ones) all around the track. */
+  private plantDecor(): void {
+    const th = this.theme;
+    const spread = (defs: AssetDef[], n: number) => {
+      const out: AssetDef[] = [];
+      if (!defs.length) return out;
+      for (let i = 0; i < n; i++) out.push(defs[Math.floor((i * defs.length) / n) % defs.length]);
+      return out;
+    };
+    const make = (defs: AssetDef[]) =>
+      defs.map((d) => {
+        const sp = d.draw();
+        const tex = new THREE.CanvasTexture(sp.canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return { mat: new THREE.SpriteMaterial({ map: tex, alphaTest: 0.35 }), sp };
+      });
+    const trees = make(spread(assetsFor(th.groups, 'tree'), 9));
+    const bushes = make(spread(assetsFor(th.groups, 'bush'), 6));
+    const far = make(spread(th.far.length ? assetsFor(th.far, 'structure') : [], th.trackside ? 8 : 6));
+    const side = th.trackside ? make(spread(assetsFor(['sf'], 'trackside'), 12)) : [];
     const line: [number, number][] = [];
     for (let s = 0; s < MX_LEN; s += 4) {
       const p = loopAt(s);
@@ -458,25 +551,58 @@ export class MxScene {
       const p = mxPose(u, true);
       line.push([p.x, p.z]);
     }
-    let seed = 12345;
+    let seed = 12345 + this.circuit * 977;
     const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-    let n = 0;
-    for (let tries = 0; tries < 2600 && n < 420; tries++) {
-      const x = -260 + rnd() * 520;
-      const z = -130 + rnd() * 420;
+    const dist = (x: number, z: number) => {
       let d = 1e9;
       for (const [lx, lz] of line) d = Math.min(d, (lx - x) ** 2 + (lz - z) ** 2);
-      d = Math.sqrt(d);
-      // a clear strip along the track, then more and more trees
+      return Math.sqrt(d);
+    };
+    const put = (list: { mat: THREE.SpriteMaterial; sp: { w: number; h: number; ax: number; ay: number } }[], x: number, z: number, k: number) => {
+      const { mat, sp } = list[Math.floor(rnd() * list.length)];
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(sp.w * k, sp.h * k, 1);
+      sprite.center.set(sp.ax / sp.w, 1 - sp.ay / sp.h);
+      sprite.position.set(x, 0, z);
+      this.scene.add(sprite);
+    };
+    const R = 300;
+    // trees and bushes: a clear strip along the track, then more and more of them
+    let n = 0;
+    for (let tries = 0; tries < 3600 && n < 420 * th.density; tries++) {
+      const x = this.cx + (rnd() * 2 - 1) * (R + 60);
+      const z = this.cz + (rnd() * 2 - 1) * (R - 20);
+      const d = dist(x, z);
       if (d < 13 || rnd() > Math.min(1, (d - 8) / 45)) continue;
-      const { mat, sp } = mats[Math.floor(rnd() * mats.length)];
-      const tree = new THREE.Sprite(mat);
-      const k = 1.1 + rnd() * 0.7;
-      tree.scale.set(sp.w * k, sp.h * k, 1);
-      tree.center.set(sp.ax / sp.w, 1 - sp.ay / sp.h);
-      tree.position.set(x, 0, z);
-      this.scene.add(tree);
+      const bush = bushes.length > 0 && (trees.length === 0 || rnd() < 0.3);
+      const list = bush ? bushes : trees;
+      if (!list.length) continue;
+      put(list, x, z, (bush ? 0.9 : 1.1) + rnd() * 0.7);
       n++;
+    }
+    // far scenery (structures: mesas, farms, houses): never close to the track
+    let f = 0;
+    for (let tries = 0; far.length && tries < 1500 && f < (th.trackside ? 16 : 14); tries++) {
+      const a = rnd() * Math.PI * 2;
+      const r = 190 + rnd() * 120;
+      const x = this.cx + Math.cos(a) * r * 1.15;
+      const z = this.cz + Math.sin(a) * r;
+      if (dist(x, z) < 150) continue;
+      put(far, x, z, 1 + rnd() * 0.6);
+      f++;
+    }
+    // city: street furniture along the track (barriers, lamps, signs)
+    if (side.length) {
+      let c = 0;
+      for (let tries = 0; tries < 1200 && c < 90; tries++) {
+        const p = loopAt(Math.floor(rnd() * MX_LEN));
+        const o = (rnd() < 0.5 ? -1 : 1) * (MX_HALF_WIDTH + 4 + rnd() * 16);
+        const x = p.x - Math.sin(p.th) * o;
+        const z = p.z + Math.cos(p.th) * o;
+        if (dist(x, z) < MX_HALF_WIDTH + 3.5) continue;
+        put(side, x, z, 0.9 + rnd() * 0.5);
+        c++;
+      }
     }
   }
 

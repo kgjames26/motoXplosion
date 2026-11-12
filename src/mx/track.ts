@@ -13,14 +13,58 @@
 
 import { KIT_MODULES } from './kitData';
 
-const CTRL: [number, number][] = [
-  [-90, 0], [-30, 0], [30, 0], [90, 0], // main straight (start / finish)
-  [124, 24], [92, 50], // first hairpin (right)
-  [34, 46], [-14, 72], [30, 100], // esses
-  [90, 102], [124, 130], [92, 158], // second hairpin (right)
-  [24, 156], [-40, 152], [-88, 128], // back straight and sweeper
-  [-112, 88], [-96, 52], [-122, 20], // long left-right back to the start
+/**
+ * v2.37: five circuits. Each is a closed loop whose first four control points are the main
+ * straight (start / finish, along +X); the world names the decor, the ground, the panorama.
+ */
+export type MxWorld = 'foret' | 'alpes' | 'canyon' | 'desert' | 'sf';
+export interface MxCircuitDef {
+  id: string;
+  name: string;
+  world: MxWorld;
+  ctrl: [number, number][];
+}
+const STRAIGHT4: [number, number][] = [[-90, 0], [-30, 0], [30, 0], [90, 0]];
+export const MX_CIRCUITS: MxCircuitDef[] = [
+  {
+    id: 'foret',
+    name: 'Grande Forêt',
+    world: 'foret',
+    ctrl: [
+      [-90, 0], [-30, 0], [30, 0], [90, 0], // main straight (start / finish)
+      [124, 24], [92, 50], // first hairpin (right)
+      [34, 46], [-14, 72], [30, 100], // esses
+      [90, 102], [124, 130], [92, 158], // second hairpin (right)
+      [24, 156], [-40, 152], [-88, 128], // back straight and sweeper
+      [-112, 88], [-96, 52], [-122, 20], // long left-right back to the start
+    ],
+  },
+  {
+    id: 'alpes',
+    name: 'Val des Alpes',
+    world: 'alpes',
+    ctrl: [...STRAIGHT4, [150, 10], [178, 48], [150, 86], [96, 92], [50, 78], [10, 96], [-8, 136], [30, 168], [96, 176], [160, 170], [200, 200], [170, 240], [100, 246], [20, 230], [-60, 236], [-130, 210], [-150, 160], [-120, 116], [-150, 70], [-140, 24]],
+  },
+  {
+    id: 'canyon',
+    name: 'Canyon Rouge',
+    world: 'canyon',
+    ctrl: [...STRAIGHT4, [150, -4], [196, -34], [190, -84], [140, -110], [80, -100], [40, -70], [-4, -84], [-30, -124], [10, -160], [80, -168], [140, -190], [130, -236], [60, -250], [-20, -230], [-80, -200], [-120, -150], [-150, -90], [-140, -30]],
+  },
+  {
+    id: 'desert',
+    name: 'Dunes du Mojave',
+    world: 'desert',
+    ctrl: [...STRAIGHT4, [150, 0], [210, 16], [250, 60], [236, 116], [180, 140], [120, 120], [70, 90], [10, 84], [-40, 110], [-52, 160], [-10, 200], [60, 206], [110, 230], [90, 276], [20, 290], [-60, 270], [-110, 230], [-130, 170], [-150, 110], [-150, 50]],
+  },
+  {
+    id: 'sf',
+    name: 'San Francisco Docks',
+    world: 'sf',
+    ctrl: [...STRAIGHT4, [134, 16], [142, 56], [104, 76], [56, 66], [30, 92], [56, 120], [110, 128], [146, 160], [120, 196], [60, 200], [10, 182], [-30, 200], [-80, 214], [-122, 184], [-116, 130], [-80, 100], [-114, 60], [-130, 20]],
+  },
 ];
+let CTRL: [number, number][] = MX_CIRCUITS[0].ctrl;
 
 export const MX_HALF_WIDTH = 5;
 /** Beyond the track edge: this much grass, then the fence. */
@@ -32,6 +76,7 @@ const th: number[] = [];
 const kp: number[] = [];
 
 function build(): void {
+  px.length = pz.length = th.length = kp.length = 0;
   const n = CTRL.length;
   const raw: [number, number][] = [];
   for (let i = 0; i < n; i++) {
@@ -89,10 +134,8 @@ function build(): void {
     for (let i = 0; i < N; i++) kp[i] = (c[(i + N - 1) % N] + 2 * c[i] + c[(i + 1) % N]) / 4;
   }
 }
-build();
-
 /** Length of the loop (m). */
-export const MX_LEN = px.length;
+export let MX_LEN = 0;
 const wrap = (s: number) => ((s % MX_LEN) + MX_LEN) % MX_LEN;
 const lerpArr = (a: number[], s: number) => {
   const w = wrap(s);
@@ -337,10 +380,8 @@ function place(out: MxFeature[], cfg: PlaceCfg): void {
     }
   }
 }
-place(MX_FEATURES, CFG_CROSS);
 /** Cruising: the same track, with low gentle rollers instead of the big jumps. */
 export const MX_FEATURES_CRUISE: MxFeature[] = [];
-place(MX_FEATURES_CRUISE, CFG_CRUISE);
 
 /** Track height above the base level at loop arc length s (centre line). */
 export function loopHeight(s: number, cruise = false): number {
@@ -352,8 +393,26 @@ export function loopHeight(s: number, cruise = false): number {
 export const MX_ENTRY = 70;
 export const MX_EXIT = 70;
 /** Cruising: entry lane, one lap plus the main straight, exit lane. */
-export const MX_CRUISE_LOOP = MX_LEN + (MX_STRAIGHT[1] - MX_STRAIGHT[0]);
-export const MX_ZONE_LEN = MX_ENTRY + MX_CRUISE_LOOP + MX_EXIT;
+export let MX_CRUISE_LOOP = 0;
+export let MX_ZONE_LEN = 0;
+
+/** Index of the circuit currently built. */
+export let mxCircuit = -1;
+/** Build circuit i (centre line, jumps, straight, path lengths). Cruising always rides circuit 0. */
+export function setMxCircuit(i: number): void {
+  if (i === mxCircuit) return;
+  mxCircuit = i;
+  CTRL = MX_CIRCUITS[i].ctrl;
+  build();
+  MX_LEN = px.length;
+  MX_FEATURES.length = 0;
+  MX_FEATURES_CRUISE.length = 0;
+  place(MX_FEATURES, CFG_CROSS);
+  place(MX_FEATURES_CRUISE, CFG_CRUISE);
+  MX_CRUISE_LOOP = MX_LEN + (MX_STRAIGHT[1] - MX_STRAIGHT[0]);
+  MX_ZONE_LEN = MX_ENTRY + MX_CRUISE_LOOP + MX_EXIT;
+}
+setMxCircuit(0);
 
 export interface MxPose {
   x: number;

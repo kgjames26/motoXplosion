@@ -502,7 +502,11 @@ export class GLRenderer {
     }
     this.mxFade.style.opacity = String(clamp(1 - Math.abs(mxT - 0.5) * 4.5, 0, 1) * (mxT > 0 && mxT < 1 ? 1 : 0));
     if (use3d) {
-      if (!this.mx) this.mx = new MxScene();
+      if (this.mx && this.mx.circuit !== game.mxCircuit) {
+        this.mx.release(this.scene);
+        this.mx = null;
+      }
+      if (!this.mx) this.mx = new MxScene(game.mxCircuit);
       this.mxOn = true;
       this.syncRivals(game, 0, true);
       this.mx.render(this.renderer, game, dt, this.bike3d, this.rivals, this.W / this.H, (1 - mxT) * 2);

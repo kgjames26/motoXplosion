@@ -12,7 +12,7 @@ import { Particles } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose } from './mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose, setMxCircuit } from './mx/track';
 
 /** v2.26 motocross events: one lap against the clock, flips on half a lap, 2-lap race. */
 export type MxKind = 'time' | 'tricks' | 'race';
@@ -102,6 +102,8 @@ export interface RunOptions {
   cruiseControl?: boolean;
   /** v2.26: event on the motocross track (region 'cross'). */
   mx?: MxKind | null;
+  /** Which motocross circuit (0..4). */
+  mxCircuit?: number;
 }
 
 const PHYSICS_DT = 1 / 300;
@@ -207,6 +209,8 @@ export class Game {
   private events: GameEvents = {};
   // ---- v2.26 motocross track (ridden in 3D)
   mxKind: MxKind | null = null;
+  /** Motocross circuit being ridden (0 = Grande Forêt; cruising always rides 0). */
+  mxCircuit = 0;
   /** Stick left / right (-1..1, + = right). */
   steer = 0;
   /** Lateral state of the player on the track: offset from the centre line (m, + = right),
@@ -261,6 +265,8 @@ export class Game {
     this.raceLevel = this.circuit ? circuitRaceLevel(this.circuit) : 1;
     this.mxKind = this.region === 'cross' && this.mode !== 'cruising' ? (opts.mx ?? this.mxKind ?? 'time') : null;
     if (this.mxKind === 'race') this.raceLevel = 5;
+    this.mxCircuit = this.mxKind ? Math.max(0, Math.min(4, opts.mxCircuit ?? this.mxCircuit)) : 0;
+    setMxCircuit(this.mxCircuit);
     const seed = this.circuit ? circuitSeed(cm, this.region, this.circuit) : (Math.random() * 2 ** 31) | 0;
     this.weather = weatherFor(this.difficulty);
     this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.mode === 'cruising' ? 0 : this.weather);
@@ -1126,7 +1132,10 @@ export class Game {
         if (done) {
           time = this.chrono;
           medal = medalForTime(this.mode, this.circuit, time, diffIndex(this.difficulty));
-          if (this.mxKind === 'time') medal = (time <= MX_TIMES[0] ? 3 : time <= MX_TIMES[1] ? 2 : time <= MX_TIMES[2] ? 1 : 0) as Medal;
+          if (this.mxKind === 'time') {
+            const k = MX_LEN / 928; // the medal times were set on the first circuit (928 m)
+            medal = (time <= MX_TIMES[0] * k ? 3 : time <= MX_TIMES[1] * k ? 2 : time <= MX_TIMES[2] * k ? 1 : 0) as Medal;
+          }
           score = Math.round(time * 10);
           scoreLabel = fmtClock(time) + (this.falls ? ` · ${this.falls} chute${this.falls > 1 ? 's' : ''}` : '');
           lines.push({ label: this.mxKind ? 'Tour bouclé' : 'Circuit terminé', coins: Math.round(((this.mode === 'trial' ? 25 : 35) + g * 40) * dm) });
