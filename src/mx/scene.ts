@@ -4,6 +4,7 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
+import { JUMP_FLAT, JUMP_HALF_W, JUMP_SKIRT, jumpHeight } from './jumps';
 import { loopAt, mxCircuit, MX_CIRCUITS, MX_RUNOFF, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
 import type { MxWorld } from './track';
 import { KIT_MODULES } from './kitData';
@@ -101,15 +102,15 @@ function asphaltTexture(): THREE.CanvasTexture {
   return t;
 }
 
-/** A tileable, detailed earth texture drawn with the canvas: mottling, clods, pebbles, fine grain. */
+/** A tileable earth texture, dark and wet: packed loam, glossy clods, wet streaks, a few pebbles. */
 function earthTexture(): THREE.CanvasTexture {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#cdbfae';
+  g.fillStyle = '#5a4634';
   g.fillRect(0, 0, S, S);
-  let seed = 99;
+  let seed = 4242;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
   const wrapped = (x: number, y: number, r: number, draw: (px: number, py: number) => void) => {
     for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) if (x + ox > -r && x + ox < S + r && y + oy > -r && y + oy < S + r) draw(x + ox, y + oy);
@@ -122,24 +123,36 @@ function earthTexture(): THREE.CanvasTexture {
       g.fillStyle = gr;
       g.fillRect(px - r, py - r, r * 2, r * 2);
     });
-  for (let i = 0; i < 110; i++) blob(rnd() * S, rnd() * S, 24 + rnd() * 70, rnd() < 0.5 ? 'rgba(70,52,38,0.10)' : 'rgba(255,240,220,0.10)');
-  for (let i = 0; i < 700; i++) {
-    const x = rnd() * S, y = rnd() * S, r = 2 + rnd() * 6;
-    blob(x, y, r * 1.6, 'rgba(60,44,32,0.28)'); // clod, dark body
-    blob(x - r * 0.3, y - r * 0.3, r * 0.8, 'rgba(235,220,200,0.22)'); // sunny side
+  // large wet and drier patches
+  for (let i = 0; i < 120; i++) blob(rnd() * S, rnd() * S, 30 + rnd() * 80, rnd() < 0.6 ? 'rgba(28,20,14,0.16)' : 'rgba(150,120,90,0.10)');
+  // wet streaks (smeared, along the ride direction)
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * S, y = rnd() * S, l = 30 + rnd() * 90;
+    wrapped(x, y, l, (px, py) => {
+      g.strokeStyle = 'rgba(22,16,11,0.20)';
+      g.lineWidth = 2 + rnd() * 5;
+      g.beginPath(); g.moveTo(px, py); g.lineTo(px + l, py + (rnd() - 0.5) * 8); g.stroke();
+    });
   }
-  for (let i = 0; i < 320; i++) {
+  // clods: dark body, a wet glint on the lit side
+  for (let i = 0; i < 800; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 1.5 + rnd() * 5.5;
+    blob(x, y, r * 1.6, 'rgba(24,17,12,0.34)');
+    blob(x - r * 0.3, y - r * 0.3, r * 0.7, 'rgba(176,150,122,0.22)');
+  }
+  // pebbles
+  for (let i = 0; i < 160; i++) {
     const x = rnd() * S, y = rnd() * S, r = 0.8 + rnd() * 1.6;
     wrapped(x, y, r + 2, (px, py) => {
-      g.fillStyle = 'rgba(40,30,22,0.35)';
+      g.fillStyle = 'rgba(30,22,16,0.4)';
       g.beginPath(); g.arc(px + 0.8, py + 0.8, r, 0, 6.3); g.fill();
-      g.fillStyle = `rgba(${200 + rnd() * 40},${190 + rnd() * 35},${170 + rnd() * 30},0.85)`;
+      g.fillStyle = `rgba(${150 + rnd() * 40},${135 + rnd() * 30},${115 + rnd() * 25},0.7)`;
       g.beginPath(); g.arc(px, py, r, 0, 6.3); g.fill();
     });
   }
   for (let i = 0; i < 16000; i++) {
-    const v = 90 + Math.floor(rnd() * 150);
-    g.fillStyle = `rgba(${v},${Math.floor(v * 0.92)},${Math.floor(v * 0.82)},0.35)`;
+    const v = 40 + Math.floor(rnd() * 110);
+    g.fillStyle = `rgba(${v},${Math.floor(v * 0.85)},${Math.floor(v * 0.7)},0.35)`;
     g.fillRect(Math.floor(rnd() * S), Math.floor(rnd() * S), 1, 1);
   }
   const t = new THREE.CanvasTexture(c);
@@ -210,7 +223,7 @@ export class MxScene {
   private theme: Theme;
   /** The loop's earth: a coarse ribbon at first, replaced by the detailed one once the ruts are loaded. */
   private loopRibbon: THREE.Mesh | null = null;
-  private earth = new THREE.MeshLambertMaterial({ vertexColors: true });
+  private earth = new THREE.MeshPhongMaterial({ vertexColors: true, specular: new THREE.Color(0x3c3329), shininess: 24 });
   /** Middle of the circuit (the ground and the panorama are centred on it). */
   private cx = 0;
   private cz = 80;
@@ -308,8 +321,9 @@ export class MxScene {
     this.smoke.frustumCulled = false;
     s.add(this.smoke);
     this.loadKit();
+    this.buildJumps();
     this.earth.map = earthTexture();
-    this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.25);
+    this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.55);
     void loadRuts().then((d) => {
       const c = d?.circuits.find((x) => x.id === MX_CIRCUITS[this.circuit].id);
       if (!d || !c || mxCircuit !== this.circuit || c.rows !== Math.ceil(MX_LEN / d.ds)) return;
@@ -364,11 +378,11 @@ export class MxScene {
     const HW = MX_HALF_WIDTH;
     const OUT = HW + MX_RUNOFF; // end of the rideable ground (9 m)
     const lat: number[] = [];
-    for (const n of [-11.2, -10.6, -10, -9.6, -9.2, -8.5, -7.6, -6.7, -6]) lat.push(n);
-    for (let n = -5.5; n <= 5.5001; n += 0.25) lat.push(Math.round(n * 100) / 100);
-    for (const n of [6, 6.7, 7.6, 8.5, 9.2, 9.6, 10, 10.6, 11.2]) lat.push(n);
+    for (const n of [-16, -14, -12.6, -11.2, -10.6, -10, -9.6, -9.2, -8.5, -7.6, -6.7, -6]) lat.push(n);
+    for (let n = -5.5; n <= 5.5001; n += 0.2) lat.push(Math.round(n * 100) / 100);
+    for (const n of [6, 6.7, 7.6, 8.5, 9.2, 9.6, 10, 10.6, 11.2, 12.6, 14, 16]) lat.push(n);
     const L = lat.length;
-    const STEP = 0.6;
+    const STEP = 0.5;
     const m = Math.ceil(MX_LEN / STEP);
     const pos = new Float32Array(m * L * 3);
     const uv = new Float32Array(m * L * 2);
@@ -420,16 +434,21 @@ export class MxScene {
           const d = Math.min(1, sample(R.d, sm, n) * 1.15);
           const sl = sample(R.s, sm, n);
           const noise = hash2(Math.floor(sm * 2.2), Math.floor((n + 20) * 4));
-          // wheel lines: sunk into the dirt and polished; roost: loose and pale; always a little rough
-          y -= 0.05 * smooth(0.12, 0.85, d) + 0.012 * noise * (1 - d) + 0.01 * sl * noise;
-          shade = 1 - 0.34 * smooth(0.1, 0.9, d) + 0.1 * (noise - 0.5);
-          warm = 0.16 * smooth(0.15, 0.8, sl) * (1 - d);
+          // the tyre lines are grooves (3 cm) with a small berm of pushed earth on each side
+          const dl = sample(R.d, sm, n - 0.2);
+          const dr = sample(R.d, sm, n + 0.2);
+          const berm = clamp(Math.abs(dr - dl) * 2.2, 0, 1) * (1 - d);
+          y += -0.035 * smooth(0.12, 0.85, d) + 0.014 * berm - 0.012 * noise * (1 - d) - 0.01 * sl * noise;
+          // dark and wet all over the ground the bikes can use, darker still on their lines
+          const wet = 1 - 0.7 * smooth(HW - 0.5, OUT, an);
+          shade = 1 - 0.4 * wet - 0.2 * smooth(0.1, 0.9, d) + 0.1 * (noise - 0.5);
+          warm = 0.12 * smooth(0.15, 0.8, sl) * (1 - d);
         } else {
           // the bank of earth that closes the circuit: 40 cm high, a little irregular
           const rise = smooth(OUT, OUT + 0.8, an) * (1 - smooth(OUT + 1.2, OUT + 2.2, an)) * bankOn;
           const wob = 0.8 + 0.2 * hash2(Math.floor(sm / 1.5), 7) + 0.1 * Math.sin(sm / 5.3);
           y = rise * 0.4 * wob - (1 - rise) * 0.05;
-          shade = 0.92 + 0.12 * hash2(Math.floor(sm), Math.floor(an * 3));
+          shade = 0.98 + 0.12 * hash2(Math.floor(sm), Math.floor(an * 3));
         }
         pos[k * 3] = p.x + nx * n;
         pos[k * 3 + 1] = y;
@@ -463,6 +482,116 @@ export class MxScene {
     this.scene.add(mesh);
   }
 
+  /** An entry / exit lane in the same dark wet earth as the loop: two faint wheel lines, grooves included. */
+  private earthLane(samples: { x: number; z: number; th: number }[]): THREE.Mesh {
+    const HW = MX_HALF_WIDTH;
+    const lat = [-16, -12.6, -10, -8, -6.5, -5.5];
+    for (let n = -5; n <= 5.001; n += 0.25) lat.push(Math.round(n * 100) / 100);
+    lat.push(5.5, 6.5, 8, 10, 12.6, 16);
+    const L = lat.length;
+    const m = samples.length;
+    const pos = new Float32Array(m * L * 3);
+    const uv = new Float32Array(m * L * 2);
+    const col = new Float32Array(m * L * 3);
+    const smooth = (a: number, b: number, x: number) => {
+      const t = clamp((x - a) / (b - a), 0, 1);
+      return t * t * (3 - 2 * t);
+    };
+    samples.forEach((p, i) => {
+      const nx = -Math.sin(p.th);
+      const nz = Math.cos(p.th);
+      lat.forEach((n, j) => {
+        const an = Math.abs(n);
+        const k = i * L + j;
+        const line = Math.max(Math.exp(-(((an - 1.3) / 0.35) ** 2)) * 0.7, Math.exp(-((an / 0.5) ** 2)) * 0.25);
+        const noise = hash2(Math.floor(i * 0.8), Math.floor((n + 20) * 4));
+        const wet = 1 - 0.7 * smooth(HW - 0.5, HW + 4, an);
+        const y = an > HW + 4 ? -0.05 : 0.02 - 0.03 * line + 0.01 * (noise - 0.5) * (1 - line);
+        const shade = 1 - 0.4 * wet - 0.2 * line + 0.1 * (noise - 0.5);
+        pos[k * 3] = p.x + nx * n;
+        pos[k * 3 + 1] = y;
+        pos[k * 3 + 2] = p.z + nz * n;
+        uv[k * 2] = n / 1.6;
+        uv[k * 2 + 1] = (i * 2) / 1.6;
+        col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = clamp(shade, 0, 1.2);
+      });
+    });
+    const idx: number[] = [];
+    for (let i = 0; i < m - 1; i++)
+      for (let j = 0; j < L - 1; j++) {
+        const a = i * L + j;
+        const b = (i + 1) * L + j;
+        idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, this.earth);
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /**
+   * The parametric jumps of the circuit (jumps.ts): the mesh is sampled from the very function the
+   * physics rides, in world coordinates, in the same dark wet earth. Edit a circuit's `jumps` list
+   * in track.ts and both the shape and the collision follow.
+   */
+  private buildJumps(): void {
+    for (const f of MX_FEATURES) {
+      if (!f.spec) continue;
+      const spec = f.spec;
+      const nu = Math.ceil(f.len / 0.4) + 1;
+      const lat: number[] = [];
+      for (let n = -JUMP_HALF_W; n <= JUMP_HALF_W + 0.001; n += n < -JUMP_FLAT || n >= JUMP_FLAT ? 0.5 : 0.75) lat.push(Math.round(n * 100) / 100);
+      const L = lat.length;
+      const pos = new Float32Array(nu * L * 3);
+      const uv = new Float32Array(nu * L * 2);
+      const col = new Float32Array(nu * L * 3);
+      const c = Math.cos(f.pth);
+      const sn = Math.sin(f.pth);
+      for (let i = 0; i < nu; i++) {
+        const t = Math.min(f.len, (i * f.len) / (nu - 1));
+        for (let j = 0; j < L; j++) {
+          const n = lat[j];
+          const h = jumpHeight(spec, t, n);
+          const k = i * L + j;
+          const a = t - f.len / 2;
+          const noise = hash2(Math.floor(t * 1.7) + 31 * this.circuit, Math.floor((n + 20) * 3));
+          pos[k * 3] = f.px + a * c - n * sn;
+          pos[k * 3 + 1] = h + (Math.abs(n) > JUMP_FLAT + JUMP_SKIRT - 0.01 ? -0.03 : 0.03) + 0.008 * noise;
+          pos[k * 3 + 2] = f.pz + a * sn + n * c;
+          uv[k * 2] = n / 1.6;
+          uv[k * 2 + 1] = (f.s0 + t) / 1.6;
+          // packed, wet earth: darker on the flat top and the faces, a bit paler at the foot
+          const v = 0.64 + 0.08 * noise + 0.12 * (1 - Math.min(1, h / 0.4)) * (Math.abs(n) > JUMP_FLAT ? 1 : 0.4);
+          col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = v;
+        }
+      }
+      const idx: number[] = [];
+      for (let i = 0; i < nu - 1; i++)
+        for (let j = 0; j < L - 1; j++) {
+          const a = i * L + j;
+          const b = (i + 1) * L + j;
+          idx.push(a, a + 1, b, a + 1, b + 1, b);
+        }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      const mesh = new THREE.Mesh(g, this.earth);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.visible = !this.cruiseView;
+      this.crossMeshes.push(mesh);
+      this.scene.add(mesh);
+    }
+  }
+
   private buildTrack(): void {
     const loop = [];
     for (let s = 0; s < MX_LEN; s++) loop.push({ ...loopAt(s), h: 0 }); // flat: the jumps are the kit's pieces
@@ -476,7 +605,7 @@ export class MxScene {
         const p = mxPose(u, true);
         lane.push({ x: p.x, z: p.z, th: p.th, k: 0, h: 0 });
       }
-      const mesh = this.ribbon(lane, false);
+      const mesh = this.earthLane(lane);
       mesh.position.y = -0.015;
       this.scene.add(mesh);
     }
@@ -722,6 +851,7 @@ export class MxScene {
       return modules.find((m) => Math.abs(m.cx - k.cx) < 0.6 && Math.abs(m.cz - k.cz) < 0.6);
     };
     for (const [list, cruise] of [[MX_FEATURES, false], [MX_FEATURES_CRUISE, true]] as const) for (const f of list) {
+      if (f.mod < 0) continue; // parametric jumps have their own mesh (buildJumps)
       const k = KIT_MODULES[f.mod];
       const src = find(f.mod);
       if (!src) continue;

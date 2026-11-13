@@ -12,6 +12,7 @@
  */
 
 import { KIT_MODULES } from './kitData';
+import { J, JUMP_HALF_W, jumpHeight, jumpLength, scaleJump, type JumpSpec } from './jumps';
 
 /**
  * v2.37: five circuits. Each is a closed loop whose first four control points are the main
@@ -23,7 +24,14 @@ export interface MxCircuitDef {
   name: string;
   world: MxWorld;
   ctrl: [number, number][];
+  /** Jumps of the lap, in order along the track (see jumps.ts). Missing: DEFAULT_JUMPS. */
+  jumps?: JumpSpec[];
 }
+/** A varied set, small to big: used by the circuits that do not list their own. */
+export const DEFAULT_JUMPS: JumpSpec[] = [
+  J.table(2.2, 22), J.single(1.2, 18), J.double(1.2, 30), J.table(3.4, 34), J.single(0.6, 11), J.triple(1, 34),
+  J.table(1, 10), J.single(1.8, 24), J.table(4.6, 46), J.double(0.8, 20), J.single(0.5, 3),
+];
 const STRAIGHT4: [number, number][] = [[-90, 0], [-30, 0], [30, 0], [90, 0]];
 export const MX_CIRCUITS: MxCircuitDef[] = [
   {
@@ -164,8 +172,10 @@ export function loopAt(s: number): { x: number; z: number; th: number; k: number
  * stretched like the piece is: `sx` along the track, `sy` in height.
  */
 export interface MxFeature {
-  /** Index in KIT_MODULES. */
+  /** Index in KIT_MODULES (-1 for a parametric jump). */
   mod: number;
+  /** Parametric jump (jumps.ts): the height comes from it instead of the kit grid. */
+  spec?: JumpSpec;
   s0: number;
   len: number;
   /** Height of the piece on the track (m). */
@@ -222,6 +232,7 @@ export const KIT_JUMPS: number[] = KIT_MODULES.map((m, i) => ({ m, i }))
 
 /** Height of a piece at its own coordinates: tp along (0..len), np across (m, from its axis). */
 function gridHeight(f: MxFeature, tp: number, np: number): number {
+  if (f.spec) return jumpHeight(f.spec, tp, np);
   const g = KIT_MODULES[f.mod].grid;
   const u = Math.min(47.999, Math.max(0, (tp / f.len) * 48));
   const i = Math.floor(u);
@@ -280,18 +291,20 @@ interface PlaceCfg {
   slope: number;
   tableSlope: number;
   gap: number;
+  /** Parametric jumps to lay (instead of the kit pieces). */
+  specs?: JumpSpec[];
 }
 /** The cross circuit: big tabletops and jumps. */
-const CFG_CROSS: PlaceCfg = { tableH: MX_TABLE_H, jumpMax: MX_JUMP_MAX, slope: 0.45, tableSlope: 0.36, gap: 8 };
+const CFG_CROSS: PlaceCfg = { tableH: MX_TABLE_H, jumpMax: MX_JUMP_MAX, slope: 0.45, tableSlope: 0.36, gap: 14 };
 /** Cruising rolls through the same track at a ride's pace: low rollers, long and gentle, well spaced. */
 const CFG_CRUISE: PlaceCfg = { tableH: 1.3, jumpMax: 0.9, slope: 0.22, tableSlope: 0.2, gap: 30 };
 
 /** True when no other part of the circuit passes under the (now wide) piece laid on [s, s+len]. */
 function footprintClear(s: number, len: number, mod: number): boolean {
+  const halfW = mod < 0 ? JUMP_HALF_W + 3 : (KIT_MODULES[mod].wid * mxLatScale(mod)) / 2 + 3;
   const pm = loopAt(s + len / 2);
   const c = Math.cos(pm.th);
   const sn = Math.sin(pm.th);
-  const halfW = (KIT_MODULES[mod].wid * mxLatScale(mod)) / 2 + 3;
   for (let i = 0; i < MX_LEN; i += 3) {
     const d = (((i - s) % MX_LEN) + MX_LEN) % MX_LEN;
     if (d < len + 12 || d > MX_LEN - 12) continue;
@@ -333,6 +346,26 @@ function place(out: MxFeature[], cfg: PlaceCfg): void {
     const end = b - (main ? 26 : 5); // and so does the fork to the exit lane
     let tries = 0;
     while (s < end - 9 && tries < order.length) {
+      if (cfg.specs) {
+        let found = false;
+        for (let a = 0; a < cfg.specs.length && !found; a++) {
+          const base = cfg.specs[q % cfg.specs.length];
+          q++;
+          for (const k of [1, 0.85, 0.7, 0.55]) {
+            const spec = k === 1 ? base : scaleJump(base, k);
+            const len = jumpLength(spec);
+            if (len <= end - s && pathDrift(s, len) <= MX_MAX_DRIFT && footprintClear(s, len, -1)) {
+              const pm = loopAt(s + len / 2);
+              out.push({ mod: -1, spec, s0: s, len, h: spec.h, sx: 1, sy: 1, px: pm.x, pz: pm.z, pth: pm.th });
+              s += len + cfg.gap;
+              found = true;
+              break;
+            }
+          }
+        }
+        if (!found) s += 6; // slide along the stretch and try again further on
+        continue;
+      }
       const mod = order[q % order.length];
       q++;
       const m = KIT_MODULES[mod];
@@ -407,7 +440,7 @@ export function setMxCircuit(i: number): void {
   MX_LEN = px.length;
   MX_FEATURES.length = 0;
   MX_FEATURES_CRUISE.length = 0;
-  place(MX_FEATURES, CFG_CROSS);
+  place(MX_FEATURES, { ...CFG_CROSS, specs: MX_CIRCUITS[i].jumps ?? DEFAULT_JUMPS });
   place(MX_FEATURES_CRUISE, CFG_CRUISE);
   MX_CRUISE_LOOP = MX_LEN + (MX_STRAIGHT[1] - MX_STRAIGHT[0]);
   MX_ZONE_LEN = MX_ENTRY + MX_CRUISE_LOOP + MX_EXIT;
