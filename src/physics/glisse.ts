@@ -19,6 +19,13 @@ import { clamp, GRAVITY_SCALE } from '../core/math';
  *  - bars that steer into the turn to hold the lean, and into a slide to catch it. Below
  *    walking pace the stick simply turns the bars.
  *
+ * v2.54 (beta), what made it hard to play, measured with a bot on the five circuits:
+ *  - the roll answered ~0.9 s after the stick (now ~0.3 s): the rider over-corrected and wobbled;
+ *  - the wheel loads were filtered "downwards" (a bump switched the grip off, the bike then
+ *    turned at half the radius of the old model): they are now smoothed both ways with a floor;
+ *  - below walking pace the lean was fed back from the tyre force and kept the bike circling
+ *    with the stick at rest; there the roll now just follows the stick and nothing slides.
+ *
  * Ancienne glisse does not use this file.
  */
 
@@ -33,8 +40,25 @@ export const GLISSE = {
   /** Roll arm (m). A touch higher than the real CG so a lowside is a mistake, not a frame. */
   cgHeight: 1.05,
   peakSlip: 0.17,
+  /** Load filter rate (1/s) and the share of the static load the tyres always keep. */
+  loadRate: 8,
+  loadFloor: 0.6,
+  /** Tyre capacity relative to the nominal grip the stick is scaled on (1 = exactly the nominal). */
+  tyre: 1.15,
+  /** How much drive / brake eats of the side grip (friction ellipse). */
+  ell: 0.42,
+  /** Side-grip loss once a spinning rear is leant over: base + lean part. */
+  spinBase: 0.1,
+  spinLean: 0.34,
+  /** The tyres give up on this fraction of what the stick asks for only when really overloaded. */
+  holdK: 0.92,
+  /** Speed lost to lean (m/s² at full lean). */
+  scrubLean: 0.85,
+  /** Yaw relaxation towards the path (1/s) and the extra while the rear spins. */
+  relax: 3.2,
+  relaxSpin: 4,
   /** How hard the rider may roll the bike (rad/s²). Physics still wins past this. */
-  rollAuthority: 9.5,
+  rollAuthority: 26,
   /** Extra drag (m/s²) when the rear is fully spinning. */
   spinDrag: 1.15,
 };
@@ -100,7 +124,7 @@ function budget(muN: number, Fx: number, spinLoss: number): number {
   if (muN < 1) return 0;
   const u = clamp(Math.abs(Fx) / muN, 0, 1);
   // A full drive still leaves side bite. Zeroing it is what spun the old model out.
-  const ell = Math.sqrt(1 - 0.42 * u * u);
+  const ell = Math.sqrt(1 - GLISSE.ell * u * u);
   const deep = u > 0.92 ? (u - 0.92) / 0.08 : 0;
   return muN * ell * (1 - 0.18 * deep) * (1 - clamp(spinLoss, 0, 0.55));
 }
@@ -120,11 +144,11 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
     s.spin = 0;
     s.slideF *= Math.exp(-c.dt * 6);
     s.slideR *= Math.exp(-c.dt * 6);
-    s.nf *= Math.exp(-c.dt * 8);
-    s.nr *= Math.exp(-c.dt * 8);
+    s.nf += (m * G * (b / L) - s.nf) * (1 - Math.exp(-c.dt * 3));
+    s.nr += (m * G * (a / L) - s.nr) * (1 - Math.exp(-c.dt * 3));
     s.yawRate *= Math.exp(-c.dt * 1.3);
     s.lat *= Math.exp(-c.dt * 1.1);
-    s.lean += (c.stick * 0.32 - s.lean) * (1 - Math.exp(-c.dt * 1.5));
+    s.lean += (c.stick * 0.32 - s.lean) * (1 - Math.exp(-c.dt * 4));
     s.leanRate = 0;
     s.bar += (0 - s.bar) * (1 - Math.exp(-c.dt * 3));
     integrateHeading(s, c, v, c.dt);
@@ -138,16 +162,15 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
   const tb = same ? 0.3 * clamp((Math.abs(c.trackK) - 0.012) * 45, 0, 1) : 0;
   const mu0 = clamp(c.mu0, 0.15, 1.6);
   const muB = (mu0 + tb) / Math.max(0.25, 1 - mu0 * tb);
-  const muF = muB * 1.06;
-  const muR = muB * 0.96;
+  const muF = muB * 1.06 * GLISSE.tyre;
+  const muR = muB * 0.96 * GLISSE.tyre;
 
   const NstatF = m * G * (b / L);
   const NstatR = m * G * (a / L);
 
   const filt = (cur: number, rawN: number, stat: number): number => {
-    const meas = clamp(rawN, 0, 2.4 * stat);
-    const rate = meas + 60 < cur ? 14 : 6;
-    return cur + (meas - cur) * (1 - Math.exp(-c.dt * rate));
+    const meas = clamp(rawN, 0, 2 * stat);
+    return cur + (meas - cur) * (1 - Math.exp(-c.dt * GLISSE.loadRate));
   };
   s.nf = filt(s.nf, c.frontN, NstatF);
   s.nr = filt(s.nr, c.rearN, NstatR);
@@ -155,8 +178,12 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
     s.nf = NstatF;
     s.nr = NstatR;
   }
+  // What the tyres can use: the filtered load, never below a share of the static one. A bump or
+  // a short hop does not switch the grip off.
+  const Nf = Math.max(s.nf, GLISSE.loadFloor * NstatF);
+  const Nr = Math.max(s.nr, GLISSE.loadFloor * NstatR);
 
-  const uDrive = clamp(Math.max(0, c.rearFx) / Math.max(50, muR * s.nr), 0, 1.25);
+  const uDrive = clamp(Math.max(0, c.rearFx) / Math.max(50, muR * Nr), 0, 1.25);
   const leanedIn = clamp(Math.abs(s.lean) / 0.4, 0, 1);
   // A spinning rear on a straight still drives. It gives the tail away once the bike is lent over.
   const slipSpin = c.throttle > 0.22 ? clamp((-c.rearSlip - 0.8) / 5, 0, 1) * (0.35 + 0.65 * leanedIn) : 0;
@@ -173,9 +200,9 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
   const u = Math.max(v, 1.4);
   // What the tyres can hold right now. The stick may ask for more; a rider on a phone
   // does not, or the lean falls in and the tail comes round.
-  const spinLossNow = s.spin * (0.1 + 0.34 * clamp(Math.abs(s.lean) / 0.5, 0, 1));
-  const ayMax = (budget(muF * s.nf, c.frontFx, 0) + budget(muR * s.nr, c.rearFx, spinLossNow)) / m;
-  const phiHold = Math.atan(clamp((0.92 * ayMax) / G, 0.05, 1.2));
+  const spinLossNow = s.spin * (GLISSE.spinBase + GLISSE.spinLean * clamp(Math.abs(s.lean) / 0.5, 0, 1));
+  const ayMax = (budget(muF * Nf, c.frontFx, 0) + budget(muR * Nr, c.rearFx, spinLossNow)) / m;
+  const phiHold = Math.atan(clamp((GLISSE.holdK * ayMax) / G, 0.05, 1.2));
   const asked = Math.abs(stick) * phiMax * (0.18 + 0.82 * dyn);
   const phiDes = Math.sign(stick) * Math.min(asked, Math.max(phiHold, 0.05));
 
@@ -190,11 +217,11 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
   let Fyr = 0;
 
   for (let i = 0; i < steps; i++) {
-    const phiDotCmd = clamp((phiDes - s.lean) * 3.1, -1.7, 1.7);
-    const rider = clamp((phiDotCmd - s.leanRate) * 6.5, -GLISSE.rollAuthority, GLISSE.rollAuthority);
+    const phiDotCmd = clamp((phiDes - s.lean) * 7.5, -3.2, 3.2);
+    const rider = clamp((phiDotCmd - s.leanRate) * 14, -GLISSE.rollAuthority, GLISSE.rollAuthority);
     const grav = (G / hcg) * Math.sin(s.lean) - (ayRoll / hcg) * Math.cos(s.lean);
     const phidd = dyn * grav + rider - s.leanRate * (2.4 + 2.2 * (1 - dyn));
-    s.leanRate = clamp(s.leanRate + phidd * h, -2.4, 2.4);
+    s.leanRate = clamp(s.leanRate + phidd * h, -3.4, 3.4);
     s.lean += s.leanRate * h;
     if (s.lean > 1.02) {
       s.lean = 1.02;
@@ -219,9 +246,9 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
     const vf = Math.max(u, 1);
     af = Math.atan2(s.lat + a * s.yawRate, vf) - s.bar;
     ar = Math.atan2(s.lat - b * s.yawRate, vf);
-    Fyf = -budget(muF * s.nf, c.frontFx, 0) * shape(af / GLISSE.peakSlip);
-    const spinLoss = s.spin * (0.1 + 0.34 * clamp(Math.abs(s.lean) / 0.5, 0, 1));
-    Fyr = -budget(muR * s.nr, c.rearFx, spinLoss) * shape(ar / GLISSE.peakSlip);
+    Fyf = -budget(muF * Nf, c.frontFx, 0) * shape(af / GLISSE.peakSlip);
+    const spinLoss = s.spin * (GLISSE.spinBase + GLISSE.spinLean * clamp(Math.abs(s.lean) / 0.5, 0, 1));
+    Fyr = -budget(muR * Nr, c.rearFx, spinLoss) * shape(ar / GLISSE.peakSlip);
     ay = (Fyf * Math.cos(s.bar) + Fyr) / m;
     ayRoll += (ay - ayRoll) * Math.min(1, h * 16);
     const yawAcc = (a * Fyf * Math.cos(s.bar) - b * Fyr) / Iz - s.yawRate * 0.35;
@@ -233,7 +260,7 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
     if (ya * excess > 0) ya *= 1 - clamp(Math.abs(excess) / 0.18, 0, 0.9);
     s.lat += (ay - u * s.yawRate) * h;
     s.yawRate += ya * h;
-    s.yawRate += (rPath - s.yawRate) * Math.min(1, h * (3.2 + 4 * s.spin));
+    s.yawRate += (rPath - s.yawRate) * Math.min(1, h * (GLISSE.relax + GLISSE.relaxSpin * s.spin));
     // A deep slide scrubs sideways speed and yaws the bike back. Past this the old model
     // pirouetted.
     const maxLat = u * Math.tan(0.5);
@@ -249,17 +276,22 @@ export function glisseStep(s: GlisseState, c: GlisseCmd): GlisseResult {
   const kin = (v * Math.tan(clamp(s.bar, -1.2, 1.2))) / L;
   s.yawRate = dyn * s.yawRate + (1 - dyn) * kin;
   s.lat *= dyn;
-  if (dyn < 1) s.lean = dyn * s.lean + (1 - dyn) * Math.atan2(ay, G);
+  // Below walking pace the roll simply follows what the rider asks. Following the tyre force here
+  // fed the lean back into the bars and kept the bike circling with the stick at rest.
+  if (dyn < 1) s.lean = dyn * s.lean + (1 - dyn) * phiDes;
 
-  const sF = clamp((Math.abs(af) / GLISSE.peakSlip - 0.82) / 0.75, 0, 1);
-  const sR = Math.max(clamp((Math.abs(ar) / GLISSE.peakSlip - 0.72) / 0.7, 0, 1), s.spin * 0.85);
+  // At low speed the bike is steered, not slid: no slide flags, no sliding scrub.
+  const sF = dyn * clamp((Math.abs(af) / GLISSE.peakSlip - 0.82) / 0.75, 0, 1);
+  // Opening the throttle with the bike leant puts the rear out for the eye, whatever the grip left.
+  const power = clamp((uDrive - 0.5) / 0.45, 0, 1) * clamp(Math.abs(s.lean) / 0.3, 0, 1) * clamp(c.throttle * 1.2, 0, 1) * 0.85;
+  const sR = dyn * Math.max(clamp((Math.abs(ar) / GLISSE.peakSlip - 0.72) / 0.7, 0, 1), s.spin * 0.85, power);
   s.slideF += (sF - s.slideF) * (1 - Math.exp(-c.dt * 8));
   s.slideR += (sR - s.slideR) * (1 - Math.exp(-c.dt * 8));
 
   const scrubAcc =
-    Math.min(6, (Math.abs(Fyf * Math.sin(af)) + Math.abs(Fyr * Math.sin(ar))) / Math.max(1, m)) +
-    GLISSE.spinDrag * s.spin +
-    0.85 * Math.abs(Math.sin(s.lean));
+    dyn * Math.min(6, (Math.abs(Fyf * Math.sin(af)) + Math.abs(Fyr * Math.sin(ar))) / Math.max(1, m)) +
+    GLISSE.spinDrag * s.spin * dyn +
+    GLISSE.scrubLean * Math.abs(Math.sin(s.lean));
   return finish(s, v, scrubAcc * c.dt);
 }
 
@@ -280,5 +312,7 @@ function integrateHeading(s: GlisseState, c: GlisseCmd, v: number, h: number): v
 function finish(s: GlisseState, v: number, scrub: number): GlisseResult {
   const beta = Math.atan2(s.lat, Math.max(v, 0.6));
   const psi = clamp(s.body + beta, -1.1, 1.1);
-  return { psi, drift: s.body - psi, slide: Math.max(s.slideF, s.slideR), scrub: Math.max(0, scrub) };
+  // Visual only: the tail hangs out when the rear lets go, the nose pushes a little when the front does.
+  const show = Math.sign(s.lean) * (0.2 * s.slideR - 0.05 * s.slideF) * clamp(Math.abs(s.lean) / 0.25, 0, 1);
+  return { psi, drift: s.body - psi + show, slide: Math.max(s.slideF, s.slideR), scrub: Math.max(0, scrub) };
 }

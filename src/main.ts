@@ -8,6 +8,7 @@ import { loadSettings, saveSettings, Layout, Quality, KEY_ACTIONS, DEFAULT_KEYS,
 import type { KeyAction } from './settings';
 import { Controls } from './ui/controls';
 import { Hud } from './ui/hud';
+import { bootDone, bootFail, bootProgress, preloadImage } from './ui/boot';
 import { Garage } from './ui/garage';
 import { MultiUI } from './ui/multiplayer';
 import { REGION_ORDER, REGIONS, RegionId } from './world/regions';
@@ -39,6 +40,7 @@ import {
  * Entry point: wires the game loop, renderer, HUD, controls, screens, settings, audio and PWA.
  */
 const $ = (id: string) => document.getElementById(id)!;
+bootProgress(0.3, 'Préparation du jeu');
 
 const settings = loadSettings();
 setMxPhysics(settings.mxPhysics !== 'ancienne');
@@ -422,7 +424,22 @@ function buildKeys(waiting?: KeyAction): void {
     });
 }
 
+/** Fold / unfold the keyboard configuration (a waiting key capture is dropped when it folds). */
+function setKeysOpen(open: boolean): void {
+  const panel = $('keys-panel');
+  panel.classList.toggle('open', open);
+  $('keys-fold').classList.toggle('open', open);
+  $('keys-toggle').setAttribute('aria-expanded', String(open));
+  if (!open) {
+    controls.capture = null;
+    buildKeys();
+  } else {
+    window.setTimeout(() => $('keys-fold').scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 340);
+  }
+}
+
 function openSettings(from: ScreenName): void {
+  setKeysOpen(false);
   buildKeys();
   settingsReturn = from;
   const m = $('set-music') as HTMLInputElement;
@@ -442,6 +459,7 @@ function openSettings(from: ScreenName): void {
 }
 
 function bindSettings(): void {
+  $('keys-toggle').addEventListener('click', () => setKeysOpen(!$('keys-panel').classList.contains('open')));
   $('keys-reset').addEventListener('click', () => {
     Object.assign(settings.keys, DEFAULT_KEYS);
     saveSettings(settings);
@@ -965,7 +983,8 @@ bindSettings();
 refreshTitle();
 applyLayout(settings.layout);
 const loadingEl = $('loading');
-loadAssets()
+// The launch screen waits behind the loading screen (index.html) until the images and the poster are in.
+const assetsReady = loadAssets((done, total) => bootProgress(0.3 + 0.55 * (done / total), 'Chargement des textures'))
   .then((a) => {
     renderer.setAssets(a);
     loadingEl.classList.add('hidden');
@@ -973,7 +992,10 @@ loadAssets()
   .catch((e) => {
     console.error(e);
     loadingEl.textContent = 'Erreur de chargement';
+    bootFail('Connexion trop faible ou coupée');
+    throw e;
   });
+const posterReady = preloadImage('/res/splash.webp').then(() => bootProgress(0.92, 'Dernières retouches'));
 show('title');
 renderer.render(game, 0, true);
 
@@ -1119,7 +1141,11 @@ $('splash-settings').addEventListener('click', () => {
   audio.unlock();
   leaveSplash(() => openSettings('title'));
 });
-startSplash();
+// the poster starts (fade from black) as the loading screen leaves
+Promise.all([assetsReady, posterReady])
+  .then(() => bootDone())
+  .then(() => startSplash())
+  .catch(() => {});
 
 // ---------------------------------------------------------------- loop
 let last = performance.now();

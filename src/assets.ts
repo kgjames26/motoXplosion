@@ -28,20 +28,28 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 let cached: Promise<Assets> | null = null;
 
-export function loadAssets(): Promise<Assets> {
+/** `onProgress(done, total)` is called as each file arrives (the loading screen's bar). */
+export function loadAssets(onProgress?: (done: number, total: number) => void): Promise<Assets> {
   if (cached) return cached;
   cached = (async () => {
     const base = '/res/';
     const bdMeta = await fetch(base + 'backdrops.json').then((r) => r.json() as Promise<Record<string, BackdropMeta>>);
     const names = Object.keys(bdMeta);
+    const total = 6 + names.length;
+    let done = 0;
+    const img = (src: string) =>
+      loadImage(src).then((i) => {
+        onProgress?.(++done, total);
+        return i;
+      });
     const [dirt, grass, rock, rockWarm, stone, sand, ...bds] = await Promise.all([
-      loadImage(base + 'tex-dirt.webp'),
-      loadImage(base + 'tex-grass.webp'),
-      loadImage(base + 'tex-rock.webp'),
-      loadImage(base + 'tex-rock-warm.webp'),
-      loadImage(base + 'tex-stone.webp'),
-      loadImage(base + 'tex-sand.webp'),
-      ...names.map((n) => loadImage(`${base}backdrop-${n}.webp`)),
+      img(base + 'tex-dirt.webp'),
+      img(base + 'tex-grass.webp'),
+      img(base + 'tex-rock.webp'),
+      img(base + 'tex-rock-warm.webp'),
+      img(base + 'tex-stone.webp'),
+      img(base + 'tex-sand.webp'),
+      ...names.map((n) => img(`${base}backdrop-${n}.webp`)),
     ]);
     const backdrops: Assets['backdrops'] = {};
     names.forEach((n, i) => (backdrops[n] = { img: bds[i], meta: bdMeta[n] }));

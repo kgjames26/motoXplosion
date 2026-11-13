@@ -13,8 +13,89 @@
     <link rel="icon" href="/icons/favicon-48.png" type="image/png" sizes="48x48" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
     <title>MotoXplosion</title>
+    <!-- Loading screen: inline on purpose, so it paints before any other file has arrived (slow first launch) -->
+    <style id="boot-css">
+      html,body{margin:0;height:100%;background:#120c0a}
+      #boot{--bu:max(min(1vh,.55vw),2.2px);position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',Arial,sans-serif;background:radial-gradient(120% 95% at 50% 38%,#4a2d1b 0%,#1f140e 52%,#0a0608 100%);opacity:1;transition:opacity .55s ease,visibility 0s linear .55s;-webkit-user-select:none;user-select:none;touch-action:none}
+      @media (orientation:portrait){#boot{--bu:1.05vw}}
+      #boot.out{opacity:0;visibility:hidden;pointer-events:none}
+      #boot::before{content:'';position:absolute;inset:0 -20%;background:repeating-linear-gradient(100deg,transparent 0 8vw,rgba(255,150,60,.06) 8vw 8.5vw);animation:boot-lines 2.6s linear infinite}
+      #boot::after{content:'';position:absolute;left:0;right:0;bottom:0;height:46%;background:radial-gradient(70% 100% at 50% 100%,rgba(255,122,26,.22),transparent 70%);pointer-events:none}
+      .boot-core{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:calc(var(--bu)*2.2);width:min(92vw,calc(var(--bu)*120));text-align:center}
+      .boot-logo{font-family:'Arial Black','Segoe UI',system-ui,sans-serif;font-weight:900;font-style:italic;font-size:min(9.4vw,calc(var(--bu)*13));line-height:1;letter-spacing:-.03em;white-space:nowrap;transform:rotate(-3deg);-webkit-text-stroke:calc(var(--bu)*.6) #0d1018;paint-order:stroke fill;filter:drop-shadow(0 calc(var(--bu)*.8) 0 rgba(0,0,0,.55)) drop-shadow(0 0 calc(var(--bu)*3) rgba(255,150,60,.38));animation:boot-pop .55s cubic-bezier(.2,1.2,.3,1) both}
+      .boot-logo .b1,.boot-logo .b2{background:linear-gradient(180deg,#fff 0%,#f2f2f2 55%,#c8ccd4 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+      .boot-logo .bx{display:inline-block;font-size:1.32em;margin:0 -.04em;transform:translateY(.06em) rotate(-6deg);background:linear-gradient(180deg,#ffd27a 0%,#ff8a1e 45%,#e34a0a 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(calc(var(--bu)*-.6) 0 0 #3fe0ff) drop-shadow(0 0 calc(var(--bu)*1.5) rgba(63,224,255,.6))}
+      .boot-tag{padding:calc(var(--bu)*.5) calc(var(--bu)*2);background:linear-gradient(90deg,#ff6a12,#ffb347 50%,#3fe0ff);color:#0d1018;font-weight:900;font-style:italic;font-size:calc(var(--bu)*2.4);letter-spacing:.04em;transform:skewX(-12deg);animation:boot-pop .55s .12s cubic-bezier(.2,1.2,.3,1) both}
+      .boot-scene{position:relative;width:min(74vw,calc(var(--bu)*74));height:calc(var(--bu)*19);margin-top:calc(var(--bu)*.6);overflow:hidden}
+      .boot-ground{position:absolute;left:0;right:0;bottom:calc(var(--bu)*2.2);height:calc(var(--bu)*.9);border-radius:99px;background:linear-gradient(#7a4c29,#3d2514)}
+      .boot-dash{position:absolute;left:0;bottom:calc(var(--bu)*.7);width:calc(100% + var(--bu)*8);height:calc(var(--bu)*.5);background:repeating-linear-gradient(90deg,#8a5a34 0 calc(var(--bu)*3),transparent calc(var(--bu)*3) calc(var(--bu)*8));animation:boot-dash .6s linear infinite}
+      .boot-bike{position:absolute;left:50%;bottom:calc(var(--bu)*2.6);width:calc(var(--bu)*24);margin-left:calc(var(--bu)*-12);transform-origin:20% 90%;animation:boot-ride .9s ease-in-out infinite}
+      .boot-bike svg{display:block;width:100%;height:auto;overflow:visible}
+      .boot-wheel{transform-box:fill-box;transform-origin:center;animation:boot-spin .45s linear infinite}
+      .boot-puff{position:absolute;bottom:calc(var(--bu)*3.4);left:calc(50% - var(--bu)*12);width:calc(var(--bu)*2.6);height:calc(var(--bu)*2.6);border-radius:50%;background:rgba(214,170,120,.5);opacity:0;animation:boot-puff 1s ease-out infinite}
+      .boot-puff:nth-of-type(2){animation-delay:.33s}.boot-puff:nth-of-type(3){animation-delay:.66s}
+      .boot-bar{position:relative;width:min(74vw,calc(var(--bu)*80));height:calc(var(--bu)*2.4);border-radius:99px;background:rgba(0,0,0,.5);border:calc(var(--bu)*.4) solid rgba(255,255,255,.22);box-shadow:inset 0 2px 6px rgba(0,0,0,.6),0 0 calc(var(--bu)*3) rgba(255,122,26,.2);overflow:hidden}
+      .boot-fill{position:absolute;inset:0 auto 0 0;width:calc(var(--p,.08)*100%);min-width:calc(var(--bu)*2.4);border-radius:99px;background:linear-gradient(180deg,#ffe07a,#ffb02e 50%,#e8730c);box-shadow:0 0 calc(var(--bu)*2.5) rgba(255,160,50,.7);transition:width .5s cubic-bezier(.2,.8,.2,1);overflow:hidden}
+      .boot-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.6) 50%,transparent 70%);transform:translateX(-100%);animation:boot-sheen 1.3s ease-in-out infinite}
+      .boot-msg{font-weight:800;font-size:calc(var(--bu)*3);letter-spacing:.05em;opacity:.92;min-height:calc(var(--bu)*3.6)}
+      .boot-dots i{display:inline-block;font-style:normal;animation:boot-blink 1.2s infinite both}
+      .boot-dots i:nth-child(2){animation-delay:.2s}.boot-dots i:nth-child(3){animation-delay:.4s}
+      .boot-slow{font-size:calc(var(--bu)*2.4);font-weight:650;line-height:1.35;max-width:calc(var(--bu)*72);min-height:calc(var(--bu)*6.6);opacity:0;transition:opacity .7s ease}
+      #boot.slow .boot-slow{opacity:.8}
+      .boot-retry{display:none;font:900 italic calc(var(--bu)*3.2) 'Segoe UI',system-ui,sans-serif;color:#1a1208;background:linear-gradient(180deg,#ffe07a,#ffb02e 50%,#e8730c);border:calc(var(--bu)*.5) solid #1c1a2b;border-radius:calc(var(--bu)*3.4);padding:calc(var(--bu)*1.2) calc(var(--bu)*5);cursor:pointer;box-shadow:0 calc(var(--bu)*.7) 0 rgba(0,0,0,.45)}
+      #boot.stuck .boot-retry,#boot.fail .boot-retry{display:inline-block}
+      #boot.fail .boot-fill{background:linear-gradient(180deg,#ff9a8a,#e5432c)}
+      #boot.fail .boot-dots{display:none}
+      @keyframes boot-lines{to{transform:translateX(-8.5vw)}}
+      @keyframes boot-pop{from{opacity:0;transform:rotate(-3deg) scale(.86)}}
+      @keyframes boot-dash{to{transform:translateX(calc(var(--bu)*-8))}}
+      @keyframes boot-spin{to{transform:rotate(360deg)}}
+      @keyframes boot-ride{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(calc(var(--bu)*-.9)) rotate(-2.2deg)}}
+      @keyframes boot-puff{0%{opacity:.55;transform:translateX(0) scale(.5)}100%{opacity:0;transform:translateX(calc(var(--bu)*-12)) translateY(calc(var(--bu)*-2)) scale(2.2)}}
+      @keyframes boot-sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
+      @keyframes boot-blink{0%,80%,100%{opacity:.15}40%{opacity:1}}
+      @media (prefers-reduced-motion:reduce){#boot::before,.boot-dash,.boot-bike,.boot-puff,.boot-fill::after,.boot-logo,.boot-tag{animation:none}}
+    </style>
   </head>
   <body>
+    <!-- Loading screen (hidden by src/ui/boot.ts once the game is ready) -->
+    <div id="boot" role="status" aria-live="polite" style="--p:.08">
+      <div class="boot-core">
+        <div class="boot-logo" aria-label="motoXplosion"><span class="b1">moto</span><span class="bx">X</span><span class="b2">plosion</span></div>
+        <div class="boot-tag">CRUISING MOTOCROSS ADVENTURE</div>
+        <div class="boot-scene" aria-hidden="true">
+          <div class="boot-ground"></div>
+          <div class="boot-dash"></div>
+          <i class="boot-puff"></i><i class="boot-puff"></i><i class="boot-puff"></i>
+          <div class="boot-bike">
+            <svg viewBox="0 0 120 72" xmlns="http://www.w3.org/2000/svg">
+              <g class="boot-wheel" style="transform-origin:26px 54px"><circle cx="26" cy="54" r="14" fill="#14141a" stroke="#0a0a0d" stroke-width="2"/><circle cx="26" cy="54" r="16.5" fill="none" stroke="#3a3a44" stroke-width="3" stroke-dasharray="4 3.2"/><circle cx="26" cy="54" r="8.5" fill="none" stroke="#c9c3b6" stroke-width="1.4"/><path d="M26 46v16M18 54h16" stroke="#c9c3b6" stroke-width="1.2"/><circle cx="26" cy="54" r="2.6" fill="#ff8a1e"/></g>
+              <g class="boot-wheel" style="transform-origin:96px 54px"><circle cx="96" cy="54" r="14" fill="#14141a" stroke="#0a0a0d" stroke-width="2"/><circle cx="96" cy="54" r="16.5" fill="none" stroke="#3a3a44" stroke-width="3" stroke-dasharray="4 3.2"/><circle cx="96" cy="54" r="8.5" fill="none" stroke="#c9c3b6" stroke-width="1.4"/><path d="M96 46v16M88 54h16" stroke="#c9c3b6" stroke-width="1.2"/><circle cx="96" cy="54" r="2.6" fill="#ff8a1e"/></g>
+              <path d="M26 54L50 40H72L96 54" fill="none" stroke="#1c1a2b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M96 54L88 28" stroke="#c9c3b6" stroke-width="3.4" stroke-linecap="round"/>
+              <path d="M44 38c4-9 16-12 30-8l6 9-10 5H50z" fill="#ff7a1a" stroke="#1c1a2b" stroke-width="2.4" stroke-linejoin="round"/>
+              <path d="M32 36l14-3 6 5H36z" fill="#2e2b33" stroke="#1c1a2b" stroke-width="2.2" stroke-linejoin="round"/>
+              <path d="M82 26h10M86 22l4 8" stroke="#1c1a2b" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M52 36L58 18l12 3-2 12z" fill="#f4f4f6" stroke="#1c1a2b" stroke-width="2.2" stroke-linejoin="round"/>
+              <path d="M66 22l18 4" stroke="#3fe0ff" stroke-width="4" stroke-linecap="round"/>
+              <path d="M52 40l-4 12h6" fill="none" stroke="#1c1a2b" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="63" cy="11" r="8.4" fill="#ff8a1e" stroke="#1c1a2b" stroke-width="2.4"/>
+              <path d="M64 7.6h9.6a1 1 0 0 1 1 1.2L73 14H64z" fill="#3fe0ff" stroke="#1c1a2b" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="boot-bar"><i class="boot-fill"></i></div>
+        <div class="boot-msg"><span class="boot-msg-t">Chargement</span><span class="boot-dots"><i>.</i><i>.</i><i>.</i></span></div>
+        <div class="boot-slow">La connexion est lente : le jeu se télécharge, un instant encore. La prochaine fois, il s’ouvrira bien plus vite.</div>
+        <button type="button" class="boot-retry" id="boot-retry" onclick="location.reload()">RÉESSAYER</button>
+      </div>
+    </div>
+    <script>
+      // timers start with the page, before any module has arrived
+      (function(){var b=document.getElementById('boot');if(!b)return;
+        setTimeout(function(){b.classList.add('slow')},5000);
+        setTimeout(function(){b.classList.add('stuck')},25000);})();
+    </script>
     <div id="app">
       <canvas id="game" aria-label="MotoXplosion"></canvas>
 
@@ -382,19 +463,26 @@
             </div>
             <button class="btn-secondary timer-reset hidden" id="timer-reset"><i id="timer-reset-fill"></i><b id="timer-reset-label">Garder appuyé pour remettre à zéro</b></button>
           </div>
-          <div class="set-row keys-row">
-            <span>Touches clavier</span>
-            <div class="keys-grid" id="set-keys"></div>
-            <button class="btn-secondary" id="keys-reset">Touches par défaut</button>
+          <div class="set-fold" id="keys-fold">
+            <button type="button" class="set-fold-btn" id="keys-toggle" aria-expanded="false" aria-controls="keys-panel">
+              <span>Configuration clavier</span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            <div class="keys-panel" id="keys-panel">
+              <div class="keys-inner">
+                <div class="keys-grid" id="set-keys"></div>
+                <button class="btn-secondary keys-reset" id="keys-reset">Touches par défaut</button>
+              </div>
+            </div>
           </div>
           <div class="set-row layout-row">
             <span>Physique circuit 3D</span>
             <div class="layouts quality" id="set-mxphys">
-              <button data-phys="nouvelle" class="layout-opt">Nouvelle glisse</button>
+              <button data-phys="nouvelle" class="layout-opt">Nouvelle glisse <em class="beta">beta</em></button>
               <button data-phys="ancienne" class="layout-opt">Ancienne</button>
             </div>
           </div>
-          <p class="set-hint">Nouvelle : pneus, appui et contre-braquage. L'ancienne ne change pas.</p>
+          <p class="set-hint">Nouvelle (beta) : pneus, appui et contre-braquage, encore en réglage. L'ancienne ne change pas.</p>
           <label class="set-row check">
             <span>Vibrations</span>
             <input type="checkbox" id="set-vibration" />
