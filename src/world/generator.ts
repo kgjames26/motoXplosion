@@ -7,6 +7,7 @@ import { ENDURO_CP, ModeId, raceLength } from '../modes';
 import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
 import { rockKindFor } from '../catalog/rocks';
 import { HILL_SCALE } from '../weather';
+import { J, jumpLength, jumpProfile, type JumpSpec } from '../mx/jumps';
 import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxBase, mxPathHeight } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
@@ -50,6 +51,7 @@ type FeatureName =
   | 'bigHill'
   | 'cruiseHill'
   | 'miniHills'
+  | 'cruiseJump'
   | 'speedJump'
   | 'techHill'
   // desert
@@ -357,7 +359,7 @@ export class Generator {
       // sections, big jumps), plus the speed-window jumps of v2.21
       // v2.36: a ride, not a trap: round hills and long easy descents, jumps with a landing to aim for
       // (no sudden drops, no gaps, no steep technical pitches)
-      feats = { miniHills: 7, cruiseHill: 2, bigHill: 1.5, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
+      feats = { miniHills: 7, cruiseJump: 8, cruiseHill: 2, bigHill: 1.5, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -1355,6 +1357,8 @@ export class Generator {
         return this.cruiseHill(d);
       case 'miniHills':
         return this.miniHills(d);
+      case 'cruiseJump':
+        return this.cruiseJump(d);
       case 'enduroObs': {
         // one to three enduro obstacles (roots, fallen trees, stones, mossy logs) in a row
         const list = assetsFor(['enduro'], 'obstacle');
@@ -1595,6 +1599,46 @@ export class Generator {
     };
     const seg: Segment = { len: L, shape, props: 1.1 };
     seg.coins = r.chance(0.35) ? 'line' : undefined;
+    return [seg];
+  }
+
+  /**
+   * v2.49, cruising: real jumps, big ones. One to three mounds of 5 to 15 m above the track (tables,
+   * singles, a few doubles: the shapes of mx/jumps.ts, stretched to a random length), on flat ground
+   * or riding on a long gentle hill. Gentle ramps and soft landing faces: a jump, not a wall.
+   */
+  private cruiseJump(_d: number): Segment[] {
+    const r = this.rng;
+    const n = r.weighted([1, 2, 3], [4, 3, 1.5]);
+    const specs: JumpSpec[] = [];
+    for (let i = 0; i < n; i++) {
+      const h = r.range(5, 15);
+      const kind = r.weighted(['table', 'single', 'double'] as const, [2, 5, h < 9 ? 2.5 : 0]);
+      const opt = { lip: r.range(0.3, 0.42), land: r.range(0.27, 0.36) };
+      const mk = J[kind];
+      const nat = jumpLength(mk(h, 0, opt));
+      specs.push(mk(h, nat * r.range(0.9, 1.6), opt));
+    }
+    const starts: number[] = [];
+    let t = r.range(30, 60);
+    for (const sp of specs) {
+      starts.push(t);
+      t += jumpLength(sp) + r.range(30, 80);
+    }
+    const L = t + r.range(10, 30);
+    // optional long gentle hill under all of it (sin²: flat at both ends)
+    const maxSlope = r.range(0.04, 0.16);
+    const Hb = r.chance(0.55) ? Math.min((maxSlope * L) / Math.PI, r.range(6, 30)) : 0;
+    const shape = (x: number): number => {
+      let y = Hb * Math.sin((Math.PI * Math.min(L, Math.max(0, x))) / L) ** 2;
+      for (let i = 0; i < specs.length; i++) {
+        const u = x - starts[i];
+        if (u > 0 && u < jumpLength(specs[i])) y += jumpProfile(specs[i], u);
+      }
+      return y;
+    };
+    const seg: Segment = { len: L, shape, props: 0.6, surface: () => Surface.Dirt, noPickup: [[0, L]] };
+    seg.coins = r.chance(0.4) ? 'line' : undefined;
     return [seg];
   }
 
