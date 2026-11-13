@@ -9,7 +9,7 @@ import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones 
 import { rockKindFor } from '../catalog/rocks';
 import { HILL_SCALE } from '../weather';
 import { J, jumpLength, jumpProfile, type JumpSpec } from '../mx/jumps';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxBase, mxPathHeight } from '../mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, mxBase, mxCircuit, mxPathHeight, mxZoneLenOf, setMxCircuit } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
 /**
@@ -224,7 +224,7 @@ export class Generator {
   private paletteEnd = -1;
   /** Circuit grade 0..1 (circuits only). */
   private grade = 0;
-  /** Track drawing multiplier: cruising +5 %, race circuits +35 % on top of that. */
+  /** Track drawing multiplier: cruising and enduro alike, race circuits +35 % on top of that. */
   private hard = 1;
   private trialZones = Infinity;
   private trialDone = false;
@@ -247,7 +247,7 @@ export class Generator {
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
     this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
-    this.hard = (mode === 'cruising' ? 1.05 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
+    this.hard = (mode === 'cruising' ? 1.35 * 1.2 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     if (region.id === 'cross' && mode !== 'cruising') {
@@ -321,8 +321,10 @@ export class Generator {
       }
       if (reg.id === 'cross' && !this.world.mxAt(x - 1)) {
         // v2.26: the track is ridden in 3D: entry lane, a lap and the main straight, exit lane
-        this.queue.push(this.mxSegment(true, MX_ZONE_LEN));
-        this.biomeEnd = Math.max(this.biomeEnd, x + MX_ZONE_LEN);
+        const circ = this.world.crossCircuitAt(x);
+        const zl = mxZoneLenOf(circ);
+        this.queue.push(this.mxSegment(true, zl, circ));
+        this.biomeEnd = Math.max(this.biomeEnd, x + zl);
         return;
       }
       if (reg.id === 'cross') {
@@ -356,11 +358,11 @@ export class Generator {
       // race track: jumps, berms and rhythm sections whatever the scenery (dunes in the desert)
       feats = { tabletop: 4, double: 4, berm: 3, whoops: 2, rollers: 2, stepUp: 1, ...(this.biome === Biome.Desert ? { dunes: 2 } : {}) };
     } else if (this.mode === 'cruising') {
-      // v2.25: built like the first enduro circuits (hills with a steep pitch, technical
-      // sections, big jumps), plus the speed-window jumps of v2.21
-      // v2.36: a ride, not a trap: round hills and long easy descents, jumps with a landing to aim for
-      // (no sudden drops, no gaps, no steep technical pitches)
-      feats = { miniHills: 7, cruiseJump: 8, cruiseHill: 2, bigHill: 1.5, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
+      // v2.55: cruising is built like enduro (big hills with a steep pitch, technical hills, climbs and
+      // descents, fords, jumps), starting at the level of the first circuits and growing with distance;
+      // it keeps its own speed-window jumps and its jump coins
+      this.grade = Math.min(0.35, d0 * 0.4);
+      feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6, cruiseJump: 1.5, speedJump: 1.2 + d0 * 1.2 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -970,15 +972,19 @@ export class Generator {
   }
 
   /** v2.26: the motocross track as one segment of the 2D world (height along its path). */
-  private mxSegment(cruise: boolean, len: number): Segment {
+  private mxSegment(cruise: boolean, len: number, circuit = mxCircuit): Segment {
     return {
       len,
-      shape: (t) => (t >= len ? 0 : mxPathHeight(t, cruise)),
+      shape: (t) => {
+        if (mxCircuit !== circuit) setMxCircuit(circuit); // cruising: each visit rides its own circuit
+        return t >= len ? 0 : mxPathHeight(t, cruise);
+      },
       surface: () => Surface.Dirt,
       noPickup: [[0, len]],
       props: 0,
       onStart: (x0, h0) => {
-        this.world.mxZones.push({ x0, x1: x0 + len, h0, cruise });
+        if (mxCircuit !== circuit) setMxCircuit(circuit);
+        this.world.mxZones.push({ x0, x1: x0 + len, h0, cruise, circuit });
         // coins in the air, on the ideal line of every jump
         const laps = cruise ? 2 : 6;
         for (let lap = 0; lap < laps; lap++)
@@ -1467,15 +1473,15 @@ export class Generator {
    */
   private bigHill(d: number): Segment[] {
     const r = this.rng;
-    const g = this.circuit ? this.grade : Math.min(0.12, d * 0.25); // cruising: like the first enduro circuits
+    const g = this.circuit || this.mode === 'cruising' ? this.grade : Math.min(0.12, d * 0.25); // cruising: enduro style, its grade grows with distance
     // v2.18: higher and steeper from the first circuits
     // v2.21: +20 % (height, steepness, bumps)
     const H = (r.range(9, 13) + g * 12) * HILL_SCALE[this.diff] * 1.2;
-    const soft = this.mode === 'cruising' ? 0.6 : 1; // cruising: rounded hills, easy descents
+    const soft = 1;
     const su = (r.range(0.24, 0.3) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12 * soft;
     const sd = (r.range(0.26, 0.32) + g * 0.1) * (this.diff ? 0.93 : 1) * 1.12 * soft;
     const bump = (0.2 + g * 0.25) * 1.2;
-    const variant = this.mode === 'cruising' ? r.weighted(['classic', 'longGentle', 'valley', 'ridge'], [3, 3, 1.5, 1.5]) : r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
+    const variant = r.weighted(['classic', 'camel', 'terraces', 'steepShort', 'longGentle', 'valley', 'ridge'], [3, 2, 2, 1.5, 1.5, 1.5, 1.5]);
     let pieces: [number, number][];
     switch (variant) {
       case 'camel':
@@ -1506,7 +1512,7 @@ export class Generator {
         pieces = [[H / su, su], [r.range(4, 9), 0], [H / sd, -sd]];
     }
     // a short steeper pitch inside the first climb, from the first circuits on
-    if (this.mode !== 'cruising') {
+    {
       const i = pieces.findIndex((p) => p[1] > 0.05);
       if (i >= 0) {
         const [L0, s0] = pieces[i];

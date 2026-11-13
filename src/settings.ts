@@ -39,12 +39,12 @@ export interface Settings {
   /** v2.25 parental timer: minutes allowed (0 = off) and seconds already used. */
   timerMin: number;
   timerUsed: number;
-  /** Circuit 3D: Nouvelle glisse (tyres, roll) or Ancienne (v2.50, unchanged). */
-  mxPhysics: 'nouvelle' | 'ancienne';
+  /** Circuit 3D handling: "nouveau" gameplay (tyres, roll; the default) or "ancien" (v2.50, unchanged). Replaces the old `mxPhysics` key, so everyone starts on the new one. */
+  gameplay: 'nouveau' | 'ancien';
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 , mxPhysics: 'ancienne' };
+const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 , gameplay: 'nouveau' };
 
 export function loadSettings(): Settings {
   try {

@@ -4,7 +4,7 @@
  * - Hashed build assets (/assets/*) and icons: cache first (immutable).
  * Bump CACHE whenever files in public/assets change (their names are not hashed).
  */
-const CACHE = 'motoxplosion-v54';
+const CACHE = 'motoxplosion-v55';
 const SHELL = [
   '/',
   '/index.html',
@@ -16,6 +16,7 @@ const SHELL = [
   '/res/backdrops.json',
   '/res/backdrop-alps-forest.webp',
   '/res/splash.webp',
+  '/res/loading.webp',
   '/res/tex-dirt.webp',
   '/res/tex-grass.webp',
   '/res/tex-rock.webp',

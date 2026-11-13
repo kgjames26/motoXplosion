@@ -499,6 +499,20 @@ export function setMxCircuit(i: number): void {
 }
 setMxCircuit(0);
 
+/** Length of the cruising visit (entry lane, a lap, exit lane) of each circuit, measured once. */
+const zoneLens: number[] = [];
+export function mxZoneLenOf(i: number): number {
+  if (zoneLens.length === 0) {
+    const keep = mxCircuit;
+    for (let k = 0; k < MX_CIRCUITS.length; k++) {
+      setMxCircuit(k);
+      zoneLens.push(MX_ZONE_LEN);
+    }
+    setMxCircuit(keep);
+  }
+  return zoneLens[i];
+}
+
 export interface MxPose {
   x: number;
   z: number;

@@ -14,13 +14,13 @@ import { Particles, smokeRate } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose, setMxCircuit, type MxPose } from './mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxCircuit, mxPose, setMxCircuit, type MxPose } from './mx/track';
 
 /**
  * v2.53 — handling of the 3D circuit. "Ancienne" keeps the v2.50 model in Game.mxLateralLegacy.
- * "Nouvelle glisse" is the tyre and roll model in physics/glisse.ts. Nothing else reads it.
+ * "Nouveau gameplay" is the tyre and roll model in physics/glisse.ts. Nothing else reads it.
  */
-export let USE_NEW_MX_PHYSICS = false; // the old handling stays the default
+export let USE_NEW_MX_PHYSICS = true; // "nouveau gameplay" is the default
 export function setMxPhysics(on: boolean): void {
   USE_NEW_MX_PHYSICS = on;
 }
@@ -886,6 +886,11 @@ export class Game {
       this.mxPhiDot = 0;
       return;
     }
+    if (z.circuit !== this.mxCircuit || z.circuit !== mxCircuit) {
+      // cruising: this visit rides its own 3D circuit
+      this.mxCircuit = z.circuit;
+      setMxCircuit(z.circuit);
+    }
     const u = b.x - z.x0;
     const len = z.x1 - z.x0;
     // view: swing to 3D just after the mouth of the entry lane, back before the end of the exit lane
@@ -960,7 +965,7 @@ export class Game {
   }
 
   /**
-   * v2.50 handling of the 3D circuit, kept as it was (settings: "Physique circuit 3D: ancienne").
+   * v2.50 handling of the 3D circuit, kept as it was (settings: "Gameplay circuit 3D: ancien").
    * Kinematic: the bike goes where the lean points it, the slides only bend the path a little.
    * Also used whenever the bike is driven for the player (countdown, crash, cruising lanes).
    */

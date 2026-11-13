@@ -6,8 +6,7 @@ const el = document.getElementById('boot');
 let shown = 0.08;
 
 function say(text: string): void {
-  const t = el?.querySelector('.boot-msg-t');
-  if (t) t.textContent = text;
+  el?.querySelectorAll('.boot-msg-t').forEach((t) => (t.textContent = text));
 }
 
 /** Progress 0..1 (never goes back) and, optionally, the line shown under the bar. */

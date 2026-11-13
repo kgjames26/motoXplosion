@@ -43,7 +43,7 @@ const $ = (id: string) => document.getElementById(id)!;
 bootProgress(0.3, 'Préparation du jeu');
 
 const settings = loadSettings();
-setMxPhysics(settings.mxPhysics !== 'ancienne');
+setMxPhysics(settings.gameplay !== 'ancien');
 settings.layout = 'gauche'; // v2.31: no left-handed layout any more
 const profile = loadProfile();
 // the home screen opens on a circuit mode (cruising has its own big button)
@@ -449,8 +449,8 @@ function openSettings(from: ScreenName): void {
   $('set-music-v').textContent = m.value;
   $('set-sfx-v').textContent = s.value;
   ($('set-vibration') as HTMLInputElement).checked = settings.vibration;
-  for (const b of $('set-mxphys').querySelectorAll('.layout-opt')) b.classList.toggle('selected', (b as HTMLElement).dataset.phys === settings.mxPhysics);
-  setMxPhysics(settings.mxPhysics !== 'ancienne');
+  for (const b of $('set-mxphys').querySelectorAll('.layout-opt')) b.classList.toggle('selected', (b as HTMLElement).dataset.phys === settings.gameplay);
+  setMxPhysics(settings.gameplay !== 'ancien');
   ($('set-pseudo') as HTMLInputElement).value = settings.pseudo;
   applyLayout(settings.layout);
   applyQuality(settings.quality);
@@ -493,9 +493,9 @@ function bindSettings(): void {
   });
   for (const b of $('set-mxphys').querySelectorAll('.layout-opt')) {
     b.addEventListener('click', () => {
-      settings.mxPhysics = (b as HTMLElement).dataset.phys === 'ancienne' ? 'ancienne' : 'nouvelle';
+      settings.gameplay = (b as HTMLElement).dataset.phys === 'ancien' ? 'ancien' : 'nouveau';
       saveSettings(settings);
-      setMxPhysics(settings.mxPhysics !== 'ancienne');
+      setMxPhysics(settings.gameplay !== 'ancien');
       for (const o of $('set-mxphys').querySelectorAll('.layout-opt')) o.classList.toggle('selected', o === b);
     });
   }

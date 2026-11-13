@@ -825,24 +825,78 @@ export class MxScene {
   }
 
   private buildMarkers(): void {
-    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.8, 0.07), new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.ceil(MX_LEN / 8) * 2);
-    const m = new THREE.Matrix4();
-    const col = new THREE.Color();
-    let i = 0;
-    for (let s = 0; s < MX_LEN; s += 8) {
-      const p = loopAt(s);
-      const h = 0;
-      for (const side of [-1, 1]) {
-        const n = side * (MX_HALF_WIDTH + 0.5);
-        m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + loopHeightN(s, n) + 0.4, p.z + Math.cos(p.th) * n);
-        posts.setMatrixAt(i, m);
-        posts.setColorAt(i, col.set(0xf2d21b)); // yellow stakes, like the MXGP tracks
-        i++;
+    // v2.55: yellow stakes 30 % bigger and a white string tied along the edge of the playable zone.
+    // Race view and cruising view each get their own set (their jumps are not the same).
+    const STAKE = 1.3;
+    const stakeGeo = new THREE.BoxGeometry(0.07 * STAKE, 0.8 * STAKE, 0.07 * STAKE);
+    const stakeMat = new THREE.MeshLambertMaterial({ color: 0xf2d21b });
+    const stringGeo = new THREE.BoxGeometry(1, 1, 1);
+    const stringMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const STRING_H = 0.8 * STAKE * 0.88; // a little under the top of the stakes
+    const STRING_W = 0.08;
+    // where the cruising lanes meet the loop, the string leaves the way open
+    const laneGap: [number, number][] = [];
+    for (const [from, to] of [[-40, MX_ENTRY + 2], [MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0] - 2, MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0] + MX_EXIT + 40]] as [number, number][])
+      for (let u = from; u <= to; u += 2) {
+        const lp = mxPose(u, true);
+        laneGap.push([lp.x, lp.z]);
       }
+    const GAP = MX_HALF_WIDTH + 1.5;
+    const inGap = (x: number, z: number): boolean => {
+      for (const [lx, lz] of laneGap) if ((lx - x) ** 2 + (lz - z) ** 2 < GAP * GAP) return true;
+      return false;
+    };
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const X = new THREE.Vector3(1, 0, 0);
+    for (const cruise of [false, true]) {
+      const edge = (s: number, side: number): THREE.Vector3 => {
+        const p = loopAt(s);
+        const n = side * (MX_HALF_WIDTH + 0.5);
+        return new THREE.Vector3(p.x - Math.sin(p.th) * n, bankAt(p.k, side * MX_HALF_WIDTH) + loopHeightN(s, n, cruise), p.z + Math.cos(p.th) * n);
+      };
+      const group = new THREE.Group();
+      const posts = new THREE.InstancedMesh(stakeGeo, stakeMat, Math.ceil(MX_LEN / 8) * 2);
+      let i = 0;
+      for (let s = 0; s < MX_LEN; s += 8) {
+        for (const side of [-1, 1]) {
+          const e = edge(s, side);
+          if (cruise && inGap(e.x, e.z)) continue;
+          m.makeTranslation(e.x, e.y + 0.4 * STAKE, e.z);
+          posts.setMatrixAt(i++, m);
+        }
+      }
+      posts.count = i;
+      posts.castShadow = true;
+      group.add(posts);
+      const STEP = 1.5;
+      const segs: [THREE.Vector3, THREE.Vector3][] = [];
+      for (const side of [-1, 1]) {
+        let prev: THREE.Vector3 | null = null;
+        for (let s = 0; s <= MX_LEN + 1e-6; s += STEP) {
+          const e = edge(s, side);
+          e.y += STRING_H;
+          const open = cruise && inGap(e.x, e.z);
+          if (prev && !open) segs.push([prev, e]);
+          prev = open ? null : e;
+        }
+      }
+      const strings = new THREE.InstancedMesh(stringGeo, stringMat, segs.length);
+      segs.forEach(([a, b], k) => {
+        dir.subVectors(b, a);
+        const len = dir.length();
+        q.setFromUnitVectors(X, dir.multiplyScalar(1 / len));
+        sc.set(len + 0.04, STRING_W, STRING_W);
+        m.compose(a.clone().add(b).multiplyScalar(0.5), q, sc);
+        strings.setMatrixAt(k, m);
+      });
+      group.add(strings);
+      group.visible = cruise === this.cruiseView;
+      (cruise ? this.cruiseMeshes : this.crossMeshes).push(group);
+      this.scene.add(group);
     }
-    posts.count = i;
-    posts.castShadow = true;
-    this.scene.add(posts);
     // start / finish arch across the main straight
     const p = loopAt(MX_STRAIGHT[0] + 5);
     const arch = new THREE.Group();

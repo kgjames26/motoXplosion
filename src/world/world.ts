@@ -1,7 +1,7 @@
 import { clamp } from '../core/math';
 import { Generator } from './generator';
 import { REGIONS, RegionDef, RegionId } from './regions';
-import { MX_ZONE_LEN, mxLateralDelta } from '../mx/track';
+import { MX_CIRCUITS, mxLateralDelta, mxZoneLenOf } from '../mx/track';
 import type { ModeId } from '../modes';
 import { tyreBonus, Weather, weatherGrip } from '../weather';
 import {
@@ -73,8 +73,8 @@ export class World {
    * Stretches of the world that are the 3D motocross track: x range, base height, and whether
    * it is the cruising visit (entry lane, lap, exit lane) or the circuit itself (laps).
    */
-  mxZones: { x0: number; x1: number; h0: number; cruise: boolean }[] = [];
-  mxAt(x: number): { x0: number; x1: number; h0: number; cruise: boolean } | null {
+  mxZones: { x0: number; x1: number; h0: number; cruise: boolean; circuit: number }[] = [];
+  mxAt(x: number): { x0: number; x1: number; h0: number; cruise: boolean; circuit: number } | null {
     for (const z of this.mxZones) if (x >= z.x0 && x < z.x1) return z;
     return null;
   }
@@ -82,9 +82,9 @@ export class World {
   // ---------------------------------------------------------------- cruising journey (v2.25)
   /**
    * Cruising crosses all the worlds: 1500 m per world (750 m of it alone, then 750 m sliding
-   * into the next one), except the motocross track: 1000 m, entered and left all at once.
+   * into the next one), except the motocross track: one lap of a 3D circuit, entered and left all at once.
    */
-  private stays: { x0: number; x1: number; id: RegionId }[] = [];
+  private stays: { x0: number; x1: number; id: RegionId; circuit: number }[] = [];
   private stayAt(x: number): number {
     const ids: RegionId[] = ['alpes', 'foret', 'canyon', 'desert', 'sf'];
     let i = 0;
@@ -101,11 +101,18 @@ export class World {
           id = pool[(v >>> 8) % pool.length];
         }
         const x0 = prev ? prev.x1 : 0;
-        this.stays.push({ x0, x1: x0 + (id === 'cross' ? MX_ZONE_LEN : 1500), id });
+        // the motocross visit rides one of the finished 3D circuits, drawn at random
+        const circuit = id === 'cross' ? (v >>> 16) % MX_CIRCUITS.length : 0;
+        this.stays.push({ x0, x1: x0 + (id === 'cross' ? mxZoneLenOf(circuit) : 1500), id, circuit });
       }
       if (x < this.stays[i].x1) return i;
       i++;
     }
+  }
+
+  /** Cruising: which 3D circuit the motocross visit at x rides. */
+  crossCircuitAt(x: number): number {
+    return this.stays[this.stayAt(Math.max(0, x))].circuit;
   }
 
   /** The world at x (cruising: the journey; other modes: the level's world). */
