@@ -2559,7 +2559,6 @@ u.mk {
 /* the rider and his bike rumble with the engine */
 .splash-rider {
   clip-path: polygon(10% 30%, 12.5% 17%, 25% 16%, 27% 29%, 33% 42%, 36% 45%, 39.5% 61%, 41% 80%, 39.5% 97%, 27% 98%, 24% 90%, 15% 98%, 5.5% 96%, 5.5% 70%, 10.5% 55%, 9.5% 42%);
-  animation: rumble 0.11s steps(2) infinite alternate;
 }
 @keyframes rumble {
   from {
@@ -4425,3 +4424,14 @@ button.wallet {
 }
 .mx-circuits .mxc.selected { background: #ff7a1a; border-color: #ffd2a8; color: #1a1208; }
 .mx-circuits .mxc .medal-ico { width: 12px; height: 12px; }
+
+/* v2.37 : touches clavier */
+.keys-row { flex-wrap: wrap; }
+.keys-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; width: 100%; font-size: 13px; }
+.key-btn { min-width: 70px; padding: 6px 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,.3); background: rgba(0,0,0,.4); color: #fff; font: 700 13px system-ui, sans-serif; }
+.key-btn.wait { background: #ff7a1a; color: #1a1208; }
+.mx-circuits .mxc .mxc-ico svg { width: 22px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.mx-circuits { justify-content: center; }
+
+.splash-version { z-index: 3; opacity: 0.75; text-shadow: 0 1px 3px rgba(0,0,0,.8); color: #fff; }
+.set-version { font-size: 11px; font-weight: 600; opacity: .6; letter-spacing: .05em; }

@@ -1204,8 +1204,11 @@ export class Game {
     const target = j ? (j.vmin! + j.vmax!) / 2 / 3.6 : 17;
     this.input.throttle = b.grounded ? clamp((target - b.speed) * 0.5 + 0.35, 0, 1) : 0.1;
     this.input.brake = b.grounded && b.speed > target + 2 ? 0.5 : 0;
-    this.input.balance = clamp(err * 2.5 + b.omega * 0.35, -1, 1);
+    // gentle, low-pass rider balance: the home bike glides, it does not jitter
+    const wantBal = clamp(err * 1.6 + b.omega * 0.25, -1, 1);
+    this.input.balance += (wantBal - this.input.balance) * (1 - Math.exp(-4 * dt));
     this.stepPhysics(dt, this.input, false);
+    this.shake = 0;
     w.ensure(b.x + 140);
     w.trim(b.x - 120);
     const ev = b.consumeEvents();

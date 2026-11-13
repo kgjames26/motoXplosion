@@ -140,6 +140,7 @@
           <button class="neon-play splash-play" id="splash-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" /></svg>JOUER</button>
           <button class="neon-round splash-gear" id="splash-settings" aria-label="Options"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)" /></svg></button>
         </div>
+        <div class="version splash-version" id="splash-version"></div>
         <div class="splash-black" id="splash-black"></div>
       </div>
 
@@ -340,7 +341,7 @@
       </div>
 
       <div id="screen-settings" class="screen hidden">
-        <h2>PARAMÈTRES</h2>
+        <h2>PARAMÈTRES <small class="set-version" id="set-version"></small></h2>
         <div class="settings panel">
           <label class="set-row">
             <span>🎵 Musique</span>
@@ -380,6 +381,11 @@
               <button data-min="90" class="layout-opt">1 h 30</button>
             </div>
             <button class="btn-secondary timer-reset hidden" id="timer-reset"><i id="timer-reset-fill"></i><b id="timer-reset-label">Garder appuyé pour remettre à zéro</b></button>
+          </div>
+          <div class="set-row keys-row">
+            <span>Touches clavier</span>
+            <div class="keys-grid" id="set-keys"></div>
+            <button class="btn-secondary" id="keys-reset">Touches par défaut</button>
           </div>
           <label class="set-row check">
             <span>Vibrations</span>

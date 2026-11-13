@@ -1,7 +1,9 @@
 import { clamp } from '../core/math';
+import { DEFAULT_KEYS } from '../settings';
+import type { KeyAction } from '../settings';
 
 /**
- * Touch (multi-pointer) and keyboard controls (Space = gas, Ctrl / AltGr = brake, ← → = balance).
+ * Touch (multi-pointer) and keyboard controls (Z = gas, S = brake, arrows = joystick; all rebindable).
  *  - Throttle grip: drag down inside the grip track; release returns it to idle.
  *  - Balance slider: ARRIÈRE (left, -1) ↔ AVANT (right, +1); springs back to the centre.
  *  - Brake disc: hold to brake.
@@ -20,6 +22,10 @@ export class Controls {
   private balTouch = false;
   private thrTouch = false;
   private keys = new Set<string>();
+  /** Keyboard bindings (lower-cased `key` values), set from the settings. */
+  bindings: Record<KeyAction, string> = { ...DEFAULT_KEYS };
+  /** While set, the next key pressed is handed to it (rebinding screen) and does not drive the bike. */
+  capture: ((key: string) => void) | null = null;
   private kbThrottle = 0;
   onPause: () => void = () => {};
   onCruise: () => void = () => {};
@@ -41,14 +47,22 @@ export class Controls {
     this.bindStick();
     window.addEventListener('keydown', (e) => {
       // typing in a text field (pseudo) never drives the bike
+      if (this.capture) {
+        e.preventDefault();
+        const done = this.capture;
+        this.capture = null;
+        done(e.key.toLowerCase());
+        return;
+      }
       if (e.repeat || (e.target as HTMLElement | null)?.tagName === 'INPUT') return;
-      this.keys.add(e.code);
-      // Space would click the focused button / scroll, AltGr would open browser menus
-      if (e.code === 'Space' || e.code === 'AltRight' || e.code === 'AltLeft') e.preventDefault();
-      if (e.code === 'Escape' || e.code === 'KeyP') this.onPause();
-      if (e.code === 'KeyC') this.onCruise();
+      const k = e.key.toLowerCase();
+      this.keys.add(k);
+      // Space would click the focused button / scroll, arrows scroll the page, AltGr opens browser menus
+      if (k === ' ' || k === 'alt' || k === 'altgraph' || k.startsWith('arrow')) e.preventDefault();
+      if (k === 'escape' || k === 'p') this.onPause();
+      if (k === 'c') this.onCruise();
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => this.reset());
   }
 
@@ -168,21 +182,24 @@ export class Controls {
   /** Per-frame update: keyboard mixing, spring-back and visuals. */
   update(dt: number): void {
     const k = this.keys;
-    // keyboard: Space = throttle, Ctrl or AltGr = brake, arrows = rider balance
+    // keyboard (rebindable): throttle / brake keys, the four joystick keys
+    const bd = this.bindings;
     const st = this.stickMode;
-    const up = k.has('Space') || (!st && k.has('ArrowUp'));
-    const down = k.has('ControlLeft') || k.has('ControlRight') || k.has('AltRight') || (!st && k.has('ArrowDown'));
-    const left = k.has('ArrowLeft') || k.has('KeyA');
-    const right = k.has('ArrowRight') || k.has('KeyD');
+    const up = k.has(bd.throttle);
+    const down = k.has(bd.brake);
+    const left = k.has(bd.left);
+    const right = k.has(bd.right);
+    const fwd = k.has(bd.up);
+    const back = k.has(bd.down);
     // keyboard throttle ramps like a twist grip
     this.kbThrottle = clamp(this.kbThrottle + (up ? 3 : -6) * dt, 0, 1);
     if (!this.thrTouch) this.throttle = this.kbThrottle;
     if (!this.brakeEl.classList.contains('on')) this.brake = down ? 1 : 0;
     if (st) {
-      // 3D track: ← → steer, ↑ ↓ shift the rider's weight
+      // 3D track: joystick left / right steer, up / down shift the rider's weight
       if (!this.stickTouch) {
         const ts = left ? -1 : right ? 1 : 0;
-        const tb = k.has('ArrowUp') ? 1 : k.has('ArrowDown') ? -1 : 0;
+        const tb = fwd ? 1 : back ? -1 : 0;
         this.steer += (ts - this.steer) * (1 - Math.exp(-(ts === 0 ? 10 : 6) * dt));
         this.balance += (tb - this.balance) * (1 - Math.exp(-(tb === 0 ? 9 : 5) * dt));
         if (Math.abs(this.steer) < 0.002) this.steer = 0;

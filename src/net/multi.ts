@@ -31,6 +31,8 @@ export interface StageSettings {
   region: RegionId;
   circuit: number;
   difficulty: Difficulty;
+  /** Ride the motocross circuit of the world (a 2-lap race on the 3D track) instead of the mode's circuit. */
+  cross?: boolean;
 }
 
 /** Compact live state of a rider (sent ~12 times a second). */

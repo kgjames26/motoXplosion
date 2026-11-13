@@ -18,6 +18,8 @@ export interface MultiHost {
   outfit: () => string;
   /** Start a local run for this stage (spec, tyres… from the profile). */
   startStage: (stage: StageSettings, elapsed: number) => void;
+  /** The host owns the motocross circuit of this world (it can be offered to the room). */
+  crossOpen: (region: RegionId) => boolean;
   backToTitle: () => void;
   bank: () => void;
 }
@@ -172,7 +174,8 @@ export class MultiUI {
       <h3>${host ? `Programme la manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`}` : `Manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`} (programmée par l’hôte)`}</h3>
       ${roundsOpen ? `<div class="mp-row"><span>Nombre de manches</span>${[1, 2, 3, 4, 5, 6, 8].map((k) => opt('rounds', k, String(k), (L.final ? 3 : L.rounds) === k)).join('')}</div>` : ''}
       <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
-      <div class="mp-row"><span>Monde</span>${REGION_ORDER.map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
+      <div class="mp-row"><span>Monde</span>${REGION_ORDER.filter((r) => r !== 'cross').map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
+      ${host && this.h.crossOpen(S.region) ? `<div class="mp-row"><span>Cross</span>${opt('cross', 0, 'Non', !S.cross)}${opt('cross', 1, 'Circuit MXGP', !!S.cross)}</div>` : !host && S.cross ? `<div class="mp-row"><span>Cross</span><b class="mp-num">Circuit MXGP</b></div>` : ''}
       <div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>
       <div class="mp-row"><span>Météo</span>${DIFFICULTIES.map((d, i) => opt('difficulty', d.id, `${WEATHER_ICONS[i]}${WEATHER_NAMES[i]}`, S.difficulty === d.id)).join('')}</div>
       ${host ? `<button class="neon-play mp-start"${L.running ? ' disabled' : ''}>${L.final ? 'NOUVEAU CHAMPIONNAT' : `LANCER LA MANCHE ${n} / ${L.rounds}`}</button>` : '<p class="mp-wait-host">L’hôte lance la manche…</p>'}`;
@@ -200,7 +203,8 @@ export class MultiUI {
     if (k === 'rounds') m.setNext({}, Number(v));
     else if (k === 'circuit') m.setNext({ circuit: Number(v) });
     else if (k === 'mode') m.setNext({ mode: v as ModeId });
-    else if (k === 'region') m.setNext({ region: v as RegionId });
+    else if (k === 'region') m.setNext({ region: v as RegionId, cross: m.lobby.next.cross && this.h.crossOpen(v as RegionId) });
+    else if (k === 'cross') m.setNext({ cross: v === '1' });
     else if (k === 'difficulty') m.setNext({ difficulty: v as Difficulty });
   }
 
