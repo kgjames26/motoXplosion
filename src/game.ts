@@ -881,7 +881,7 @@ export class Game {
     const WHEELBASE = 1.48;
     const LOCK = 0.62; // handlebar lock (rad)
     const vEff = Math.max(v, 1.5);
-    const leanMax = Math.atan(clamp(this.mxMu * 1.12, 0.3, 1.03)); // full stick = a little past the grip
+    const leanMax = Math.atan(clamp(this.mxMu * 1.04, 0.3, 1.0)); // full stick = right at the limit of the grip
     const kMax = Math.min(Math.tan(LOCK) / WHEELBASE, (G * Math.tan(leanMax)) / (vEff * vEff));
     let stick = clamp(this.steer, -1, 1);
     if (this.mxAuto || this.crashTimer > 0 || this.finished || this.countdown > 0) {
@@ -893,8 +893,12 @@ export class Game {
     // lean follows the stick (quicker to pick the bike up than to throw it in)
     const target = Math.atan((kCmd * vEff * vEff) / G); // <= leanMax
     const barTarget = Math.atan(WHEELBASE * kCmd);
-    this.mxBar += (barTarget - this.mxBar) * Math.min(1, dt * 12);
-    this.mxLean += (target - this.mxLean) * Math.min(1, dt * (Math.abs(target) < Math.abs(this.mxLean) ? 9 : 6.5));
+    this.mxBar += (barTarget - this.mxBar) * Math.min(1, dt * 8);
+    // ~105 kg of bike and ~75 kg of rider: the roll has inertia. The lean eases towards the target and
+    // its rate is capped (a heavy machine is flicked over, not snapped), a touch quicker when slow.
+    const rollK = Math.abs(target) < Math.abs(this.mxLean) ? 5.5 : 4.2;
+    const rollMax = 1.6 + 1.4 * clamp(1 - v / 14, 0, 1); // rad/s
+    this.mxLean += clamp((target - this.mxLean) * Math.min(1, dt * rollK), -rollMax * dt, rollMax * dt);
     let slide = 0;
     if (b.grounded && v > 0.5) {
       // tyres: a knobby on packed dirt peaks at mu ~ 0.65 (SURFACES.Dirt x the track's gripK,
@@ -936,24 +940,25 @@ export class Game {
       const need = Math.abs(Math.tan(this.mxLean)) * b.mass * G;
       const satF = capF > 1 ? (need * share) / capF : 0;
       // drive or braking force on the rear eats 30% more of its side grip than the plain friction circle says
-      const satR = capR > 1 ? (need * (1 - share)) / (capR * (1 - 0.3 * clamp(rearUse, 0, 1))) : 0;
+      const satR = capR > 1 ? (need * (1 - share)) / (capR * (1 - 0.3 * clamp(rearUse, 0, 1) ** 2)) : 0;
       // motocross: tyres let go early and progressively, so every fast corner is a slide to hold
-      const sF = clamp((satF - 0.62) / 0.45, 0, 1);
+      const sF = clamp((satF - 0.78) / 0.4, 0, 1) * 0.8;
       // power slide: the rear spinning up (drive using the tyre's grip) lets go sideways as soon as the bike is
       // leaned a little: the harder the drive, the more it steps out (friction circle: drive vs side grip)
-      const powerSlide = clamp((rearUse - 0.4) / 0.4, 0, 1) * clamp(Math.abs(this.mxLean) / 0.2, 0, 1) * clamp(this.input.throttle * 1.2, 0, 1) * 1.3;
-      const sR = Math.min(1, Math.max(clamp((satR - 0.55) / 0.4, 0, 1), powerSlide));
-      this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 7);
-      this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 7);
+      const powerSlide = clamp((rearUse - 0.5) / 0.45, 0, 1) * clamp(Math.abs(this.mxLean) / 0.3, 0, 1) * clamp(this.input.throttle * 1.2, 0, 1) * 0.85;
+      const sR = Math.min(0.85, Math.max(clamp((satR - 0.7) / 0.45, 0, 1), powerSlide));
+      // the tyres let go progressively and grip back a little quicker (weight on them)
+      this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * (sF > this.mxSlideF ? 3.5 : 6));
+      this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * (sR > this.mxSlideR ? 3.5 : 6));
       slide = Math.max(slide, this.mxSlideF * 0.8, this.mxSlideR * 0.8);
       b.vx *= 1 - 0.18 * (this.mxSlideF + this.mxSlideR) * dt;
       // leaning costs a little drive: pick the bike up to accelerate out of the turn
       b.vx *= 1 - 0.1 * Math.abs(Math.sin(this.mxLean)) * dt;
-      const yaw = ((steerGain * G * lat) / vEff) * (1 + 0.55 * this.mxSlideR - 0.4 * this.mxSlideF);
+      const yaw = ((steerGain * G * lat) / vEff) * (1 + 0.35 * this.mxSlideR - 0.35 * this.mxSlideF);
       const ds = (v * Math.cos(this.mxPsi)) / Math.max(0.4, 1 - this.mxN * pose.k);
       this.mxPsi += (yaw - pose.k * ds) * dt;
       // spinning the rear with the bike leaned steps the back out (power slide)
-      if (rearUse > 0.6 && Math.abs(this.mxLean) > 0.15) slide = Math.max(slide, Math.min(0.9, (rearUse - 0.6) * 3));
+      if (rearUse > 0.7 && Math.abs(this.mxLean) > 0.2) slide = Math.max(slide, Math.min(0.7, (rearUse - 0.7) * 2.5));
     } else if (!b.grounded) {
       this.mxSlideF = this.mxSlideR = 0;
       // in the air the bike keeps its line; the track may turn under it
@@ -962,7 +967,7 @@ export class Game {
     this.mxPsi = clamp(this.mxPsi, -1.1, 1.1);
     this.mxSlide += (slide - this.mxSlide) * Math.min(1, dt * 8);
     // the body points into the turn more than the bike travels: a visible drift (rear out), less when the front pushes
-    this.mxDrift += (Math.sign(this.mxLean) * (0.32 * this.mxSlideR - 0.08 * this.mxSlideF) - this.mxDrift) * Math.min(1, dt * 6);
+    this.mxDrift += (Math.sign(this.mxLean) * (0.24 * this.mxSlideR - 0.06 * this.mxSlideF) - this.mxDrift) * Math.min(1, dt * 4);
     this.mxN += v * Math.sin(this.mxPsi) * dt;
     // riding off line or across the track covers less of it
     const f = clamp(Math.cos(this.mxPsi) / Math.max(0.4, 1 - this.mxN * pose.k), 0.3, 1.25);

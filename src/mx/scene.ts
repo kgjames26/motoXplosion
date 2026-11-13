@@ -51,6 +51,8 @@ interface Theme {
   fog: number;
   hemiGround: number;
   ground: { tex: string; tint: number; rep: number };
+  /** Colour multiplier of the ground beside the track (run-off, banks): grass in the green worlds. */
+  verge: [number, number, number];
   track: { tex: string; tint: number };
   /** Groups of the sprites planted around (trees, bushes) and the far scenery (structures). */
   groups: AssetGroup[];
@@ -61,11 +63,11 @@ interface Theme {
   density: number;
 }
 const THEMES: Record<MxWorld, Theme> = {
-  foret: { pano: 'foret.0', bg: 0x8fc6f4, fog: 0xcfe6f6, hemiGround: 0x7a6a4a, ground: { tex: 'tex-dirt', tint: 0xd8c8b0, rep: 180 }, track: { tex: 'tex-dirt', tint: 0x9a7a62 }, groups: ['foret', 'green'], far: [], trackside: false, density: 1 },
-  alpes: { pano: 'alpes.0', bg: 0x7fb4ee, fog: 0xd4e4f2, hemiGround: 0x6a7a58, ground: { tex: 'tex-grass', tint: 0xc4d4b0, rep: 150 }, track: { tex: 'tex-dirt', tint: 0x8a7664 }, groups: ['alpes', 'green'], far: ['alpes'], trackside: false, density: 0.8 },
-  canyon: { pano: 'canyon.p2', bg: 0x6aa6ea, fog: 0xe8d2bc, hemiGround: 0x9a5a3a, ground: { tex: 'tex-rock-warm', tint: 0xe6b894, rep: 120 }, track: { tex: 'tex-sand', tint: 0xc0704a }, groups: ['canyon'], far: ['canyon'], trackside: false, density: 0.45 },
-  desert: { pano: 'desert.p1', bg: 0x74aef0, fog: 0xf0dfc4, hemiGround: 0xb08a5a, ground: { tex: 'tex-sand', tint: 0xf0d6a4, rep: 140 }, track: { tex: 'tex-sand', tint: 0xb88a56 }, groups: ['desert'], far: ['desert'], trackside: false, density: 0.35 },
-  sf: { pano: 'sf.p2', bg: 0x6aa6ea, fog: 0xdfe5ec, hemiGround: 0x6a6c70, ground: { tex: 'asphalt', tint: 0xffffff, rep: 130 }, track: { tex: 'tex-dirt', tint: 0x86705e }, groups: ['sf'], far: ['sf'], trackside: true, density: 0.22 },
+  foret: { pano: 'foret.0', bg: 0x8fc6f4, fog: 0xcfe6f6, hemiGround: 0x5a7a3a, ground: { tex: 'tex-grass', tint: 0xa8c888, rep: 150 }, verge: [0.5, 0.95, 0.36], track: { tex: 'tex-dirt', tint: 0x9a7a62 }, groups: ['foret', 'green'], far: [], trackside: false, density: 1 },
+  alpes: { pano: 'alpes.0', bg: 0x7fb4ee, fog: 0xd4e4f2, hemiGround: 0x6a7a58, ground: { tex: 'tex-grass', tint: 0xb4d098, rep: 150 }, verge: [0.52, 0.95, 0.4], track: { tex: 'tex-dirt', tint: 0x8a7664 }, groups: ['alpes', 'green'], far: ['alpes'], trackside: false, density: 0.8 },
+  canyon: { pano: 'canyon.p2', bg: 0x6aa6ea, fog: 0xe8d2bc, hemiGround: 0x9a5a3a, ground: { tex: 'tex-rock-warm', tint: 0xe6b894, rep: 120 }, verge: [1.2, 0.95, 0.78], track: { tex: 'tex-sand', tint: 0xc0704a }, groups: ['canyon'], far: ['canyon'], trackside: false, density: 0.45 },
+  desert: { pano: 'desert.p1', bg: 0x74aef0, fog: 0xf0dfc4, hemiGround: 0xb08a5a, ground: { tex: 'tex-sand', tint: 0xf0d6a4, rep: 140 }, verge: [1.3, 1.15, 0.9], track: { tex: 'tex-sand', tint: 0xb88a56 }, groups: ['desert'], far: ['desert'], trackside: false, density: 0.35 },
+  sf: { pano: 'sf.p2', bg: 0x6aa6ea, fog: 0xdfe5ec, hemiGround: 0x6a6c70, ground: { tex: 'asphalt', tint: 0xffffff, rep: 130 }, verge: [0.75, 0.76, 0.78], track: { tex: 'tex-dirt', tint: 0x86705e }, groups: ['sf'], far: ['sf'], trackside: true, density: 0.22 },
 };
 
 /** A procedural asphalt (no photo needed): dark grey with grain, patches and the odd crack. */
@@ -108,7 +110,7 @@ function earthTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#5a4634';
+  g.fillStyle = '#9a7a5c';
   g.fillRect(0, 0, S, S);
   let seed = 4242;
   const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -124,12 +126,12 @@ function earthTexture(): THREE.CanvasTexture {
       g.fillRect(px - r, py - r, r * 2, r * 2);
     });
   // large wet and drier patches
-  for (let i = 0; i < 120; i++) blob(rnd() * S, rnd() * S, 30 + rnd() * 80, rnd() < 0.6 ? 'rgba(28,20,14,0.16)' : 'rgba(150,120,90,0.10)');
+  for (let i = 0; i < 120; i++) blob(rnd() * S, rnd() * S, 30 + rnd() * 80, rnd() < 0.5 ? 'rgba(60,44,30,0.14)' : 'rgba(200,175,145,0.12)');
   // wet streaks (smeared, along the ride direction)
   for (let i = 0; i < 90; i++) {
     const x = rnd() * S, y = rnd() * S, l = 30 + rnd() * 90;
     wrapped(x, y, l, (px, py) => {
-      g.strokeStyle = 'rgba(22,16,11,0.20)';
+      g.strokeStyle = 'rgba(50,36,24,0.18)';
       g.lineWidth = 2 + rnd() * 5;
       g.beginPath(); g.moveTo(px, py); g.lineTo(px + l, py + (rnd() - 0.5) * 8); g.stroke();
     });
@@ -137,8 +139,8 @@ function earthTexture(): THREE.CanvasTexture {
   // clods: dark body, a wet glint on the lit side
   for (let i = 0; i < 800; i++) {
     const x = rnd() * S, y = rnd() * S, r = 1.5 + rnd() * 5.5;
-    blob(x, y, r * 1.6, 'rgba(24,17,12,0.34)');
-    blob(x - r * 0.3, y - r * 0.3, r * 0.7, 'rgba(176,150,122,0.22)');
+    blob(x, y, r * 1.6, 'rgba(50,36,24,0.32)');
+    blob(x - r * 0.3, y - r * 0.3, r * 0.7, 'rgba(225,200,170,0.25)');
   }
   // pebbles
   for (let i = 0; i < 160; i++) {
@@ -151,7 +153,7 @@ function earthTexture(): THREE.CanvasTexture {
     });
   }
   for (let i = 0; i < 16000; i++) {
-    const v = 40 + Math.floor(rnd() * 110);
+    const v = 80 + Math.floor(rnd() * 130);
     g.fillStyle = `rgba(${v},${Math.floor(v * 0.85)},${Math.floor(v * 0.7)},0.35)`;
     g.fillRect(Math.floor(rnd() * S), Math.floor(rnd() * S), 1, 1);
   }
@@ -223,7 +225,7 @@ export class MxScene {
   private theme: Theme;
   /** The loop's earth: a coarse ribbon at first, replaced by the detailed one once the ruts are loaded. */
   private loopRibbon: THREE.Mesh | null = null;
-  private earth = new THREE.MeshPhongMaterial({ vertexColors: true, specular: new THREE.Color(0x3c3329), shininess: 24 });
+  private earth = new THREE.MeshPhongMaterial({ vertexColors: true, specular: new THREE.Color(0x1a1612), shininess: 12 });
   /** Middle of the circuit (the ground and the panorama are centred on it). */
   private cx = 0;
   private cz = 80;
@@ -323,7 +325,7 @@ export class MxScene {
     this.loadKit();
     this.buildJumps();
     this.earth.map = earthTexture();
-    this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.55);
+    this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.6);
     void loadRuts().then((d) => {
       const c = d?.circuits.find((x) => x.id === MX_CIRCUITS[this.circuit].id);
       if (!d || !c || mxCircuit !== this.circuit || c.rows !== Math.ceil(MX_LEN / d.ds)) return;
@@ -430,6 +432,7 @@ export class MxScene {
         let y = bankAt(p.k, clamp(n, -HW, HW)) + 0.02;
         let shade = 1;
         let warm = 0;
+        let grassy = 0;
         if (an <= OUT) {
           const dens = (q: number): number => {
             let e = 0;
@@ -447,25 +450,27 @@ export class MxScene {
           const dr = dens(n + 0.2);
           const berm = clamp(Math.abs(dr - dl) * 2.2, 0, 1) * (1 - d);
           y += -0.05 * smooth(0.08, 0.6, d) + 0.02 * berm - 0.012 * noise * (1 - d) - 0.01 * sl * noise;
-          // dark and wet all over the ground the bikes can use, darker still on their lines
-          const wet = 1 - smooth(HW - 0.3, OUT + 1, an);
-          shade = 1.12 - 0.52 * wet - 0.2 * smooth(0.05, 0.6, d) * wet + 0.1 * (noise - 0.5);
-          warm = 0.12 * smooth(0.15, 0.8, sl) * (1 - d);
+          // light packed dirt on the track, darker on the wheel lines; beside it the run-off turns to verge
+          shade = 1.02 - 0.3 * smooth(0.05, 0.6, d) + 0.1 * (noise - 0.5);
+          warm = 0.1 * smooth(0.15, 0.8, sl) * (1 - d);
+          grassy = smooth(HW + 0.2, HW + 1.6, an) * (0.75 + 0.25 * noise);
         } else {
           // the bank of earth that closes the circuit: 40 cm high, a little irregular
           const rise = smooth(OUT, OUT + 0.8, an) * (1 - smooth(OUT + 1.2, OUT + 2.2, an)) * bankOn;
           const wob = 0.8 + 0.2 * hash2(Math.floor(sm / 1.5), 7) + 0.1 * Math.sin(sm / 5.3);
-          y = rise * 0.4 * wob - (1 - rise) * 0.05;
-          shade = 1.12 + 0.1 * hash2(Math.floor(sm), Math.floor(an * 3));
+          y = an > OUT + 2.4 ? -0.12 : rise * 0.4 * wob - (1 - rise) * 0.05; // beyond the bank: the world's ground
+          shade = 0.95 + 0.1 * hash2(Math.floor(sm), Math.floor(an * 3));
+          grassy = 1;
         }
         pos[k * 3] = p.x + nx * n;
         pos[k * 3 + 1] = y;
         pos[k * 3 + 2] = p.z + nz * n;
         uv[k * 2] = n / 1.6;
         uv[k * 2 + 1] = sm / 1.6;
-        col[k * 3] = clamp(shade + warm, 0, 1.2);
-        col[k * 3 + 1] = clamp(shade + warm * 0.7, 0, 1.2);
-        col[k * 3 + 2] = clamp(shade + warm * 0.2, 0, 1.2);
+        const vg = this.theme.verge;
+        col[k * 3] = clamp((shade + warm) * (1 + (vg[0] - 1) * grassy), 0, 1.3);
+        col[k * 3 + 1] = clamp((shade + warm * 0.7) * (1 + (vg[1] - 1) * grassy), 0, 1.3);
+        col[k * 3 + 2] = clamp((shade + warm * 0.2) * (1 + (vg[2] - 1) * grassy), 0, 1.3);
       }
     }
     const idx: number[] = [];
@@ -513,15 +518,16 @@ export class MxScene {
         const k = i * L + j;
         const line = Math.max(Math.exp(-(((an - 1.3) / 0.35) ** 2)) * 0.7, Math.exp(-((an / 0.5) ** 2)) * 0.25);
         const noise = hash2(Math.floor(i * 0.8), Math.floor((n + 20) * 4));
-        const wet = 1 - smooth(HW - 0.3, HW + 4, an);
-        const y = an > HW + 4 ? -0.05 : 0.02 - 0.03 * line + 0.01 * (noise - 0.5) * (1 - line);
-        const shade = 1.12 - 0.52 * wet - 0.2 * line * wet + 0.1 * (noise - 0.5);
+        const grassy = smooth(HW + 0.2, HW + 1.6, an);
+        const y = an > HW + 4 ? -0.12 : 0.02 - 0.03 * line + 0.01 * (noise - 0.5) * (1 - line);
+        const shade = 1.02 - 0.3 * line * (1 - grassy) + 0.1 * (noise - 0.5);
+        const vg = this.theme.verge;
         pos[k * 3] = p.x + nx * n;
         pos[k * 3 + 1] = y;
         pos[k * 3 + 2] = p.z + nz * n;
         uv[k * 2] = n / 1.6;
         uv[k * 2 + 1] = (i * 2) / 1.6;
-        col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = clamp(shade, 0, 1.2);
+        for (let q = 0; q < 3; q++) col[k * 3 + q] = clamp(shade * (1 + (vg[q] - 1) * grassy), 0, 1.3);
       });
     });
     const idx: number[] = [];
@@ -574,7 +580,7 @@ export class MxScene {
           uv[k * 2] = n / 1.6;
           uv[k * 2 + 1] = (f.s0 + t) / 1.6;
           // packed, wet earth: darker on the flat top and the faces, a bit paler at the foot
-          const v = 0.82 + 0.08 * noise + 0.12 * (1 - Math.min(1, h / 0.4)) * (Math.abs(n) > JUMP_FLAT ? 1 : 0.4); // lighter than the track (0.6), darker than the ground around (1.12)
+          const v = 1.1 + 0.08 * noise; // packed dirt, a little lighter than the ridden track
           col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = v;
         }
       }
@@ -621,7 +627,7 @@ export class MxScene {
 
   /** Edge posts, start arch, a few banners: what makes it read as a race track. */
   private buildMarkers(): void {
-    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.7, 0.16), new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.ceil(MX_LEN / 8) * 2);
+    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.8, 0.07), new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.ceil(MX_LEN / 8) * 2);
     const m = new THREE.Matrix4();
     const col = new THREE.Color();
     let i = 0;
@@ -630,9 +636,9 @@ export class MxScene {
       const h = 0;
       for (const side of [-1, 1]) {
         const n = side * (MX_HALF_WIDTH + 0.5);
-        m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + 0.3, p.z + Math.cos(p.th) * n);
+        m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + 0.4, p.z + Math.cos(p.th) * n);
         posts.setMatrixAt(i, m);
-        posts.setColorAt(i, col.set((s / 8) % 2 ? 0xe8392f : 0xf4f4f4));
+        posts.setColorAt(i, col.set(0xf2d21b)); // yellow stakes, like the MXGP tracks
         i++;
       }
     }
@@ -1064,8 +1070,8 @@ export class MxScene {
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 1.75 + 20.8 * 0.0175 + clamp((b.forwardSpeed - 20.8) / 25, -1, 1) * 0.15 + sw * 2.5; // the distance of 75 km/h, give or take 15 cm
-    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.75 + sw * 0.6 /* helmet (≈ +1.15) + 60 cm */, wz - Math.sin(yaw) * dist);
+    const dist = 3.6 + clamp((b.forwardSpeed - 20.8) / 25, -1, 1) * 0.15 + sw * 2.5; // MXGP-like chase view: 3.6 m behind, give or take 15 cm
+    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 2.15 + sw * 0.6 /* a metre above the helmet: the track ahead reads well */, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
       const k = Math.min(1, dt * 30); // a tight follow: a lag would let the bike run into / away from the lens when it brakes or accelerates
@@ -1074,14 +1080,14 @@ export class MxScene {
       this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 4);
     }
     // look a few metres ahead of the bike, and a touch towards where the track goes next
-    const lx = wx + Math.cos(this.camYaw) * 4 * 0.78 + (far.x - wx) * 0.22;
-    const lz = wz + Math.sin(this.camYaw) * 4 * 0.78 + (far.z - wz) * 0.22;
-    const lookWant = new THREE.Vector3(lx, this.camY + 0.85, lz);
+    const lx = wx + Math.cos(this.camYaw) * 6 * 0.78 + (far.x - wx) * 0.22;
+    const lz = wz + Math.sin(this.camYaw) * 6 * 0.78 + (far.z - wz) * 0.22;
+    const lookWant = new THREE.Vector3(lx, this.camY + 0.75, lz);
     if (this.fresh) this.look.copy(lookWant);
     else this.look.lerp(lookWant, Math.min(1, dt * 6));
     this.fresh = false;
     this.camera.aspect = aspect;
-    this.camera.fov = 60 + clamp(20.8 / 25, 0, 1) * 9; // the 75 km/h framing, always
+    this.camera.fov = 70; // wide, like the reference chase cameras
     this.camera.updateProjectionMatrix();
     this.camera.position.copy(this.camPos);
     if (game.shake > 0) this.camera.position.y += (Math.random() - 0.5) * game.shake * game.shake * 0.12;
