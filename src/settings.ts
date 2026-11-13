@@ -44,7 +44,7 @@ export interface Settings {
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 , mxPhysics: 'nouvelle' };
+const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 , mxPhysics: 'ancienne' };
 
 export function loadSettings(): Settings {
   try {

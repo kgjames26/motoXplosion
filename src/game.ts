@@ -19,7 +19,7 @@ import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose, set
  * v2.51 — handling of the 3D circuit. Set USE_NEW_MX_PHYSICS to false (or pick "Ancienne" in the
  * settings) to ride with the v2.50 model, kept intact in Game.mxLateralLegacy.
  */
-export let USE_NEW_MX_PHYSICS = true;
+export let USE_NEW_MX_PHYSICS = false; // v2.52: the old (safer) handling is the default
 export function setMxPhysics(on: boolean): void {
   USE_NEW_MX_PHYSICS = on;
 }
@@ -34,28 +34,28 @@ export const MX_PHYSICS_CONFIG = {
   cgRear: 0.76,
   cgHeight: 0.62,
   /** Side grip of each tyre, as a share of the dirt's friction. A bit less at the rear: it is the one that steps out. */
-  gripFront: 1.0,
-  gripRear: 0.8,
+  gripFront: 1.1,
+  gripRear: 1.0,
   /** Slip angle (rad) where a tyre gives its most; past it the grip falls by slideFalloff (sliding). */
-  peakSlip: 0.17,
+  peakSlip: 0.2,
   slideFalloff: 0.3,
   /** Side grip lost at 30 m/s, and at full lean (fractions). */
-  speedGripLoss: 0.12,
-  leanGripLoss: 0.2,
+  speedGripLoss: 0.05,
+  leanGripLoss: 0.08,
   /** Extra weight transfer on top of the chassis (0 = chassis only). */
   weightTransfer: 0.25,
   /** Wheelspin: drive demand multiplier, the tyre use where the rear starts to spin, side grip lost and speed lost (m/s²) when it spins fully. */
-  torque: 1.05,
+  torque: 0.85,
   spinThreshold: 0.72,
-  spinLatLoss: 0.65,
-  spinDrag: 1.2,
+  spinLatLoss: 0.4,
+  spinDrag: 0.6,
   /** Counter-steer: extra steering allowed against a slide. */
-  counterSteer: 0.45,
+  counterSteer: 0.25,
   /** Yaw damper (1/s) and biggest angle between where the bike points and where it goes (rad). */
   yawDamping: 4.5,
-  maxSlip: 0.65,
+  maxSlip: 0.4,
   /** How fast a slide straightens by itself once the tyres can hold (1/s²). */
-  slipRecover: 6,
+  slipRecover: 10,
   /** Fastest the bike may rotate (rad/s). */
   maxYawRate: 2.2,
   /** Integration steps per frame for the tyres. */
