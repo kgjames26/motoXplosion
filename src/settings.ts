@@ -39,7 +39,7 @@ export interface Settings {
   /** v2.25 parental timer: minutes allowed (0 = off) and seconds already used. */
   timerMin: number;
   timerUsed: number;
-  /** v2.51: 3D circuit handling, new (tyres that slide, wheelspin) or the old one (v2.50). */
+  /** Circuit 3D: Nouvelle glisse (tyres, roll) or Ancienne (v2.50, unchanged). */
   mxPhysics: 'nouvelle' | 'ancienne';
 }
 

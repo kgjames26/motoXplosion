@@ -806,6 +806,13 @@ button {
   font-weight: 800;
   font-size: calc(var(--u) * 3.2);
 }
+.set-hint {
+  margin: calc(var(--u) * -1) 0 calc(var(--u) * 1);
+  font-size: calc(var(--u) * 2.5);
+  font-weight: 650;
+  line-height: 1.35;
+  opacity: 0.72;
+}
 .set-row > span {
   width: calc(var(--u) * 30);
   flex: none;
