@@ -1,3 +1,4 @@
+import { KMH } from './units';
 import { aiInput, createOpponents, Opponent } from './ai';
 import type { PlayerState } from './net/multi';
 import { bikeById, BikeModel, BIKES } from './bikes';
@@ -12,7 +13,54 @@ import { Particles, smokeRate } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose, setMxCircuit } from './mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_HALF_WIDTH, MX_LEN, MX_RUNOFF, mxPose, setMxCircuit, type MxPose } from './mx/track';
+
+/**
+ * v2.51 — handling of the 3D circuit. Set USE_NEW_MX_PHYSICS to false (or pick "Ancienne" in the
+ * settings) to ride with the v2.50 model, kept intact in Game.mxLateralLegacy.
+ */
+export let USE_NEW_MX_PHYSICS = true;
+export function setMxPhysics(on: boolean): void {
+  USE_NEW_MX_PHYSICS = on;
+}
+export const MX_WHEELBASE = 1.48;
+/** Feel of the new 3D circuit handling: tune here. */
+export const MX_PHYSICS_CONFIG = {
+  /** Bike + rider (kg) and yaw inertia (kg·m²). */
+  mass: 180,
+  yawInertia: 65,
+  /** Centre of mass: distance to the front and rear axles (m), height (m). */
+  cgFront: 0.72,
+  cgRear: 0.76,
+  cgHeight: 0.62,
+  /** Side grip of each tyre, as a share of the dirt's friction. A bit less at the rear: it is the one that steps out. */
+  gripFront: 1.0,
+  gripRear: 0.8,
+  /** Slip angle (rad) where a tyre gives its most; past it the grip falls by slideFalloff (sliding). */
+  peakSlip: 0.17,
+  slideFalloff: 0.3,
+  /** Side grip lost at 30 m/s, and at full lean (fractions). */
+  speedGripLoss: 0.12,
+  leanGripLoss: 0.2,
+  /** Extra weight transfer on top of the chassis (0 = chassis only). */
+  weightTransfer: 0.25,
+  /** Wheelspin: drive demand multiplier, the tyre use where the rear starts to spin, side grip lost and speed lost (m/s²) when it spins fully. */
+  torque: 1.05,
+  spinThreshold: 0.72,
+  spinLatLoss: 0.65,
+  spinDrag: 1.2,
+  /** Counter-steer: extra steering allowed against a slide. */
+  counterSteer: 0.45,
+  /** Yaw damper (1/s) and biggest angle between where the bike points and where it goes (rad). */
+  yawDamping: 4.5,
+  maxSlip: 0.65,
+  /** How fast a slide straightens by itself once the tyres can hold (1/s²). */
+  slipRecover: 6,
+  /** Fastest the bike may rotate (rad/s). */
+  maxYawRate: 2.2,
+  /** Integration steps per frame for the tyres. */
+  substeps: 3,
+};
 
 /** v2.26 motocross events: one lap against the clock, flips on half a lap, 2-lap race. */
 export type MxKind = 'time' | 'tricks' | 'race';
@@ -223,6 +271,13 @@ export class Game {
   mxSlideF = 0;
   /** Extra heading of the body while drifting (rad, visual). */
   mxDrift = 0;
+  /** v2.51 tyre model: body heading (rel. track), yaw rate, lateral speed, rear spin, rear side force. */
+  mxBody = 0;
+  mxR = 0;
+  mxW = 0;
+  mxSpin = 0;
+  mxFyR = 0;
+  private mxNewOn = false;
   mxSlideR = 0;
   /** Handlebar angle on the 3D track (rad): wide when slow, almost straight when fast. */
   mxBar = 0;
@@ -337,7 +392,7 @@ export class Game {
       this.world.finishX = this.startX + this.raceLen;
     }
     this.finishX = this.startX + this.raceLen;
-    this.mxN = this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = this.mxSlideF = this.mxSlideR = 0;
+    this.mxN = this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = this.mxSlideF = this.mxSlideR = this.mxBody = this.mxW = this.mxR = this.mxSpin = this.mxFyR = 0;
     this.mxOff = 0;
     this.mxLastX = this.bike.x;
     this.mxLastN = 0;
@@ -860,7 +915,7 @@ export class Game {
       this.mxT = Math.max(0, this.mxT - dt / 1.1);
       this.mxAuto = this.mxT > 0;
       this.mxN *= Math.max(0, 1 - dt * 3);
-      this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = 0;
+      this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = this.mxBody = this.mxW = this.mxR = 0;
       return;
     }
     const u = b.x - z.x0;
@@ -878,7 +933,7 @@ export class Game {
     // work (wide lock, the rider hardly leans); fast, the bars barely move and the bike lays
     // over (v² · curvature = g · tan(lean)). The tightest turn is the smaller of what the bar
     // lock allows and what the lean limit (~46°) allows at this speed.
-    const WHEELBASE = 1.48;
+    const WHEELBASE = MX_WHEELBASE;
     const LOCK = 0.62; // handlebar lock (rad)
     const vEff = Math.max(v, 1.5);
     const leanMax = Math.atan(clamp(this.mxMu * 1.04, 0.3, 1.0)); // full stick = right at the limit of the grip
@@ -889,7 +944,59 @@ export class Game {
       const want = pose.k * v + (-this.mxPsi * 2.4 - this.mxN * 0.35) * Math.min(1, v / 4);
       stick = clamp(want / vEff / kMax, -1, 1);
     }
-    const kCmd = stick * kMax; // curvature asked for (1/m)
+    const autoRide = this.mxAuto || this.crashTimer > 0 || this.finished || this.countdown > 0;
+    if (USE_NEW_MX_PHYSICS && !autoRide && v > 0.3) {
+      if (!this.mxNewOn) {
+        // hand over from the kinematic model: body on the path, no slip yet
+        this.mxBody = this.mxPsi;
+        this.mxW = 0;
+        this.mxR = 0;
+        this.mxNewOn = true;
+      }
+      this.mxLateralNew(b, pose, v, G, stick * kMax, LOCK, dt);
+    } else {
+      if (this.mxNewOn) this.mxSlideF = this.mxSlideR = this.mxSpin = 0;
+      this.mxNewOn = false;
+      this.mxLateralLegacy(b, pose, v, vEff, G, stick * kMax, dt);
+    }
+    this.mxN += v * Math.sin(this.mxPsi) * dt;
+    // riding off line or across the track covers less of it
+    const f = clamp(Math.cos(this.mxPsi) / Math.max(0.4, 1 - this.mxN * pose.k), 0.3, 1.25);
+    b.x += b.vx * dt * (f - 1);
+    b.updateWheelPositions();
+    // off the track: grass drags, then the fence
+    const over = Math.abs(this.mxN) - MX_HALF_WIDTH;
+    if (over > 0 && b.grounded) b.vx *= 1 - Math.min(1, over / 2) * 1.6 * dt;
+    // off the track for good: back on it, at the level (distance) of the last spot that was on it
+    if (this.crashTimer <= 0 && !this.mxAuto && !this.finished && this.countdown <= 0) {
+      if (over <= 0 && b.grounded) {
+        this.mxLastX = b.x;
+        this.mxLastN = this.mxN;
+      }
+      this.mxOff = over > 1 ? this.mxOff + dt : 0;
+      if (this.mxOff > 0.7) this.mxBackOnTrack();
+    }
+    const lim = MX_HALF_WIDTH + MX_RUNOFF;
+    if (Math.abs(this.mxN) > lim) {
+      this.mxN = Math.sign(this.mxN) * lim;
+      if (Math.sign(this.mxPsi) === Math.sign(this.mxN)) {
+        this.mxPsi *= -0.3;
+        this.mxBody = this.mxPsi;
+        this.mxW = this.mxR = 0;
+        b.vx *= 0.75;
+        this.shake = Math.min(1, this.shake + 0.3);
+      }
+    }
+  }
+
+  /**
+   * v2.50 handling of the 3D circuit, kept as it was (settings: "Physique circuit 3D: ancienne").
+   * Kinematic: the bike goes where the lean points it, the slides only bend the path a little.
+   * Also used whenever the bike is driven for the player (countdown, crash, cruising lanes).
+   */
+  private mxLateralLegacy(b: Bike, pose: MxPose, v: number, vEff: number, G: number, kCmd: number, dt: number): void {
+    const WHEELBASE = MX_WHEELBASE;
+
     // lean follows the stick (quicker to pick the bike up than to throw it in)
     const target = Math.atan((kCmd * vEff * vEff) / G); // <= leanMax
     const barTarget = Math.atan(WHEELBASE * kCmd);
@@ -968,32 +1075,139 @@ export class Game {
     this.mxSlide += (slide - this.mxSlide) * Math.min(1, dt * 8);
     // the body points into the turn more than the bike travels: a visible drift (rear out), less when the front pushes
     this.mxDrift += (Math.sign(this.mxLean) * (0.24 * this.mxSlideR - 0.06 * this.mxSlideF) - this.mxDrift) * Math.min(1, dt * 4);
-    this.mxN += v * Math.sin(this.mxPsi) * dt;
-    // riding off line or across the track covers less of it
-    const f = clamp(Math.cos(this.mxPsi) / Math.max(0.4, 1 - this.mxN * pose.k), 0.3, 1.25);
-    b.x += b.vx * dt * (f - 1);
-    b.updateWheelPositions();
-    // off the track: grass drags, then the fence
-    const over = Math.abs(this.mxN) - MX_HALF_WIDTH;
-    if (over > 0 && b.grounded) b.vx *= 1 - Math.min(1, over / 2) * 1.6 * dt;
-    // off the track for good: back on it, at the level (distance) of the last spot that was on it
-    if (this.crashTimer <= 0 && !this.mxAuto && !this.finished && this.countdown <= 0) {
-      if (over <= 0 && b.grounded) {
-        this.mxLastX = b.x;
-        this.mxLastN = this.mxN;
+  }
+
+  /**
+   * v2.51 handling of the 3D circuit: a two-wheel tyre model integrated in real time.
+   * State: body heading `mxBody` (relative to the track), yaw rate `mxR`, lateral speed `mxW` (body
+   * frame). Each tyre makes a side force from its slip angle (peak, then a softer slide), capped by
+   * its friction circle (what drive or braking takes is gone for cornering). Loads come from the
+   * chassis (weight transfer: power unloads the front, braking unloads the rear) plus an extra share
+   * set in MX_PHYSICS_CONFIG. Too much throttle for the rear's grip spins it: it loses side grip and
+   * steps out (power slide). Steering against the slide (counter-steer) holds it; a yaw damper stops
+   * the bike from spinning round. No allocation: everything lives in fields and locals.
+   */
+  private mxLateralNew(b: Bike, pose: MxPose, v: number, G: number, kCmd: number, lock: number, dt: number): void {
+    const C = MX_PHYSICS_CONFIG;
+    const m = C.mass;
+    const La = C.cgFront;
+    const Lb = C.cgRear;
+    const L = La + Lb;
+    let slide = 0;
+    if (b.grounded) {
+      const sameSide = Math.sign(pose.k) === Math.sign(this.mxLean);
+      const tb = sameSide ? 0.3 * clamp((Math.abs(pose.k) - 0.012) * 45, 0, 1) : 0; // berm support
+      const mu0 = SURFACES[Surface.Dirt].grip * this.world.gripK(Surface.Dirt, b.x) * b.grip;
+      const muB = (mu0 + tb) / (1 - mu0 * tb);
+      const sm = Math.min(1, dt * 14);
+      this.mxNf += (b.front.normalForce - this.mxNf) * sm;
+      this.mxNr += (b.rear.normalForce - this.mxNr) * sm;
+      this.mxTf += (b.front.traction - this.mxTf) * sm;
+      this.mxTr += (b.rear.traction - this.mxTr) * sm;
+      // loads: the chassis' own, plus an extra longitudinal transfer (accelerating loads the rear)
+      const dN = (C.weightTransfer * (this.mxTf + this.mxTr) * C.cgHeight) / L;
+      // (capped: a landing spikes the loads, but the tyres saturate and the suspension soaks it up)
+      const Ncap = 1.6 * m * G;
+      const Nf = clamp(this.mxNf - dN, 0, Ncap * 0.6);
+      const Nr = clamp(this.mxNr + dN, 0, Ncap * 0.7);
+      // side grip falls with speed and with lean
+      const lose = (1 - C.speedGripLoss * clamp(v / 30, 0, 1)) * (1 - C.leanGripLoss * clamp(Math.abs(this.mxLean) / 0.8, 0, 1) ** 2);
+      const muF = muB * C.gripFront * lose;
+      const muR = muB * C.gripRear * lose;
+      // rear wheelspin: drive plus the side force it is already carrying past the tyre's circle
+      const useR = Math.sqrt(this.mxTr * this.mxTr + this.mxFyR * this.mxFyR) / Math.max(50, muR * Nr);
+      const thr = clamp(this.input.throttle, 0, 1);
+      const spinWant = this.mxTr > 0 ? clamp((useR * C.torque * (0.6 + 0.4 * thr) - C.spinThreshold) / 0.35, 0, 1) * thr : 0;
+      this.mxSpin += (spinWant - this.mxSpin) * Math.min(1, dt * (spinWant > this.mxSpin ? 6 : 4));
+      const capF = Math.sqrt(Math.max(0, (muF * Nf) ** 2 - this.mxTf ** 2));
+      const capR = Math.sqrt(Math.max(0, (muR * Nr) ** 2 - this.mxTr ** 2)) * (1 - C.spinLatLoss * this.mxSpin);
+      // the turn the stick may ask for is set by the dirt's grip; whether the tyres hold it is up to them
+      this.mxMu += (Math.max(0.3, muB * 0.95) - this.mxMu) * Math.min(1, dt * 4);
+      // steering: what the stick asks (bar angle for the curvature), more lock allowed against a slide
+      const beta = Math.atan2(this.mxW, Math.max(1, v));
+      // the bars: the geometric angle for the curvature asked, plus the slip the front tyre needs to
+      // carry its share of that turn (a real front finds it by itself through its trail)
+      const uu = Math.max(v, 1.5);
+      const yNeed = Math.min(0.97, Math.abs((m * kCmd * uu * uu * Lb) / L) / Math.max(1, capF));
+      let xs = yNeed;
+      for (let it = 0; it < 4; it++) xs -= (1.5 * xs - 0.5 * xs * xs * xs - yNeed) / Math.max(0.1, 1.5 - 1.5 * xs * xs);
+      let delta = Math.atan(L * kCmd) + Math.sign(kCmd) * clamp(xs, 0, 1) * C.peakSlip;
+      if (delta * beta > 0) delta *= 1 + C.counterSteer * clamp(Math.abs(beta) / 0.3, 0, 1.5);
+      delta = clamp(delta, -lock, lock);
+      this.mxBar += (delta - this.mxBar) * Math.min(1, dt * 10);
+      // the rider lays the bike over for the turn the stick asks for (roll inertia: flicked, not snapped)
+      {
+        const target = Math.atan((kCmd * Math.max(v, 1.5) ** 2) / G);
+        const rollK = Math.abs(target) < Math.abs(this.mxLean) ? 5.5 : 4.2;
+        const rollMax = 1.6 + 1.4 * clamp(1 - v / 14, 0, 1);
+        this.mxLean += clamp((target - this.mxLean) * Math.min(1, dt * rollK), -rollMax * dt, rollMax * dt);
       }
-      this.mxOff = over > 1 ? this.mxOff + dt : 0;
-      if (this.mxOff > 0.7) this.mxBackOnTrack();
-    }
-    const lim = MX_HALF_WIDTH + MX_RUNOFF;
-    if (Math.abs(this.mxN) > lim) {
-      this.mxN = Math.sign(this.mxN) * lim;
-      if (Math.sign(this.mxPsi) === Math.sign(this.mxN)) {
-        this.mxPsi *= -0.3;
-        b.vx *= 0.75;
-        this.shake = Math.min(1, this.shake + 0.3);
+      const u = Math.max(v, 1.5);
+      const low = clamp((v - 1) / 3, 0, 1); // walking pace: plain kinematics
+      // enough sub-steps for the tyres to stay stable (stiff at low speed and high load)
+      const stiff = ((capF + capR) * 1.5) / C.peakSlip;
+      const n = Math.min(16, Math.max(C.substeps, Math.ceil((stiff * dt) / (m * u * 0.35)), Math.ceil((stiff * La * La * dt) / (C.yawInertia * u * 0.35))));
+      const h = dt / n;
+      const ps = C.peakSlip;
+      const tyre = (alpha: number, cap: number): number => {
+        const x = Math.abs(alpha) / ps;
+        const y = x <= 1 ? 1.5 * x - 0.5 * x * x * x : 1 - C.slideFalloff * Math.min(1, (x - 1) / 2);
+        return -Math.sign(alpha) * cap * y;
+      };
+      let Fyf = 0;
+      let Fyr = 0;
+      let af = 0;
+      let ar = 0;
+      for (let i = 0; i < n; i++) {
+        af = Math.atan2(this.mxW + La * this.mxR, u) - this.mxBar;
+        ar = Math.atan2(this.mxW - Lb * this.mxR, u);
+        Fyf = tyre(af, capF);
+        Fyr = tyre(ar, capR);
+        const ay = (Fyf * Math.cos(this.mxBar) + Fyr) / m;
+        // yaw: tyre moments; a damper that only fights the slip growing (no spinning round), and a
+        // gentle pull of the body back onto its course (the rear finds grip again)
+        const grow = ay / u - this.mxR; // rate at which the slip angle changes
+        const slip = Math.atan2(this.mxW, u);
+        const damp = (grow * slip > 0 ? C.yawDamping * grow : 0) + C.slipRecover * slip;
+        this.mxW += (ay - u * this.mxR) * h;
+        this.mxR += ((La * Fyf * Math.cos(this.mxBar) - Lb * Fyr) / C.yawInertia + damp) * h;
+        this.mxR = clamp(this.mxR, -C.maxYawRate, C.maxYawRate);
       }
+      // walking pace: no slip, the bars set the turn
+      this.mxW *= low;
+      this.mxR = this.mxR * low + (1 - low) * ((v * Math.tan(this.mxBar)) / L);
+      // never more than maxSlip between where the bike points and where it goes
+      const lim = Math.tan(C.maxSlip) * u;
+      if (Math.abs(this.mxW) > lim) {
+        this.mxW = Math.sign(this.mxW) * lim;
+        if (Math.sign(-this.mxR) === Math.sign(this.mxW)) this.mxR *= 0.5;
+      }
+      this.mxFyR = Fyr;
+      // sliding tyres turn speed into heat: the scrub slows the bike, and a spinning rear drives less
+      const scrub = (Math.abs(Fyf * Math.tan(af)) + Math.abs(Fyr * Math.tan(ar))) / m;
+      b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx) * 0.5, (Math.min(scrub, 4) + C.spinDrag * this.mxSpin) * dt);
+      // leaning costs a little drive (pick the bike up to accelerate)
+      b.vx *= 1 - 0.1 * Math.abs(Math.sin(this.mxLean)) * dt;
+      // what the rest of the game reads (dust, sound, roost)
+      const sF = clamp((Math.abs(af) / ps - 0.8) / 0.9, 0, 1);
+      const sR = Math.max(clamp((Math.abs(ar) / ps - 0.8) / 0.9, 0, 1), this.mxSpin);
+      this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 8);
+      this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 8);
+      slide = Math.max(this.mxSlideF, this.mxSlideR) * 0.8;
+    } else {
+      // in the air: the bike keeps its course and its slip, the yaw calms down
+      this.mxSlideF = this.mxSlideR = this.mxSpin = 0;
+      this.mxR *= 1 - Math.min(1, dt * 1.5);
+      this.mxFyR = 0;
     }
+    // into track coordinates: the body turns at mxR, the track turns under it
+    const vel = this.mxBody + Math.atan2(this.mxW, Math.max(1, v));
+    const ds = (v * Math.cos(vel)) / Math.max(0.4, 1 - this.mxN * pose.k);
+    this.mxBody += (this.mxR - pose.k * ds) * dt;
+    this.mxBody = clamp(this.mxBody, -1.6, 1.6);
+    this.mxPsi = clamp(this.mxBody + Math.atan2(this.mxW, Math.max(1, v)), -1.1, 1.1);
+    this.mxDrift = this.mxBody - this.mxPsi;
+    this.mxSlide += (slide - this.mxSlide) * Math.min(1, dt * 8);
   }
 
   /** Put the bike back on the track where it last was on it, at half speed, straight. */
@@ -1006,7 +1220,7 @@ export class Game {
     b.vy = Math.sin(slope) * v * 0.5;
     b.rear.spin = b.front.spin = (v * 0.5) / b.rear.radius;
     this.mxN = clamp(this.mxLastN, -MX_HALF_WIDTH + 1.5, MX_HALF_WIDTH - 1.5);
-    this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = 0;
+    this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = this.mxBody = this.mxW = this.mxR = 0;
     this.mxOff = 0;
     this.steer = 0;
     this.shake = Math.min(1, this.shake + 0.2);
@@ -1233,7 +1447,7 @@ export class Game {
     const err = wrapAngle(b.angle - (b.grounded ? w.slopeAt(b.x) : w.slopeAt(b.x + Math.max(1, b.vx * 0.4))));
     // speed-window jumps: aim at the middle of the window
     const j = this.nextSpeedJump(150);
-    const target = j ? (j.vmin! + j.vmax!) / 2 / 3.6 : 17;
+    const target = j ? (j.vmin! + j.vmax!) / 2 / KMH : 17;
     this.input.throttle = b.grounded ? clamp((target - b.speed) * 0.5 + 0.35, 0, 1) : 0.1;
     this.input.brake = b.grounded && b.speed > target + 2 ? 0.5 : 0;
     // gentle, low-pass rider balance: the home bike glides, it does not jitter
@@ -1338,7 +1552,7 @@ export class Game {
       this.mxFails++;
       this.popup(bike.x, bike.y + 3.2, 'SALTO RATÉ  −2', '#ff6b5a');
     }
-    this.mxPsi = 0;
+    this.mxPsi = this.mxBody = this.mxW = this.mxR = 0;
     if (this.usesEnergy) this.stamina -= 15;
     this.shake = 1;
     const [hx, hy] = bike.pointWorld(-0.1, 0.5);

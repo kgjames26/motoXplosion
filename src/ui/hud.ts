@@ -1,3 +1,4 @@
+import { KMH } from '../units';
 import { clamp } from '../core/math';
 import { CHECKPOINT_EVERY, fmtClock, fmtMult, Game } from '../game';
 import { WEATHER_ICONS, WEATHER_NAMES } from '../weather';
@@ -118,7 +119,7 @@ export class Hud {
     el.classList.toggle('hidden', !j);
     if (!j) return;
     $('jump-range').textContent = `${j.vmin}–${j.vmax}`;
-    const v = game.bike.forwardSpeed * 3.6;
+    const v = game.bike.forwardSpeed * KMH;
     el.classList.toggle('ok', v >= j.vmin! && v <= j.vmax!);
     el.classList.toggle('fast', v > j.vmax!);
   }
@@ -141,11 +142,11 @@ export class Hud {
       this.riders.innerHTML = '';
       this.dots = [];
     }
-    const kmh = Math.round(Math.abs(game.bike.forwardSpeed) * 3.6);
+    const kmh = Math.round(Math.abs(game.bike.forwardSpeed) * KMH);
     if (kmh !== this.last.speed) {
       this.last.speed = kmh;
       this.speed.textContent = String(kmh);
-      const t = clamp(kmh / 130, 0, 1);
+      const t = clamp(kmh / 175, 0, 1);
       this.gaugeFill.style.strokeDasharray = `${t * 100} 100`;
       this.needle.style.transform = `rotate(${-90 + t * 180}deg)`;
     }

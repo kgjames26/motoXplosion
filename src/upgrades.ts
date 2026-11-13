@@ -1,3 +1,4 @@
+import { KMH } from './units';
 import type { BikeModel, BikeSpec } from './bikes';
 
 /**
@@ -108,7 +109,7 @@ export function specNumbers(s: BikeSpec): { label: string; value: number; unit: 
   return [
     { label: 'Puissance', value: s.power / 735.5, unit: 'ch', higherIsBetter: true },
     { label: 'Couple', value: s.torque / 4.3, unit: 'Nm', higherIsBetter: true },
-    { label: 'Vitesse max', value: s.maxSpeed * 3.6, unit: 'km/h', higherIsBetter: true },
+    { label: 'Vitesse max', value: s.maxSpeed * KMH, unit: 'km/h', higherIsBetter: true },
     { label: 'Poids', value: s.mass, unit: 'kg', higherIsBetter: false },
     { label: 'Suspensions', value: s.suspK * s.travel * 100, unit: '%', higherIsBetter: true },
     { label: 'Adhérence', value: s.grip * 100, unit: '%', higherIsBetter: true },

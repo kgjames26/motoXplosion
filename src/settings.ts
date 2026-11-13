@@ -39,10 +39,12 @@ export interface Settings {
   /** v2.25 parental timer: minutes allowed (0 = off) and seconds already used. */
   timerMin: number;
   timerUsed: number;
+  /** v2.51: 3D circuit handling, new (tyres that slide, wheelspin) or the old one (v2.50). */
+  mxPhysics: 'nouvelle' | 'ancienne';
 }
 
 const KEY = 'mx.settings.v2';
-const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 };
+const DEFAULTS: Settings = { keys: { ...DEFAULT_KEYS }, music: 0.6, sfx: 0.85, layout: 'gauche', region: 'alpes', vibration: true, quality: 'haute', pseudo: '', timerMin: 0, timerUsed: 0 , mxPhysics: 'nouvelle' };
 
 export function loadSettings(): Settings {
   try {

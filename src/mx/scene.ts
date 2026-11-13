@@ -1272,20 +1272,20 @@ export class MxScene {
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
     wantYaw = this.camYaw + d;
-    const targetY = bikeY; // the camera follows the rider's height (smoothly, below)
+    const targetY = bikeY + clamp(b.vy, -12, 12) * 0.05; // the rider's height, a hair ahead of where it is going
     if (this.fresh) {
       this.camYaw = wantYaw;
       this.camY = targetY;
     } else {
       this.camYaw += (wantYaw - this.camYaw) * Math.min(1, dt * 2.2); // turns into the bends a bit slower
       // height: quick, and never left behind (a jump or a drop must not run away from the lens)
-      this.camY += (targetY - this.camY) * Math.min(1, dt * 7.5);
-      this.camY = clamp(this.camY, targetY - 0.9, targetY + 0.9);
+      this.camY += (targetY - this.camY) * Math.min(1, dt * 12);
+      this.camY = clamp(this.camY, targetY - 0.4, targetY + 0.4);
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 3.6 + clamp((b.forwardSpeed - 20.8) / 25, -1, 1) * 0.15 + sw * 2.5; // MXGP-like chase view: 3.6 m behind, give or take 15 cm
-    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 2.15 + sw * 0.6 /* a metre above the helmet: the track ahead reads well */, wz - Math.sin(yaw) * dist);
+    const dist = 3.3 + clamp((b.forwardSpeed - 20.8) / 25, -1, 1) * 0.15 + sw * 2.5; // MXGP-like chase view: 3.6 m behind, give or take 15 cm
+    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.55 + sw * 0.6 /* just above the helmet: bike and wheels well in view */, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
       const k = Math.min(1, dt * 30); // a tight follow: a lag would let the bike run into / away from the lens when it brakes or accelerates
@@ -1294,11 +1294,15 @@ export class MxScene {
       this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 12);
     }
     // look a few metres ahead of the bike, and a touch towards where the track goes next
-    const lx = wx + Math.cos(this.camYaw) * 6 * 0.78 + (far.x - wx) * 0.22;
-    const lz = wz + Math.sin(this.camYaw) * 6 * 0.78 + (far.z - wz) * 0.22;
-    const lookWant = new THREE.Vector3(lx, this.camY + 0.75, lz);
+    const lx = wx + Math.cos(this.camYaw) * 2.6 * 0.85 + (far.x - wx) * 0.15;
+    const lz = wz + Math.sin(this.camYaw) * 2.6 * 0.85 + (far.z - wz) * 0.15;
+    const lookWant = new THREE.Vector3(lx, this.camY + 0.6, lz); // the bike sits near the middle of the screen
     if (this.fresh) this.look.copy(lookWant);
-    else this.look.lerp(lookWant, Math.min(1, dt * 6));
+    else {
+      this.look.x += (lookWant.x - this.look.x) * Math.min(1, dt * 8);
+      this.look.z += (lookWant.z - this.look.z) * Math.min(1, dt * 8);
+      this.look.y += (lookWant.y - this.look.y) * Math.min(1, dt * 14);
+    }
     this.fresh = false;
     this.camera.aspect = aspect;
     this.camera.fov = 70; // wide, like the reference chase cameras

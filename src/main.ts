@@ -1,7 +1,8 @@
+import { KMH } from './units';
 import './style.css';
 import { Audio } from './audio/audio';
 import { loadAssets } from './assets';
-import { Game } from './game';
+import { Game, setMxPhysics } from './game';
 import { GLRenderer } from './gl/glRenderer';
 import { loadSettings, saveSettings, Layout, Quality, KEY_ACTIONS, DEFAULT_KEYS, keyLabel } from './settings';
 import type { KeyAction } from './settings';
@@ -40,6 +41,7 @@ import {
 const $ = (id: string) => document.getElementById(id)!;
 
 const settings = loadSettings();
+setMxPhysics(settings.mxPhysics !== 'ancienne');
 settings.layout = 'gauche'; // v2.31: no left-handed layout any more
 const profile = loadProfile();
 // the home screen opens on a circuit mode (cruising has its own big button)
@@ -430,6 +432,8 @@ function openSettings(from: ScreenName): void {
   $('set-music-v').textContent = m.value;
   $('set-sfx-v').textContent = s.value;
   ($('set-vibration') as HTMLInputElement).checked = settings.vibration;
+  for (const b of $('set-mxphys').querySelectorAll('.layout-opt')) b.classList.toggle('selected', (b as HTMLElement).dataset.phys === settings.mxPhysics);
+  setMxPhysics(settings.mxPhysics !== 'ancienne');
   ($('set-pseudo') as HTMLInputElement).value = settings.pseudo;
   applyLayout(settings.layout);
   applyQuality(settings.quality);
@@ -469,6 +473,14 @@ function bindSettings(): void {
     mp.multi?.updateProfile(settings.pseudo.trim() || 'Pilote', MULTI_BIKE.id, profile.outfit);
     updateBest();
   });
+  for (const b of $('set-mxphys').querySelectorAll('.layout-opt')) {
+    b.addEventListener('click', () => {
+      settings.mxPhysics = (b as HTMLElement).dataset.phys === 'ancienne' ? 'ancienne' : 'nouvelle';
+      saveSettings(settings);
+      setMxPhysics(settings.mxPhysics !== 'ancienne');
+      for (const o of $('set-mxphys').querySelectorAll('.layout-opt')) o.classList.toggle('selected', o === b);
+    });
+  }
   ($('set-vibration') as HTMLInputElement).addEventListener('change', (e) => {
     settings.vibration = (e.target as HTMLInputElement).checked;
     saveSettings(settings);
@@ -923,12 +935,12 @@ let cruiseShown = '';
 /** Cruise control button: only in cruising when bought; shows the speed it holds. */
 function syncCruise(): void {
   const b = $('ctl-cruise');
-  const k = game.hasCruise ? (game.cruiseTarget > 0 ? 'on' + Math.round(game.cruiseTarget * 3.6) : 'off') : 'none';
+  const k = game.hasCruise ? (game.cruiseTarget > 0 ? 'on' + Math.round(game.cruiseTarget * KMH) : 'off') : 'none';
   if (k === cruiseShown) return;
   cruiseShown = k;
   b.classList.toggle('hidden', k === 'none');
   b.classList.toggle('on', game.cruiseTarget > 0);
-  $('ctl-cruise-v').textContent = game.cruiseTarget > 0 ? `${Math.round(game.cruiseTarget * 3.6)}` : 'CRUISE';
+  $('ctl-cruise-v').textContent = game.cruiseTarget > 0 ? `${Math.round(game.cruiseTarget * KMH)}` : 'CRUISE';
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();

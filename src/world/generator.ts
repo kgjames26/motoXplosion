@@ -1,3 +1,4 @@
+import { KMH } from '../units';
 import { clamp, fbm1, GRAVITY_SCALE, noise1, Rng, smoothstep } from '../core/math';
 import { Biome, DX, PropKind, Surface } from './types';
 import type { World } from './world';
@@ -962,7 +963,7 @@ export class Generator {
         },
         surface: () => Surface.Dirt,
         noPickup: [[0, len]],
-        onStart: (x0) => this.world.marks.push({ x0, x1: x0 + xa, kind: 'kicker', vmin: Math.round(lo * 3.6), vmax: Math.round(hi * 3.6) }),
+        onStart: (x0) => this.world.marks.push({ x0, x1: x0 + xa, kind: 'kicker', vmin: Math.round(lo * KMH), vmax: Math.round(hi * KMH) }),
         props: 0.3,
       },
     ];
