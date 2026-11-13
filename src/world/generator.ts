@@ -266,7 +266,8 @@ export class Generator {
   /** Difficulty 0..1: grows with distance (endless) or with the circuit number. */
   private difficulty(x: number): number {
     if (this.circuit) return clamp(0.1 + this.grade * 0.75 + x / 20000, 0, 1);
-    return clamp(x / 5000, 0, 1);
+    // cruising: twice as demanding as before (the ramp climbs twice as fast, from a higher start)
+    return clamp(0.12 + x / 2500, 0, 1);
   }
 
   generateUntil(sampleIndex: number): void {

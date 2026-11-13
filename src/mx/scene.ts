@@ -732,13 +732,13 @@ export class MxScene {
       this.camYaw = wantYaw;
       this.camY = targetY;
     } else {
-      this.camYaw += (wantYaw - this.camYaw) * Math.min(1, dt * 3.2);
+      this.camYaw += (wantYaw - this.camYaw) * Math.min(1, dt * 2.2); // turns into the bends a bit slower
       this.camY += (targetY - this.camY) * Math.min(1, dt * 2.6);
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 5.0 + v * 0.05 + sw * 2.5; // closer behind the rider
-    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 2.25 + sw * 0.6, wz - Math.sin(yaw) * dist);
+    const dist = 1.75 + v * 0.0175 + sw * 2.5; // 65 % closer behind the rider
+    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.35 + sw * 0.6, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
       const k = Math.min(1, dt * 7);
@@ -747,9 +747,9 @@ export class MxScene {
       this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 4);
     }
     // look a few metres ahead of the bike, and a touch towards where the track goes next
-    const lx = wx + Math.cos(this.camYaw) * 5 * 0.78 + (far.x - wx) * 0.22;
-    const lz = wz + Math.sin(this.camYaw) * 5 * 0.78 + (far.z - wz) * 0.22;
-    const lookWant = new THREE.Vector3(lx, this.camY + 1.25, lz);
+    const lx = wx + Math.cos(this.camYaw) * 4 * 0.78 + (far.x - wx) * 0.22;
+    const lz = wz + Math.sin(this.camYaw) * 4 * 0.78 + (far.z - wz) * 0.22;
+    const lookWant = new THREE.Vector3(lx, this.camY + 1.1, lz);
     if (this.fresh) this.look.copy(lookWant);
     else this.look.lerp(lookWant, Math.min(1, dt * 6));
     this.fresh = false;
