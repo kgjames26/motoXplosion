@@ -5,7 +5,7 @@ import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
 import { JUMP_FLAT, JUMP_HALF_W, JUMP_SKIRT, jumpHeight } from './jumps';
-import { loopAt, mxCircuit, MX_CIRCUITS, MX_RUNOFF, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
+import { loopAt, mxCircuit, MX_CIRCUITS, MX_RUNOFF, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, loopHeightN, mxBase, mxLatScale, mxPose } from './track';
 import type { MxWorld } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
@@ -186,6 +186,39 @@ const hash2 = (a: number, b: number): number => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
+/** Width of the grass slope that brings the relief under the loop back down to the ground (m). */
+const skirtW = (b: number) => 3 + 4 * b;
+/** Smooth value noise in [0, 1] on a grid of `cell` metres. */
+function vnoise(x: number, z: number, cell: number, salt: number): number {
+  const fx = x / cell, fz = z / cell;
+  const ix = Math.floor(fx), iz = Math.floor(fz);
+  const ax = fx - ix, az = fz - iz;
+  const sx = ax * ax * (3 - 2 * ax), sz = az * az * (3 - 2 * az);
+  const h = (a: number, b: number) => hash2(a * 7 + salt, b * 13 - salt);
+  return (h(ix, iz) * (1 - sx) + h(ix + 1, iz) * sx) * (1 - sz) + (h(ix, iz + 1) * (1 - sx) + h(ix + 1, iz + 1) * sx) * sz;
+}
+/**
+ * v2.48: everything inclined on the circuit (jump faces, berms, banks, steep skirts) takes a darker,
+ * redder earth colour. The edge between flat and inclined is ragged: the slope threshold is shifted
+ * by noise of 15 to 55 cm cells, so the colour changes over an irregular 15–55 cm band.
+ */
+function tintSlopes(g: THREE.BufferGeometry, k = 1): void {
+  const P = g.attributes.position.array as Float32Array;
+  const N = g.attributes.normal.array as Float32Array;
+  const C = g.attributes.color.array as Float32Array;
+  for (let i = 0; i < P.length / 3; i++) {
+    const x = P[i * 3], z = P[i * 3 + 2];
+    const ang = Math.acos(Math.min(1, Math.abs(N[i * 3 + 1]))); // rad from flat
+    const cell = 0.15 + 0.4 * vnoise(x, z, 3, 5); // 15..55 cm, varying over the circuit
+    const jit = (vnoise(x, z, cell, 11) - 0.5) * 0.16 + (vnoise(x, z, 0.15, 17) - 0.5) * 0.06;
+    const f = Math.min(1, Math.max(0, (ang - (0.2 + jit)) / 0.05)) * k; // ~11° ± 5°
+    C[i * 3] *= 1 - 0.2 * f;
+    C[i * 3 + 1] *= 1 - 0.34 * f;
+    C[i * 3 + 2] *= 1 - 0.48 * f;
+  }
+  g.attributes.color.needsUpdate = true;
+}
+
 export class MxScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
@@ -324,6 +357,7 @@ export class MxScene {
     s.add(this.smoke);
     this.loadKit();
     this.buildJumps();
+    this.buildTrackside();
     this.earth.map = earthTexture();
     this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.6);
     void loadRuts().then((d) => {
@@ -380,9 +414,9 @@ export class MxScene {
     const HW = MX_HALF_WIDTH;
     const OUT = HW + MX_RUNOFF; // end of the rideable ground (9 m)
     const lat: number[] = [];
-    for (const n of [-16, -14, -12.6, -11.2, -10.6, -10, -9.6, -9.2, -8.5, -7.6, -6.7, -6]) lat.push(n);
+    for (const n of [-27, -24, -21, -18.5, -16, -14, -12.6, -11.2, -10.6, -10, -9.6, -9.2, -8.5, -7.6, -6.7, -6]) lat.push(n);
     for (let n = -5.5; n <= 5.5001; n += 0.2) lat.push(Math.round(n * 100) / 100);
-    for (const n of [6, 6.7, 7.6, 8.5, 9.2, 9.6, 10, 10.6, 11.2, 12.6, 14, 16]) lat.push(n);
+    for (const n of [6, 6.7, 7.6, 8.5, 9.2, 9.6, 10, 10.6, 11.2, 12.6, 14, 16, 18.5, 21, 24, 27]) lat.push(n);
     const L = lat.length;
     const STEP = 0.5;
     const m = Math.ceil(MX_LEN / STEP);
@@ -425,6 +459,8 @@ export class MxScene {
       let nearLane = 1e9;
       for (const [lx, lz] of laneAt) nearLane = Math.min(nearLane, Math.hypot(lx - p.x, lz - p.z));
       const bankOn = nearLane > 24 ? 1 : smooth(14, 24, nearLane);
+      const base = mxBase(sm);
+      const turn = clamp((Math.abs(p.k) - 0.02) * 30, 0, 1); // tight turns: deep ruts in the berm
       for (let j = 0; j < L; j++) {
         const n = lat[j];
         const an = Math.abs(n);
@@ -450,15 +486,29 @@ export class MxScene {
           const dr = dens(n + 0.2);
           const berm = clamp(Math.abs(dr - dl) * 2.2, 0, 1) * (1 - d);
           y += -0.05 * smooth(0.08, 0.6, d) + 0.02 * berm - 0.012 * noise * (1 - d) - 0.01 * sl * noise;
+          // berms: the outside of a tight turn is dug by every lap, 3 deep ruts around the arc and a lip on top
+          const outN = -Math.sign(p.k) * n;
+          let rutShade = 0;
+          if (turn > 0 && outN > 1.5) {
+            let rut = 0;
+            for (const c of [2.4, 3.3, 4.2]) rut = Math.max(rut, Math.exp(-(((outN - c - 0.15 * Math.sin(sm / 7 + c)) / 0.28) ** 2)));
+            y -= 0.09 * rut * turn;
+            y += 0.28 * turn * Math.exp(-(((outN - HW - 0.5) / 0.45) ** 2));
+            rutShade = 0.12 * rut * turn;
+          }
+          y += base;
           // light packed dirt on the track, darker on the wheel lines; beside it the run-off turns to verge
-          shade = 1.02 - 0.3 * smooth(0.05, 0.6, d) + 0.1 * (noise - 0.5);
+          shade = 1.02 - 0.3 * smooth(0.05, 0.6, d) + 0.1 * (noise - 0.5) - rutShade;
           warm = 0.1 * smooth(0.15, 0.8, sl) * (1 - d);
           grassy = smooth(HW + 0.2, HW + 1.6, an) * (0.75 + 0.25 * noise);
         } else {
           // the bank of earth that closes the circuit: 40 cm high, a little irregular
           const rise = smooth(OUT, OUT + 0.8, an) * (1 - smooth(OUT + 1.2, OUT + 2.2, an)) * bankOn;
           const wob = 0.8 + 0.2 * hash2(Math.floor(sm / 1.5), 7) + 0.1 * Math.sin(sm / 5.3);
-          y = an > OUT + 2.4 ? -0.12 : rise * 0.4 * wob - (1 - rise) * 0.05; // beyond the bank: the world's ground
+          // beyond the bank: a grass slope brings the relief back down to the world's ground
+          const fall = smooth(OUT + 2.2, OUT + 2.2 + skirtW(base), an);
+          if (an <= OUT + 2.4) y = base + rise * 0.4 * wob - (1 - rise) * 0.05;
+          else y = base * (1 - fall) - 0.12 * (base < 0.05 ? 1 : fall);
           shade = 0.95 + 0.1 * hash2(Math.floor(sm), Math.floor(an * 3));
           grassy = 1;
         }
@@ -485,6 +535,7 @@ export class MxScene {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
+    tintSlopes(g);
     const mesh = new THREE.Mesh(g, this.earth);
     mesh.receiveShadow = true;
     if (this.loopRibbon) {
@@ -554,12 +605,12 @@ export class MxScene {
    * in track.ts and both the shape and the collision follow.
    */
   private buildJumps(): void {
-    for (const f of MX_FEATURES) {
+    for (const [list, cruise] of [[MX_FEATURES, false], [MX_FEATURES_CRUISE, true]] as const) for (const f of list) {
       if (!f.spec) continue;
       const spec = f.spec;
-      const nu = Math.ceil(f.len / 0.4) + 1;
+      const nu = Math.ceil(f.len / 0.3) + 1;
       const lat: number[] = [];
-      for (let n = -JUMP_HALF_W; n <= JUMP_HALF_W + 0.001; n += n < -JUMP_FLAT || n >= JUMP_FLAT ? 0.5 : 0.75) lat.push(Math.round(n * 100) / 100);
+      for (let n = -JUMP_HALF_W; n <= JUMP_HALF_W + 0.001; n += n < -JUMP_FLAT || n >= JUMP_FLAT ? 0.4 : 0.5) lat.push(Math.round(n * 100) / 100);
       const L = lat.length;
       const pos = new Float32Array(nu * L * 3);
       const uv = new Float32Array(nu * L * 2);
@@ -570,7 +621,7 @@ export class MxScene {
         const t = Math.min(f.len, (i * f.len) / (nu - 1));
         for (let j = 0; j < L; j++) {
           const n = lat[j];
-          const h = jumpHeight(spec, t, n);
+          const h = jumpHeight(spec, t, n) + mxBase(f.s0 + t);
           const k = i * L + j;
           const a = t - f.len / 2;
           const noise = hash2(Math.floor(t * 1.7) + 31 * this.circuit, Math.floor((n + 20) * 3));
@@ -597,11 +648,12 @@ export class MxScene {
       g.setAttribute('color', new THREE.BufferAttribute(col, 3));
       g.setIndex(idx);
       g.computeVertexNormals();
+      tintSlopes(g);
       const mesh = new THREE.Mesh(g, this.earth);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.visible = !this.cruiseView;
-      this.crossMeshes.push(mesh);
+      mesh.visible = cruise === this.cruiseView;
+      (cruise ? this.cruiseMeshes : this.crossMeshes).push(mesh);
       this.scene.add(mesh);
     }
   }
@@ -626,6 +678,127 @@ export class MxScene {
   }
 
   /** Edge posts, start arch, a few banners: what makes it read as a race track. */
+  /**
+   * v2.48: what lines a real MX track: advertising boards on the outside of the straights and
+   * turns, and a tape fence (posts and two red and white tapes) behind the earth bank. They follow
+   * the relief and stay clear of the other parts of the loop and of the cruising lanes.
+   */
+  private buildTrackside(): void {
+    const OUT = MX_HALF_WIDTH + MX_RUNOFF;
+    const pts: [number, number, number][] = [];
+    for (let s = 0; s < MX_LEN; s += 2) {
+      const p = loopAt(s);
+      pts.push([p.x, p.z, s]);
+    }
+    const lane: [number, number][] = [];
+    const outL = MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0];
+    for (const [from, to] of [[-40, MX_ENTRY + 2], [outL - 2, outL + MX_EXIT + 40]] as [number, number][])
+      for (let u = from; u <= to; u += 3) {
+        const q = mxPose(u, true);
+        lane.push([q.x, q.z]);
+      }
+    // is (x, z) far enough from every other part of the loop (arc distance > 40 m) and from the lanes?
+    const clear = (x: number, z: number, s: number, r: number): boolean => {
+      for (const [px, pz, ps] of pts) {
+        let ds = Math.abs(ps - s);
+        ds = Math.min(ds, MX_LEN - ds);
+        if (ds > 40 && (px - x) ** 2 + (pz - z) ** 2 < r * r) return false;
+      }
+      for (const [lx, lz] of lane) if ((lx - x) ** 2 + (lz - z) ** 2 < 11 * 11) return false;
+      return true;
+    };
+    // ---- the tape fence: one strip per side, cut where it would cross something
+    const tapeCv = document.createElement('canvas');
+    tapeCv.width = 128;
+    tapeCv.height = 64;
+    const tc = tapeCv.getContext('2d')!;
+    tc.fillStyle = '#3a3a3a';
+    tc.fillRect(0, 0, 6, 64); // post
+    for (const y of [10, 34]) for (let x = 0; x < 128; x += 16) {
+      tc.fillStyle = (x / 16) % 2 ? '#f4f4f4' : '#e0322a';
+      tc.fillRect(x, y, 16, 7);
+    }
+    const tapeTex = new THREE.CanvasTexture(tapeCv);
+    tapeTex.colorSpace = THREE.SRGBColorSpace;
+    tapeTex.wrapS = THREE.RepeatWrapping;
+    const tapeMat = new THREE.MeshLambertMaterial({ map: tapeTex, alphaTest: 0.5, transparent: false, side: THREE.DoubleSide });
+    const FN = OUT + 3.4;
+    for (const side of [-1, 1]) {
+      let pos: number[] = [];
+      let uv: number[] = [];
+      const flush = () => {
+        if (pos.length >= 12) {
+          const idx: number[] = [];
+          for (let i = 0; i < pos.length / 6 - 1; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+          g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+          g.setIndex(idx);
+          g.computeVertexNormals();
+          this.scene.add(new THREE.Mesh(g, tapeMat));
+        }
+        pos = [];
+        uv = [];
+      };
+      for (let s = 0; s <= MX_LEN; s += 1.5) {
+        const p = loopAt(s % MX_LEN);
+        const n = side * FN;
+        const x = p.x - Math.sin(p.th) * n;
+        const z = p.z + Math.cos(p.th) * n;
+        if (!clear(x, z, s % MX_LEN, FN + 1.5)) {
+          flush();
+          continue;
+        }
+        const y = mxBase(s);
+        pos.push(x, y, z, x, y + 1.05, z);
+        uv.push(s / 3, 0, s / 3, 1);
+      }
+      flush();
+    }
+    // ---- advertising boards (invented brands), 6 m x 1.1 m, on the outside
+    const brands: [string, string, string][] = [
+      ['TERRAX', '#ffd400', '#111111'], ['KROSS OIL', '#e8392f', '#ffffff'], ['VELOXA', '#1b4fd8', '#ffffff'], ['MUDKING', '#111111', '#7cd63a'],
+      ['GRIPTEK', '#ffffff', '#e8392f'], ['BRAAP', '#ff7a1a', '#111111'], ['DUNEWAX', '#0f8a6a', '#ffffff'], ['MOTOXPLOSION', '#14161c', '#ff7a1a'],
+    ];
+    const boardMats = brands.map(([name, bg, fg]) => {
+      const cv = document.createElement('canvas');
+      cv.width = 512;
+      cv.height = 96;
+      const c = cv.getContext('2d')!;
+      c.fillStyle = bg;
+      c.fillRect(0, 0, 512, 96);
+      c.fillStyle = fg;
+      c.fillRect(0, 84, 512, 12);
+      c.font = `italic 900 ${name.length > 9 ? 54 : 64}px Arial Black, sans-serif`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(name, 256, 44);
+      const t = new THREE.CanvasTexture(cv);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      return new THREE.MeshLambertMaterial({ map: t });
+    });
+    const back = new THREE.MeshLambertMaterial({ color: 0x3a3d44 });
+    const boardGeo = new THREE.BoxGeometry(6, 1.1, 0.08);
+    let b = 0;
+    for (let s = 8; s < MX_LEN - 6; s += 9) {
+      const p = loopAt(s);
+      // outside of the turn, or alternate sides on the straights
+      const side = Math.abs(p.k) > 0.01 ? -Math.sign(p.k) : (Math.floor(s / 27) % 2 ? 1 : -1);
+      if (Math.abs(p.k) < 0.01 && hash2(Math.floor(s), 3) < 0.35) continue;
+      const n = side * (OUT + 2.6);
+      const x = p.x - Math.sin(p.th) * n;
+      const z = p.z + Math.cos(p.th) * n;
+      if (!clear(x, z, s, OUT + 5)) continue;
+      const board = new THREE.Mesh(boardGeo, [back, back, back, back, side > 0 ? back : boardMats[b % boardMats.length], side > 0 ? boardMats[b % boardMats.length] : back]);
+      board.position.set(x, mxBase(s) + 0.7, z);
+      board.rotation.y = -p.th;
+      board.castShadow = true;
+      this.scene.add(board);
+      b++;
+    }
+  }
+
   private buildMarkers(): void {
     const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.8, 0.07), new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.ceil(MX_LEN / 8) * 2);
     const m = new THREE.Matrix4();
@@ -636,7 +809,7 @@ export class MxScene {
       const h = 0;
       for (const side of [-1, 1]) {
         const n = side * (MX_HALF_WIDTH + 0.5);
-        m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + 0.4, p.z + Math.cos(p.th) * n);
+        m.makeTranslation(p.x - Math.sin(p.th) * n, h + bankAt(p.k, side * MX_HALF_WIDTH) + loopHeightN(s, n) + 0.4, p.z + Math.cos(p.th) * n);
         posts.setMatrixAt(i, m);
         posts.setColorAt(i, col.set(0xf2d21b)); // yellow stakes, like the MXGP tracks
         i++;
@@ -903,10 +1076,24 @@ export class MxScene {
     const far = make(spread(th.far.length ? assetsFor(th.far, 'structure') : [], th.trackside ? 8 : 6));
     const side = th.trackside ? make(spread(assetsFor(['sf'], 'trackside'), 12)) : [];
     const line: [number, number][] = [];
+    const hills: [number, number, number][] = [];
     for (let s = 0; s < MX_LEN; s += 4) {
       const p = loopAt(s);
       line.push([p.x, p.z]);
+      const b = mxBase(s);
+      if (b > 0.05) hills.push([p.x, p.z, b]);
     }
+    // height of the grass slopes around the relief of the loop (a tree there stands on it, not in it)
+    const groundAt = (x: number, z: number): number => {
+      let h = 0;
+      const OUT = MX_HALF_WIDTH + MX_RUNOFF;
+      for (const [hx, hz, b] of hills) {
+        const d = Math.hypot(hx - x, hz - z);
+        const t = clamp((d - OUT - 2.2) / skirtW(b), 0, 1);
+        h = Math.max(h, b * (1 - t * t * (3 - 2 * t)));
+      }
+      return h;
+    };
     const total = MX_ENTRY + (MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0]) + MX_EXIT;
     for (let u = -40; u < total + 60; u += 4) {
       if (u > MX_ENTRY && u < total - MX_EXIT) continue;
@@ -925,7 +1112,7 @@ export class MxScene {
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(sp.w * k, sp.h * k, 1);
       sprite.center.set(sp.ax / sp.w, 1 - sp.ay / sp.h);
-      sprite.position.set(x, 0, z);
+      sprite.position.set(x, groundAt(x, z) - 0.05, z);
       this.scene.add(sprite);
     };
     const R = 300;

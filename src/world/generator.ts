@@ -7,7 +7,7 @@ import { ENDURO_CP, ModeId, raceLength } from '../modes';
 import { circuitGrade, circuitLength, isCircuitMode, trialRockRange, trialZones } from '../circuits';
 import { rockKindFor } from '../catalog/rocks';
 import { HILL_SCALE } from '../weather';
-import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxPathHeight } from '../mx/track';
+import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, MX_ZONE_LEN, mxBase, mxPathHeight } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
 /**
@@ -986,7 +986,7 @@ export class Generator {
             if (u + f.len > len) continue;
             for (let k = 0; k < 5; k++) {
               const t = f.len * (0.35 + (k / 4) * 0.55);
-              this.world.coins.push({ x: x0 + u + t, y: h0 + f.h + 1.2 + Math.sin((k / 4) * Math.PI) * 1.0, taken: false, takenAt: 0 });
+              this.world.coins.push({ x: x0 + u + t, y: h0 + mxBase(f.s0 + t) + f.h + 1.2 + Math.sin((k / 4) * Math.PI) * 1.0, taken: false, takenAt: 0 });
             }
           }
       },

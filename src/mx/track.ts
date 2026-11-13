@@ -29,9 +29,13 @@ export interface MxCircuitDef {
 }
 /** A varied set, small to big: used by the circuits that do not list their own. */
 export const DEFAULT_JUMPS: JumpSpec[] = [
-  J.table(2.2, 22), J.single(1.2, 18), J.double(1.2, 30), J.table(3.4, 34), J.single(0.6, 11), J.triple(1, 34),
-  J.table(1, 10), J.single(1.8, 24), J.table(4.6, 46), J.double(0.8, 20), J.single(0.5, 3),
+  // v2.48: the big ones are twice as big (height and length) and come more often; the small ones are unchanged
+  J.table(4.4, 44), J.single(1.2, 18), J.double(2.4, 60), J.table(6.8, 68), J.single(0.6, 11), J.single(3.6, 48),
+  J.table(1, 10), J.triple(2, 68), J.table(5, 52), J.double(0.8, 20), J.table(7, 80), J.single(0.5, 3),
+  J.double(3, 64), J.single(3, 40),
 ];
+/** Cruising rides the same loop with low, rounded tables: nothing that throws the rider off. */
+export const CRUISE_JUMPS: JumpSpec[] = [J.table(1.3, 18), J.table(0.8, 11), J.table(1.1, 16, { plateau: 6 }), J.table(0.6, 9)];
 const STRAIGHT4: [number, number][] = [[-90, 0], [-30, 0], [30, 0], [90, 0]];
 export const MX_CIRCUITS: MxCircuitDef[] = [
   {
@@ -256,15 +260,55 @@ function featureHeight(f: MxFeature, s: number, n: number): number {
   return gridHeight(f, f.len / 2 + dx * c + dz * sn, -dx * sn + dz * c);
 }
 
+/**
+ * v2.48: natural relief. The loop climbs and drops over long smooth hills (cosine bumps, up to
+ * ~2.4 m, grades under ~10%), flat on the main straight where the start and the cruising lanes are.
+ * Sampled once per metre when the circuit is built; the jumps sit on top of it.
+ */
+let BASE = new Float32Array(1);
+function buildBase(i: number): void {
+  BASE = new Float32Array(MX_LEN);
+  let seed = 7771 + i * 131;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const flatA = MX_STRAIGHT[0] - 25;
+  const flatB = MX_STRAIGHT[1] + 25;
+  const inFlat = (x: number) => {
+    const w = wrap(x);
+    return (w >= wrap(flatA) && w <= wrap(flatB)) || (wrap(flatA) > wrap(flatB) && (w >= wrap(flatA) || w <= wrap(flatB)));
+  };
+  let s = flatB + 20;
+  const end = flatA + MX_LEN - 20;
+  while (s < end - 60) {
+    const L = 80 + rnd() * 90;
+    if (s + L > end) break;
+    const A = 1.3 + rnd() * 1.7;
+    for (let k = 0; k <= L; k++) {
+      const x = s + k;
+      if (inFlat(x)) continue;
+      const w = wrap(x);
+      BASE[w] = Math.max(BASE[w], A * 0.5 * (1 - Math.cos((2 * Math.PI * k) / L)));
+    }
+    s += L + 15 + rnd() * 60;
+  }
+}
+/** Height of the relief under the loop at arc length s (m, >= 0). */
+export function mxBase(s: number): number {
+  const w = ((s % MX_LEN) + MX_LEN) % MX_LEN;
+  const i = Math.floor(w);
+  const a = w - i;
+  return BASE[i % MX_LEN] * (1 - a) + BASE[(i + 1) % MX_LEN] * a;
+}
+
 /** Track height above the base level at loop arc length s, n metres off the centre line. */
 export function loopHeightN(s: number, n: number, cruise = false): number {
   const w = wrap(s);
+  const base = mxBase(s);
   for (const f of cruise ? MX_FEATURES_CRUISE : MX_FEATURES) {
     let t = w - wrap(f.s0);
     if (t < 0) t += MX_LEN;
-    if (t <= f.len) return featureHeight(f, s, n);
+    if (t <= f.len) return base + featureHeight(f, s, n);
   }
-  return 0;
+  return base;
 }
 
 /** The main straight: where the lap starts and where cruising joins and leaves the loop. */
@@ -348,9 +392,16 @@ function place(out: MxFeature[], cfg: PlaceCfg): void {
     while (s < end - 9 && tries < order.length) {
       if (cfg.specs) {
         let found = false;
-        for (let a = 0; a < cfg.specs.length && !found; a++) {
-          const base = cfg.specs[q % cfg.specs.length];
-          q++;
+        // two big jumps for one small one: the big ones are tried first in their slots (scaled down
+        // if the stretch is short), the small ones fill what is left
+        const big = cfg.specs.filter((j) => j.h >= 1.5);
+        const small = cfg.specs.filter((j) => j.h < 1.5);
+        const slot = q++;
+        const tryList: JumpSpec[] = [];
+        if (big.length && slot % 3 !== 2) for (let a = 0; a < big.length; a++) tryList.push(big[(slot + a) % big.length]);
+        for (let a = 0; a < small.length; a++) tryList.push(small[(slot + a) % small.length]);
+        for (let a = 0; a < tryList.length && !found; a++) {
+          const base = tryList[a];
           for (const k of [1, 0.85, 0.7, 0.55]) {
             const spec = k === 1 ? base : scaleJump(base, k);
             const len = jumpLength(spec);
@@ -441,7 +492,8 @@ export function setMxCircuit(i: number): void {
   MX_FEATURES.length = 0;
   MX_FEATURES_CRUISE.length = 0;
   place(MX_FEATURES, { ...CFG_CROSS, specs: MX_CIRCUITS[i].jumps ?? DEFAULT_JUMPS });
-  place(MX_FEATURES_CRUISE, CFG_CRUISE);
+  place(MX_FEATURES_CRUISE, { ...CFG_CRUISE, specs: CRUISE_JUMPS });
+  buildBase(i);
   MX_CRUISE_LOOP = MX_LEN + (MX_STRAIGHT[1] - MX_STRAIGHT[0]);
   MX_ZONE_LEN = MX_ENTRY + MX_CRUISE_LOOP + MX_EXIT;
 }

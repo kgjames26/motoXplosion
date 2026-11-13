@@ -110,13 +110,13 @@ function layout(s: JumpSpec): { bumps: Bump[]; len: number } {
       for (let i = 0; i < mids; i++) {
         t += gap;
         const hm = h * 0.9;
-        const m: Bump = { at: t, up: ((1.5 * hm) / 0.7) * k, flat: 0.4 * k, down: ((1.5 * hm) / 0.7) * k, h: hm, pw: 1 };
+        const m: Bump = { at: t, up: ((1.5 * hm) / 0.5) * k, flat: 0.4 * k, down: ((1.5 * hm) / 0.7) * k, h: hm, pw: 1 };
         bumps.push(m);
         t = m.at + m.up + m.flat + m.down;
       }
       t += gap;
       const hl = h * ratio;
-      const lb: Bump = { at: t, up: ((1.5 * hl) / 0.7) * k, flat: 0.8 * k, down: ((1.5 * hl) / land) * k, h: hl, pw: 1 };
+      const lb: Bump = { at: t, up: ((1.5 * hl) / 0.5) * k, flat: 0.8 * k, down: ((1.5 * hl) / land) * k, h: hl, pw: 1 };
       bumps.push(lb);
       t = lb.at + lb.up + lb.flat + lb.down;
     }
