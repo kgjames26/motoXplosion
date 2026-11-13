@@ -8,6 +8,7 @@ import { loopAt, MX_CIRCUITS, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE
 import type { MxWorld } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
+import { smokeRate } from '../render/particles';
 import type { AssetDef, AssetGroup } from '../catalog';
 
 /**
@@ -787,39 +788,39 @@ export class MxScene {
     this.coins.instanceMatrix.needsUpdate = true;
   }
 
-  /** Exhaust smoke at the silencer: density and size follow the throttle; none for the electric bike. */
+  /** Exhaust smoke at the silencer: it drifts 20 cm (idle) to 1 m (full power) behind the pipe and vanishes; none for the electric bike. */
   private updateSmoke(game: Game, dt: number, car: THREE.Group): void {
-    const b = game.bike;
     const thr = game.input.throttle;
-    if (!game.model.electric && game.crashTimer <= 0 && thr >= 0.04) this.smokeAcc += (5 + 38 * thr * thr + 6 * thr) * dt;
+    if (!game.model.electric && game.crashTimer <= 0) this.smokeAcc += smokeRate(thr) * dt;
     else this.smokeAcc = 0;
-    const local = new THREE.Vector3();
-    car.updateMatrixWorld(true);
     while (this.smokeAcc >= 1) {
       this.smokeAcc -= 1;
       const i = this.smokeI++ % this.smokeN;
-      const [tx, ty] = game.exhaustTip();
-      local.set(tx, ty, 0.22);
-      car.localToWorld(local);
-      this.smokeP.set([local.x, local.y, local.z], i * 3);
-      const back = -(1 + thr * 2.4 + Math.random() * 0.8);
-      const yaw = -car.rotation.y;
-      this.smokeV.set([Math.cos(yaw) * back, 0.2 + Math.random() * 0.5, Math.sin(yaw) * back], i * 3);
       this.smokeL[i] = 1;
-      this.smokeS[i] = 0.25 + thr * 0.5;
+      this.smokeV[i * 3] = 0.2 + 0.8 * thr * (0.7 + 0.3 * Math.random()); // drift distance (m)
+      this.smokeV[i * 3 + 1] = 0.35 + thr * 0.3 + Math.random() * 0.1; // lifetime (s)
+      this.smokeV[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
+      this.smokeS[i] = 0.1 + thr * 0.3;
     }
+    const [tx, ty] = game.exhaustTip();
+    const [dx, dy] = game.exhaustDir();
+    const local = new THREE.Vector3();
+    car.updateMatrixWorld(true);
     for (let i = 0; i < this.smokeN; i++) {
       if (this.smokeL[i] <= 0) {
         this.smokeA[i] = 0;
         continue;
       }
-      this.smokeL[i] -= dt / 0.9;
-      for (let k = 0; k < 3; k++) this.smokeP[i * 3 + k] += this.smokeV[i * 3 + k] * dt;
-      this.smokeV[i * 3 + 1] += 0.5 * dt;
-      const t = Math.max(0, this.smokeL[i]);
-      this.smokeA[i] = t * Math.min(0.4, 0.05 + this.smokeS[i] * 0.45);
+      const life = this.smokeV[i * 3 + 1];
+      this.smokeL[i] -= dt / life;
+      const age = 1 - Math.max(0, this.smokeL[i]);
+      const sdist = 0.04 + this.smokeV[i * 3] * (1 - (1 - age) * (1 - age));
+      local.set(tx + dx * sdist, ty + dy * sdist + 0.1 * age, 0.22 + this.smokeV[i * 3 + 2]);
+      car.localToWorld(local);
+      this.smokeP.set([local.x, local.y, local.z], i * 3);
+      this.smokeS[i] = Math.max(this.smokeS[i], 0.1) * (1 + 2.2 * dt);
+      this.smokeA[i] = Math.max(0, this.smokeL[i]) * Math.min(0.4, 0.07 + this.smokeS[i] * 0.4);
     }
-    void b;
     this.smoke.geometry.attributes.position.needsUpdate = true;
     this.smoke.geometry.attributes.alpha.needsUpdate = true;
     this.smoke.geometry.attributes.psize.needsUpdate = true;

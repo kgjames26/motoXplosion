@@ -4435,3 +4435,9 @@ button.wallet {
 
 .splash-version { z-index: 3; opacity: 0.75; text-shadow: 0 1px 3px rgba(0,0,0,.8); color: #fff; }
 .set-version { font-size: 11px; font-weight: 600; opacity: .6; letter-spacing: .05em; }
+
+/* v2.39 : le disque de frein rougit quand on freine */
+.brake .disc { transition: fill 0.12s; }
+.brake.lit .disc { fill: #ff3b2a; }
+.brake.lit .hub { fill: #d9503f; }
+.brake.lit { box-shadow: 0 calc(var(--u) * 0.4) 0 rgba(0,0,0,.4), 0 0 calc(var(--u) * 3.5) rgba(255, 60, 40, 0.8); }

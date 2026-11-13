@@ -56,8 +56,7 @@ export class Particles {
           p.size += p.grow * dt;
           break;
         case 'smoke':
-          p.vx *= Math.exp(-1.6 * dt);
-          p.vy = p.vy * Math.exp(-1.2 * dt) + 0.5 * dt; // warm gas rises
+          // placed by the game relative to the silencer (vx = how far it drifts, m)
           p.size += p.grow * dt;
           break;
         case 'clod':
@@ -90,4 +89,9 @@ export class Particles {
   clear(): void {
     while (this.list.length) this.pool.push(this.list.pop()!);
   }
+}
+
+/** Exhaust smoke puffs per second for a throttle: a faint wisp at idle, a plume at full power. */
+export function smokeRate(thr: number): number {
+  return 3 + 34 * thr * thr + 7 * thr;
 }

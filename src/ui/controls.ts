@@ -215,6 +215,7 @@ export class Controls {
       if (Math.abs(this.balance) < 0.002) this.balance = 0;
     }
     // visuals
+    this.brakeEl.classList.toggle('lit', this.brake > 0.05);
     const pct = this.balance * 50 + 50;
     this.balKnob.style.left = pct + '%';
     this.balFill.style.width = pct + '%';

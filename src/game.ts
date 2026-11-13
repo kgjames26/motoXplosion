@@ -8,7 +8,7 @@ import { rockCapacity } from './climb';
 import { diffIndex, tyreBonus, Weather, weatherFor } from './weather';
 import { Bike, BikeInput } from './physics/bike';
 import type { BikeSpec } from './bikes';
-import { Particles } from './render/particles';
+import { Particles, smokeRate } from './render/particles';
 import type { RegionId } from './world/regions';
 import { Biome, Surface, SURFACES } from './world/types';
 import { World } from './world/world';
@@ -1474,32 +1474,49 @@ export class Game {
     }
   }
 
-  /** Exhaust smoke: a puff stream at the silencer whose density and size follow the throttle (none on the electric bike). */
+  /** Exhaust smoke: puffs born at the silencer that drift 20 cm (idle) to 1 m (full power) and vanish there. */
   private smokeAcc = 0;
   exhaustTip(): [number, number] {
-    return this.bike.pointWorld(-0.85, 0.12);
+    return this.bike.pointWorld(-0.9, 0.12);
+  }
+  /** Unit vector pointing out of the silencer (backwards along the bike), in world axes. */
+  exhaustDir(): [number, number] {
+    const [x0, y0] = this.bike.pointWorld(0, 0);
+    const [x1, y1] = this.bike.pointWorld(-1, 0);
+    const l = Math.hypot(x1 - x0, y1 - y0) || 1;
+    return [(x1 - x0) / l, (y1 - y0) / l];
   }
   private exhaust(dt: number): void {
-    const b = this.bike;
     const thr = this.input.throttle;
-    if (this.model.electric || this.crashTimer > 0 || thr < 0.04) return;
-    this.smokeAcc += (5 + 38 * thr * thr + 6 * thr) * dt;
-    const [x, y] = this.exhaustTip();
+    if (this.model.electric || this.crashTimer > 0) return;
+    this.smokeAcc += smokeRate(thr) * dt;
     while (this.smokeAcc >= 1) {
       this.smokeAcc -= 1;
       this.particles.spawn({
         kind: 'smoke',
-        x,
-        y,
-        vx: b.vx * 0.35 - (1.2 + thr * 3.2 + Math.random()),
-        vy: 0.15 + Math.random() * 0.5,
-        life: 0.45 + thr * 0.55 + Math.random() * 0.3,
-        size: 0.05 + thr * 0.1 + Math.random() * 0.03,
-        grow: 0.25 + thr * 0.7,
+        x: 0,
+        y: 0,
+        vx: 0.2 + 0.8 * thr * (0.7 + 0.3 * Math.random()), // how far this puff drifts (m)
+        vy: 0,
+        life: 0.35 + thr * 0.3 + Math.random() * 0.1,
+        size: 0.035 + thr * 0.07 + Math.random() * 0.02,
+        grow: 0.12 + thr * 0.3,
         r: 205,
         g: 207,
         b: 212,
       });
+    }
+  }
+  /** Smoke follows the silencer: it never trails behind the bike. */
+  private anchorSmoke(): void {
+    const [tx, ty] = this.exhaustTip();
+    const [dx, dy] = this.exhaustDir();
+    for (const p of this.particles.list) {
+      if (p.kind !== 'smoke') continue;
+      const age = 1 - p.life / p.maxLife;
+      const s = 0.04 + p.vx * (1 - (1 - age) * (1 - age));
+      p.x = tx + dx * s;
+      p.y = ty + dy * s + 0.1 * age;
     }
   }
 
@@ -1509,6 +1526,7 @@ export class Game {
     // opponents close to the player throw dust too (cheaper rate)
     for (const o of this.opponents) if (Math.abs(o.bike.x - this.bike.x) < 25) this.roost(o.bike, 0.6, dt, 0.35);
     this.particles.update(dt, (x) => this.world.heightAt(x));
+    this.anchorSmoke();
     for (let i = this.popups.length - 1; i >= 0; i--) {
       const p = this.popups[i];
       p.life -= dt;
