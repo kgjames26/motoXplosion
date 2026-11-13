@@ -737,8 +737,8 @@ export class MxScene {
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 6.4 + v * 0.07 + sw * 2.5;
-    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 2.7 + sw * 0.6, wz - Math.sin(yaw) * dist);
+    const dist = 5.0 + v * 0.05 + sw * 2.5; // closer behind the rider
+    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 2.25 + sw * 0.6, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
       const k = Math.min(1, dt * 7);

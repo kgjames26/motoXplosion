@@ -938,7 +938,10 @@ export class Game {
       const satR = capR > 1 ? (need * (1 - share)) / capR : 0;
       // motocross: tyres let go early and progressively, so every fast corner is a slide to hold
       const sF = clamp((satF - 0.62) / 0.45, 0, 1);
-      const sR = clamp((satR - 0.55) / 0.4, 0, 1);
+      // power slide: the rear spinning up (drive using the tyre's grip) lets go sideways as soon as the bike is
+      // leaned a little: the harder the drive, the more it steps out (friction circle: drive vs side grip)
+      const powerSlide = clamp((rearUse - 0.4) / 0.4, 0, 1) * clamp(Math.abs(this.mxLean) / 0.2, 0, 1) * clamp(this.input.throttle * 1.2, 0, 1);
+      const sR = Math.max(clamp((satR - 0.55) / 0.4, 0, 1), powerSlide);
       this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 7);
       this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 7);
       slide = Math.max(slide, this.mxSlideF * 0.8, this.mxSlideR * 0.8);
@@ -949,7 +952,7 @@ export class Game {
       const ds = (v * Math.cos(this.mxPsi)) / Math.max(0.4, 1 - this.mxN * pose.k);
       this.mxPsi += (yaw - pose.k * ds) * dt;
       // spinning the rear with the bike leaned steps the back out (power slide)
-      if (rearUse > 0.8 && Math.abs(this.mxLean) > 0.3) slide = Math.max(slide, Math.min(0.8, (rearUse - 0.8) * 4));
+      if (rearUse > 0.6 && Math.abs(this.mxLean) > 0.15) slide = Math.max(slide, Math.min(0.9, (rearUse - 0.6) * 3));
     } else if (!b.grounded) {
       this.mxSlideF = this.mxSlideR = 0;
       // in the air the bike keeps its line; the track may turn under it

@@ -523,8 +523,9 @@ export class GLRenderer {
     }
 
     // ---- camera: follows the bike with look-ahead, zooms out with speed and air time
-    const speedZoom = clamp(b.speed / 25, 0, 1) * 0.15 + clamp(b.airTime / 1.0, 0, 1) * 0.12;
-    this.zoom = snap ? 1 + speedZoom : approach(this.zoom, 1 + speedZoom, 1.5, dt);
+    // dynamic camera: it pulls back a little as the speed grows (and in the air), settling gently
+    const speedZoom = clamp(b.speed / 28, 0, 1) * 0.28 + clamp(b.airTime / 1.0, 0, 1) * 0.12;
+    this.zoom = snap ? 1 + speedZoom : approach(this.zoom, 1 + speedZoom, 0.9, dt);
     const aspect = this.W / this.H;
     // home screen: closer hero framing and warm sunset light
     const title = game.state === 'title';
