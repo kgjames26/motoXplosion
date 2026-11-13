@@ -185,10 +185,11 @@ export class Controls {
     // keyboard (rebindable): throttle / brake keys, the four joystick keys
     const bd = this.bindings;
     const st = this.stickMode;
-    const up = k.has(bd.throttle);
-    const down = k.has(bd.brake);
-    const left = k.has(bd.left);
-    const right = k.has(bd.right);
+    // circuit (3D) mode: the bound keys (Z / S + arrow joystick). Everywhere else: ↑ gas, ↓ brake, ← → lean
+    const up = st ? k.has(bd.throttle) : k.has('arrowup') || k.has(bd.throttle);
+    const down = st ? k.has(bd.brake) : k.has('arrowdown') || k.has(bd.brake);
+    const left = st ? k.has(bd.left) : k.has('arrowleft');
+    const right = st ? k.has(bd.right) : k.has('arrowright');
     const fwd = k.has(bd.up);
     const back = k.has(bd.down);
     // keyboard throttle ramps like a twist grip

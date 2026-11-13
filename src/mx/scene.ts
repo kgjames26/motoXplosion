@@ -117,6 +117,16 @@ export class MxScene {
   /** How thick each puff is (it grows with the scuffing of the tyre). */
   private dustS = new Float32Array(this.dustN);
   private dustI = 0;
+  // exhaust smoke (the 3D track has its own point sprites)
+  private smokeN = 160;
+  private smokeP = new Float32Array(this.smokeN * 3);
+  private smokeV = new Float32Array(this.smokeN * 3);
+  private smokeL = new Float32Array(this.smokeN);
+  private smokeA = new Float32Array(this.smokeN);
+  private smokeS = new Float32Array(this.smokeN);
+  private smokeI = 0;
+  private smokeAcc = 0;
+  private smoke!: THREE.Points;
   private dustAcc = 0;
   // camera state
   private camPos = new THREE.Vector3();
@@ -207,6 +217,22 @@ export class MxScene {
     );
     this.dust.frustumCulled = false;
     s.add(this.dust);
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(this.smokeP, 3));
+    sg.setAttribute('alpha', new THREE.BufferAttribute(this.smokeA, 1));
+    sg.setAttribute('psize', new THREE.BufferAttribute(this.smokeS, 1));
+    this.smoke = new THREE.Points(
+      sg,
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        uniforms: { scale: { value: 600 } },
+        vertexShader: 'attribute float alpha; attribute float psize; varying float vA; uniform float scale; void main(){ vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(scale * psize / -mv.z, 60.0); gl_Position = projectionMatrix * mv; }',
+        fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.1, d) * vA; gl_FragColor = vec4(0.82, 0.83, 0.86, a); }',
+      }),
+    );
+    this.smoke.frustumCulled = false;
+    s.add(this.smoke);
     this.loadKit();
   }
 
@@ -740,6 +766,7 @@ export class MxScene {
 
     this.updateCoins(game, zone);
     this.updateDust(game, dt, car);
+    this.updateSmoke(game, dt, car);
     renderer.render(this.scene, this.camera);
   }
 
@@ -760,12 +787,50 @@ export class MxScene {
     this.coins.instanceMatrix.needsUpdate = true;
   }
 
+  /** Exhaust smoke at the silencer: density and size follow the throttle; none for the electric bike. */
+  private updateSmoke(game: Game, dt: number, car: THREE.Group): void {
+    const b = game.bike;
+    const thr = game.input.throttle;
+    if (!game.model.electric && game.crashTimer <= 0 && thr >= 0.04) this.smokeAcc += (5 + 38 * thr * thr + 6 * thr) * dt;
+    else this.smokeAcc = 0;
+    const local = new THREE.Vector3();
+    car.updateMatrixWorld(true);
+    while (this.smokeAcc >= 1) {
+      this.smokeAcc -= 1;
+      const i = this.smokeI++ % this.smokeN;
+      const [tx, ty] = game.exhaustTip();
+      local.set(tx, ty, 0.22);
+      car.localToWorld(local);
+      this.smokeP.set([local.x, local.y, local.z], i * 3);
+      const back = -(1 + thr * 2.4 + Math.random() * 0.8);
+      const yaw = -car.rotation.y;
+      this.smokeV.set([Math.cos(yaw) * back, 0.2 + Math.random() * 0.5, Math.sin(yaw) * back], i * 3);
+      this.smokeL[i] = 1;
+      this.smokeS[i] = 0.25 + thr * 0.5;
+    }
+    for (let i = 0; i < this.smokeN; i++) {
+      if (this.smokeL[i] <= 0) {
+        this.smokeA[i] = 0;
+        continue;
+      }
+      this.smokeL[i] -= dt / 0.9;
+      for (let k = 0; k < 3; k++) this.smokeP[i * 3 + k] += this.smokeV[i * 3 + k] * dt;
+      this.smokeV[i * 3 + 1] += 0.5 * dt;
+      const t = Math.max(0, this.smokeL[i]);
+      this.smokeA[i] = t * Math.min(0.4, 0.05 + this.smokeS[i] * 0.45);
+    }
+    void b;
+    this.smoke.geometry.attributes.position.needsUpdate = true;
+    this.smoke.geometry.attributes.alpha.needsUpdate = true;
+    this.smoke.geometry.attributes.psize.needsUpdate = true;
+  }
+
   /** Dust thrown up by the rear wheel: more with speed, throttle and slides. */
   private updateDust(game: Game, dt: number, car: THREE.Group): void {
     const b = game.bike;
     // the rear tyre scuffs the dirt at `scuff` m/s (wheelspin, locked wheel, power slide): that is what
     // throws the dust, on top of the plain rolling dust that grows with speed
-    const scuff = Math.abs(b.rear.slip) + game.mxSlide * 6;
+    const scuff = Math.abs(b.rear.slip) + game.mxSlide * 6 + game.mxSlideR * 6;
     const rate = b.rear.contact && game.crashTimer <= 0 ? Math.min(260, Math.abs(b.forwardSpeed) * 0.9 + scuff * 26 + game.input.throttle * 8) : 0;
     const thick = Math.min(1.6, 0.35 + scuff / 5);
     this.dustAcc += rate * dt;

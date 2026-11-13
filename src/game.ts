@@ -219,6 +219,9 @@ export class Game {
   mxPsi = 0;
   mxLean = 0;
   mxSlide = 0;
+  /** Circuit mode: how far each wheel is past its grip (0..1): the front pushes wide, the rear steps out. */
+  mxSlideF = 0;
+  mxSlideR = 0;
   /** Handlebar angle on the 3D track (rad): wide when slow, almost straight when fast. */
   mxBar = 0;
   // smoothed tyre loads (N) and drive/brake forces (N) of the front and rear wheels
@@ -332,7 +335,7 @@ export class Game {
       this.world.finishX = this.startX + this.raceLen;
     }
     this.finishX = this.startX + this.raceLen;
-    this.mxN = this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = 0;
+    this.mxN = this.mxPsi = this.mxLean = this.mxSlide = this.mxBar = this.mxSlideF = this.mxSlideR = 0;
     this.mxOff = 0;
     this.mxLastX = this.bike.x;
     this.mxLastN = 0;
@@ -923,14 +926,29 @@ export class Game {
         lat = Math.sign(lat) * mu * (1 - 0.18 * slide);
         b.vx *= 1 - 0.35 * slide * dt; // sliding scrubs speed
       }
+      // One wheel at its limit slides on its own: each tyre carries its share of the cornering
+      // force (by its load); past its circle it lets go. The rear (power on, or light) steps out and
+      // the bike rotates (oversteer, a drift to catch); the front (hard braking, too much lean) washes
+      // out and the bike runs wide (understeer).
+      const share = this.mxNf + this.mxNr > 1 ? this.mxNf / (this.mxNf + this.mxNr) : 0.5;
+      const need = Math.abs(Math.tan(this.mxLean)) * b.mass * G;
+      const satF = capF > 1 ? (need * share) / capF : 0;
+      const satR = capR > 1 ? (need * (1 - share)) / capR : 0;
+      const sF = clamp((satF - 0.95) / 0.4, 0, 1);
+      const sR = clamp((satR - 0.95) / 0.4, 0, 1);
+      this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 7);
+      this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 7);
+      slide = Math.max(slide, this.mxSlideF * 0.8, this.mxSlideR * 0.8);
+      b.vx *= 1 - 0.18 * (this.mxSlideF + this.mxSlideR) * dt;
       // leaning costs a little drive: pick the bike up to accelerate out of the turn
       b.vx *= 1 - 0.1 * Math.abs(Math.sin(this.mxLean)) * dt;
-      const yaw = (steerGain * G * lat) / vEff;
+      const yaw = ((steerGain * G * lat) / vEff) * (1 + 0.55 * this.mxSlideR - 0.5 * this.mxSlideF);
       const ds = (v * Math.cos(this.mxPsi)) / Math.max(0.4, 1 - this.mxN * pose.k);
       this.mxPsi += (yaw - pose.k * ds) * dt;
       // spinning the rear with the bike leaned steps the back out (power slide)
       if (rearUse > 0.8 && Math.abs(this.mxLean) > 0.3) slide = Math.max(slide, Math.min(0.8, (rearUse - 0.8) * 4));
     } else if (!b.grounded) {
+      this.mxSlideF = this.mxSlideR = 0;
       // in the air the bike keeps its line; the track may turn under it
       this.mxPsi -= pose.k * v * Math.cos(this.mxPsi) * dt;
     }
@@ -1456,8 +1474,38 @@ export class Game {
     }
   }
 
+  /** Exhaust smoke: a puff stream at the silencer whose density and size follow the throttle (none on the electric bike). */
+  private smokeAcc = 0;
+  exhaustTip(): [number, number] {
+    return this.bike.pointWorld(-0.85, 0.12);
+  }
+  private exhaust(dt: number): void {
+    const b = this.bike;
+    const thr = this.input.throttle;
+    if (this.model.electric || this.crashTimer > 0 || thr < 0.04) return;
+    this.smokeAcc += (5 + 38 * thr * thr + 6 * thr) * dt;
+    const [x, y] = this.exhaustTip();
+    while (this.smokeAcc >= 1) {
+      this.smokeAcc -= 1;
+      this.particles.spawn({
+        kind: 'smoke',
+        x,
+        y,
+        vx: b.vx * 0.35 - (1.2 + thr * 3.2 + Math.random()),
+        vy: 0.15 + Math.random() * 0.5,
+        life: 0.45 + thr * 0.55 + Math.random() * 0.3,
+        size: 0.05 + thr * 0.1 + Math.random() * 0.03,
+        grow: 0.25 + thr * 0.7,
+        r: 205,
+        g: 207,
+        b: 212,
+      });
+    }
+  }
+
   private updateFx(dt: number): void {
     this.roost(this.bike, this.input.throttle, dt);
+    this.exhaust(dt);
     // opponents close to the player throw dust too (cheaper rate)
     for (const o of this.opponents) if (Math.abs(o.bike.x - this.bike.x) < 25) this.roost(o.bike, 0.6, dt, 0.35);
     this.particles.update(dt, (x) => this.world.heightAt(x));

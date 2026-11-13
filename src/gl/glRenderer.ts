@@ -883,6 +883,11 @@ export class GLRenderer {
           a = Math.min(1, t * 1.4) * 0.5;
           size = p.size * 2.6;
           break;
+        case 'smoke':
+          // the fainter and smaller the puff, the lighter the throttle that made it
+          a = Math.min(1, t * 1.3) * Math.min(0.42, 0.06 + p.size * 2.2);
+          size = p.size * 2.4;
+          break;
         case 'clod':
           size = Math.max(0.05, p.size * 1.6);
           break;

@@ -229,7 +229,7 @@ function buildModes(): void {
   $('modes').innerHTML =
     MODES.filter((m) => m.id !== 'cruising').map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
     `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>` +
-    `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Cross</b><small>Circuit MXGP</small><span class="medals"></span></button>`;
+    `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Circuit</b><small>Style MXGP</small><span class="medals"></span></button>`;
   $('mode-multi').addEventListener('click', () => {
     closePickers();
     mp.open();

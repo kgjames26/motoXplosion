@@ -3,7 +3,7 @@
  * Simulated in world units (m), drawn by the renderer.
  */
 
-export type ParticleKind = 'dust' | 'clod' | 'splash' | 'spark' | 'leaf';
+export type ParticleKind = 'dust' | 'clod' | 'splash' | 'spark' | 'leaf' | 'smoke';
 
 export interface Particle {
   kind: ParticleKind;
@@ -53,6 +53,11 @@ export class Particles {
         case 'dust':
           p.vx *= Math.exp(-2.2 * dt);
           p.vy = p.vy * Math.exp(-2 * dt) + 0.25 * dt; // slight lift
+          p.size += p.grow * dt;
+          break;
+        case 'smoke':
+          p.vx *= Math.exp(-1.6 * dt);
+          p.vy = p.vy * Math.exp(-1.2 * dt) + 0.5 * dt; // warm gas rises
           p.size += p.grow * dt;
           break;
         case 'clod':
