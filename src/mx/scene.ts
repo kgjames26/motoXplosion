@@ -186,6 +186,28 @@ const hash2 = (a: number, b: number): number => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
+/** Direction towards the sun (also used to bake light and shade into the earth, shadows on or off). */
+const SUN = (() => {
+  const v = [-0.62, 0.62, 0.48];
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return v.map((x) => x / l) as [number, number, number];
+})();
+/**
+ * v2.50: light baked into the vertex colours, so the relief reads even with shadows off (phones):
+ * faces turned to the sun lighter, faces turned away clearly darker, a soft dark band at the foot
+ * of the shaded faces.
+ */
+function bakeLight(g: THREE.BufferGeometry, k = 1): void {
+  const N = g.attributes.normal.array as Float32Array;
+  const C = g.attributes.color.array as Float32Array;
+  for (let i = 0; i < N.length / 3; i++) {
+    const d = N[i * 3] * SUN[0] + N[i * 3 + 1] * SUN[1] + N[i * 3 + 2] * SUN[2];
+    const f = Math.min(1.3, Math.max(0.5, 1 + 1.6 * k * (d - SUN[1])));
+    for (let q = 0; q < 3; q++) C[i * 3 + q] *= f;
+  }
+  g.attributes.color.needsUpdate = true;
+}
+
 /** Width of the grass slope that brings the relief under the loop back down to the ground (m). */
 const skirtW = (b: number) => 3 + 4 * b;
 /** Smooth value noise in [0, 1] on a grid of `cell` metres. */
@@ -222,7 +244,7 @@ function tintSlopes(g: THREE.BufferGeometry, k = 1): void {
 export class MxScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
-  private sun = new THREE.DirectionalLight(0xfff2dc, 2.4);
+  private sun = new THREE.DirectionalLight(0xfff2dc, 2.8);
   private dirt = new THREE.MeshLambertMaterial({ color: 0x9a6a44, side: THREE.DoubleSide });
   private grass = new THREE.MeshLambertMaterial({ color: 0xb09070 });
   private carriers = new Map<Bike3D, THREE.Group>();
@@ -277,13 +299,13 @@ export class MxScene {
     }
     s.background = new THREE.Color(th.bg);
     s.fog = new THREE.Fog(th.fog, 140, 520);
-    s.add(new THREE.HemisphereLight(0xdcefff, th.hemiGround, 1.25));
+    s.add(new THREE.HemisphereLight(0xdcefff, th.hemiGround, 0.95)); // less flat fill: the relief reads by the sun
     this.sun.position.set(-40, 70, 30);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -34;
-    sc.right = sc.top = 34;
+    sc.left = sc.bottom = -45;
+    sc.right = sc.top = 45;
     sc.near = 1;
     sc.far = 220;
     this.sun.shadow.bias = -0.0006;
@@ -536,8 +558,10 @@ export class MxScene {
     g.setIndex(idx);
     g.computeVertexNormals();
     tintSlopes(g);
+    bakeLight(g);
     const mesh = new THREE.Mesh(g, this.earth);
     mesh.receiveShadow = true;
+    mesh.castShadow = true;
     if (this.loopRibbon) {
       this.scene.remove(this.loopRibbon);
       this.loopRibbon.geometry.dispose();
@@ -631,7 +655,7 @@ export class MxScene {
           uv[k * 2] = n / 1.6;
           uv[k * 2 + 1] = (f.s0 + t) / 1.6;
           // packed, wet earth: darker on the flat top and the faces, a bit paler at the foot
-          const v = 1.1 + 0.08 * noise; // packed dirt, a little lighter than the ridden track
+          const v = 1.18 + 0.08 * noise + 0.1 * Math.min(1, (h - mxBase(f.s0 + t)) / 2); // packed dirt, clearly lighter than the flat track, lightest on top
           col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = v;
         }
       }
@@ -648,7 +672,8 @@ export class MxScene {
       g.setAttribute('color', new THREE.BufferAttribute(col, 3));
       g.setIndex(idx);
       g.computeVertexNormals();
-      tintSlopes(g);
+      tintSlopes(g, 1.2);
+      bakeLight(g, 1.2);
       const mesh = new THREE.Mesh(g, this.earth);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -1253,7 +1278,9 @@ export class MxScene {
       this.camY = targetY;
     } else {
       this.camYaw += (wantYaw - this.camYaw) * Math.min(1, dt * 2.2); // turns into the bends a bit slower
-      this.camY += (targetY - this.camY) * Math.min(1, dt * 3.4);
+      // height: quick, and never left behind (a jump or a drop must not run away from the lens)
+      this.camY += (targetY - this.camY) * Math.min(1, dt * 7.5);
+      this.camY = clamp(this.camY, targetY - 0.9, targetY + 0.9);
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
@@ -1264,7 +1291,7 @@ export class MxScene {
       const k = Math.min(1, dt * 30); // a tight follow: a lag would let the bike run into / away from the lens when it brakes or accelerates
       this.camPos.x += (want.x - this.camPos.x) * k;
       this.camPos.z += (want.z - this.camPos.z) * k;
-      this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 4);
+      this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 12);
     }
     // look a few metres ahead of the bike, and a touch towards where the track goes next
     const lx = wx + Math.cos(this.camYaw) * 6 * 0.78 + (far.x - wx) * 0.22;
@@ -1281,7 +1308,7 @@ export class MxScene {
     this.camera.lookAt(this.look);
     this.camera.updateMatrixWorld();
     // sun and its shadow follow the bike
-    this.sun.position.set(wx - 30, 60, wz + 22);
+    this.sun.position.set(wx + SUN[0] * 70, SUN[1] * 70, wz + SUN[2] * 70); // a lower sun: long shadows behind the jumps
     this.sun.target.position.set(wx, 0, wz);
     this.sun.castShadow = renderer.shadowMap.enabled;
 
