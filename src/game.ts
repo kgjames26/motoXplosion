@@ -221,6 +221,8 @@ export class Game {
   mxSlide = 0;
   /** Circuit mode: how far each wheel is past its grip (0..1): the front pushes wide, the rear steps out. */
   mxSlideF = 0;
+  /** Extra heading of the body while drifting (rad, visual). */
+  mxDrift = 0;
   mxSlideR = 0;
   /** Handlebar angle on the 3D track (rad): wide when slow, almost straight when fast. */
   mxBar = 0;
@@ -934,15 +936,16 @@ export class Game {
       const need = Math.abs(Math.tan(this.mxLean)) * b.mass * G;
       const satF = capF > 1 ? (need * share) / capF : 0;
       const satR = capR > 1 ? (need * (1 - share)) / capR : 0;
-      const sF = clamp((satF - 0.95) / 0.4, 0, 1);
-      const sR = clamp((satR - 0.95) / 0.4, 0, 1);
+      // motocross: tyres let go early and progressively, so every fast corner is a slide to hold
+      const sF = clamp((satF - 0.62) / 0.45, 0, 1);
+      const sR = clamp((satR - 0.55) / 0.4, 0, 1);
       this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 7);
       this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 7);
       slide = Math.max(slide, this.mxSlideF * 0.8, this.mxSlideR * 0.8);
       b.vx *= 1 - 0.18 * (this.mxSlideF + this.mxSlideR) * dt;
       // leaning costs a little drive: pick the bike up to accelerate out of the turn
       b.vx *= 1 - 0.1 * Math.abs(Math.sin(this.mxLean)) * dt;
-      const yaw = ((steerGain * G * lat) / vEff) * (1 + 0.55 * this.mxSlideR - 0.5 * this.mxSlideF);
+      const yaw = ((steerGain * G * lat) / vEff) * (1 + 0.55 * this.mxSlideR - 0.4 * this.mxSlideF);
       const ds = (v * Math.cos(this.mxPsi)) / Math.max(0.4, 1 - this.mxN * pose.k);
       this.mxPsi += (yaw - pose.k * ds) * dt;
       // spinning the rear with the bike leaned steps the back out (power slide)
@@ -954,6 +957,8 @@ export class Game {
     }
     this.mxPsi = clamp(this.mxPsi, -1.1, 1.1);
     this.mxSlide += (slide - this.mxSlide) * Math.min(1, dt * 8);
+    // the body points into the turn more than the bike travels: a visible drift (rear out), less when the front pushes
+    this.mxDrift += (Math.sign(this.mxLean) * (0.32 * this.mxSlideR - 0.08 * this.mxSlideF) - this.mxDrift) * Math.min(1, dt * 6);
     this.mxN += v * Math.sin(this.mxPsi) * dt;
     // riding off line or across the track covers less of it
     const f = clamp(Math.cos(this.mxPsi) / Math.max(0.4, 1 - this.mxN * pose.k), 0.3, 1.25);

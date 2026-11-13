@@ -110,7 +110,7 @@ export class MxScene {
   private carriers = new Map<Bike3D, THREE.Group>();
   private coins: THREE.InstancedMesh;
   private dust: THREE.Points;
-  private dustN = 560;
+  private dustN = 2400;
   private dustP = new Float32Array(this.dustN * 3);
   private dustV = new Float32Array(this.dustN * 3);
   private dustL = new Float32Array(this.dustN); // life left (s)
@@ -212,8 +212,8 @@ export class MxScene {
         transparent: true,
         depthWrite: false,
         uniforms: { scale: { value: 600 } },
-        vertexShader: 'attribute float alpha; varying float vA; uniform float scale; void main(){ vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(scale * (0.35 + (1.0 - alpha) * 1.1) / -mv.z, 90.0); gl_Position = projectionMatrix * mv; }',
-        fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.1, d) * vA * 0.38; gl_FragColor = vec4(0.80, 0.63, 0.44, a); }',
+        vertexShader: 'attribute float alpha; varying float vA; uniform float scale; void main(){ vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(scale * (0.5 + (1.0 - alpha) * 1.6) / -mv.z, 150.0); gl_Position = projectionMatrix * mv; }',
+        fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.1, d) * vA * 0.42; gl_FragColor = vec4(0.80, 0.63, 0.44, a); }',
       }),
     );
     this.dust.frustumCulled = false;
@@ -695,7 +695,7 @@ export class MxScene {
     player.lane = 0;
     player.steer = crashed ? 0 : game.mxBar;
     player.update(b, dt, crashed);
-    const car = this.place(player, b, zone, game.mxN, game.mxPsi, game.mxLean);
+    const car = this.place(player, b, zone, game.mxN, game.mxPsi + game.mxDrift, game.mxLean);
     if (crashed) player.setRiderDetached(true, game.ragdoll!.x, game.ragdoll!.y, game.ragdoll!.angle, car);
     else player.setRiderDetached(false);
     for (const o of game.opponents) {
@@ -832,8 +832,8 @@ export class MxScene {
     // the rear tyre scuffs the dirt at `scuff` m/s (wheelspin, locked wheel, power slide): that is what
     // throws the dust, on top of the plain rolling dust that grows with speed
     const scuff = Math.abs(b.rear.slip) + game.mxSlide * 6 + game.mxSlideR * 6;
-    const rate = b.rear.contact && game.crashTimer <= 0 ? Math.min(260, Math.abs(b.forwardSpeed) * 0.9 + scuff * 26 + game.input.throttle * 8) : 0;
-    const thick = Math.min(1.6, 0.35 + scuff / 5);
+    const rate = b.rear.contact && game.crashTimer <= 0 ? Math.min(1100, Math.abs(b.forwardSpeed) * 2.6 + scuff * 75 + game.input.throttle * 30 + (game.mxSlideR + game.mxSlideF) * 160) : 0;
+    const thick = Math.min(2.4, 0.6 + scuff / 3.2);
     this.dustAcc += rate * dt;
     const local = new THREE.Vector3();
     car.updateMatrixWorld(true);
@@ -855,7 +855,7 @@ export class MxScene {
         this.dustA[i] = 0;
         continue;
       }
-      this.dustL[i] -= dt / 1.3;
+      this.dustL[i] -= dt / 1.8;
       this.dustP[i * 3] += this.dustV[i * 3] * dt;
       this.dustP[i * 3 + 1] += this.dustV[i * 3 + 1] * dt;
       this.dustP[i * 3 + 2] += this.dustV[i * 3 + 2] * dt;
