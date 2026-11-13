@@ -935,13 +935,14 @@ export class Game {
       const share = this.mxNf + this.mxNr > 1 ? this.mxNf / (this.mxNf + this.mxNr) : 0.5;
       const need = Math.abs(Math.tan(this.mxLean)) * b.mass * G;
       const satF = capF > 1 ? (need * share) / capF : 0;
-      const satR = capR > 1 ? (need * (1 - share)) / capR : 0;
+      // drive or braking force on the rear eats 30% more of its side grip than the plain friction circle says
+      const satR = capR > 1 ? (need * (1 - share)) / (capR * (1 - 0.3 * clamp(rearUse, 0, 1))) : 0;
       // motocross: tyres let go early and progressively, so every fast corner is a slide to hold
       const sF = clamp((satF - 0.62) / 0.45, 0, 1);
       // power slide: the rear spinning up (drive using the tyre's grip) lets go sideways as soon as the bike is
       // leaned a little: the harder the drive, the more it steps out (friction circle: drive vs side grip)
-      const powerSlide = clamp((rearUse - 0.4) / 0.4, 0, 1) * clamp(Math.abs(this.mxLean) / 0.2, 0, 1) * clamp(this.input.throttle * 1.2, 0, 1);
-      const sR = Math.max(clamp((satR - 0.55) / 0.4, 0, 1), powerSlide);
+      const powerSlide = clamp((rearUse - 0.4) / 0.4, 0, 1) * clamp(Math.abs(this.mxLean) / 0.2, 0, 1) * clamp(this.input.throttle * 1.2, 0, 1) * 1.3;
+      const sR = Math.min(1, Math.max(clamp((satR - 0.55) / 0.4, 0, 1), powerSlide));
       this.mxSlideF += (sF - this.mxSlideF) * Math.min(1, dt * 7);
       this.mxSlideR += (sR - this.mxSlideR) * Math.min(1, dt * 7);
       slide = Math.max(slide, this.mxSlideF * 0.8, this.mxSlideR * 0.8);

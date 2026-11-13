@@ -431,24 +431,32 @@ export class MxScene {
         let shade = 1;
         let warm = 0;
         if (an <= OUT) {
-          const d = Math.min(1, sample(R.d, sm, n) * 1.15);
+          const dens = (q: number): number => {
+            let e = 0;
+            for (let w = 0; w < 5; w++) {
+              const c = (w - 2) * 1.9 + 0.9 * Math.sin(sm / (17 + 6 * w) + w * 2.1);
+              e = Math.max(e, Math.exp(-(((q - c) / 0.22) ** 2)) * (0.45 + 0.55 * hash2(Math.floor(sm / 22), w + 3)));
+            }
+            return Math.min(1, sample(R.d, sm, q) * 1.7 + e * 0.75 * (Math.abs(q) < HW ? 1 : 0));
+          };
+          const d = dens(n);
           const sl = sample(R.s, sm, n);
           const noise = hash2(Math.floor(sm * 2.2), Math.floor((n + 20) * 4));
           // the tyre lines are grooves (3 cm) with a small berm of pushed earth on each side
-          const dl = sample(R.d, sm, n - 0.2);
-          const dr = sample(R.d, sm, n + 0.2);
+          const dl = dens(n - 0.2);
+          const dr = dens(n + 0.2);
           const berm = clamp(Math.abs(dr - dl) * 2.2, 0, 1) * (1 - d);
-          y += -0.035 * smooth(0.12, 0.85, d) + 0.014 * berm - 0.012 * noise * (1 - d) - 0.01 * sl * noise;
+          y += -0.05 * smooth(0.08, 0.6, d) + 0.02 * berm - 0.012 * noise * (1 - d) - 0.01 * sl * noise;
           // dark and wet all over the ground the bikes can use, darker still on their lines
-          const wet = 1 - 0.7 * smooth(HW - 0.5, OUT, an);
-          shade = 1 - 0.4 * wet - 0.2 * smooth(0.1, 0.9, d) + 0.1 * (noise - 0.5);
+          const wet = 1 - smooth(HW - 0.3, OUT + 1, an);
+          shade = 1.12 - 0.52 * wet - 0.2 * smooth(0.05, 0.6, d) * wet + 0.1 * (noise - 0.5);
           warm = 0.12 * smooth(0.15, 0.8, sl) * (1 - d);
         } else {
           // the bank of earth that closes the circuit: 40 cm high, a little irregular
           const rise = smooth(OUT, OUT + 0.8, an) * (1 - smooth(OUT + 1.2, OUT + 2.2, an)) * bankOn;
           const wob = 0.8 + 0.2 * hash2(Math.floor(sm / 1.5), 7) + 0.1 * Math.sin(sm / 5.3);
           y = rise * 0.4 * wob - (1 - rise) * 0.05;
-          shade = 0.98 + 0.12 * hash2(Math.floor(sm), Math.floor(an * 3));
+          shade = 1.12 + 0.1 * hash2(Math.floor(sm), Math.floor(an * 3));
         }
         pos[k * 3] = p.x + nx * n;
         pos[k * 3 + 1] = y;
@@ -505,9 +513,9 @@ export class MxScene {
         const k = i * L + j;
         const line = Math.max(Math.exp(-(((an - 1.3) / 0.35) ** 2)) * 0.7, Math.exp(-((an / 0.5) ** 2)) * 0.25);
         const noise = hash2(Math.floor(i * 0.8), Math.floor((n + 20) * 4));
-        const wet = 1 - 0.7 * smooth(HW - 0.5, HW + 4, an);
+        const wet = 1 - smooth(HW - 0.3, HW + 4, an);
         const y = an > HW + 4 ? -0.05 : 0.02 - 0.03 * line + 0.01 * (noise - 0.5) * (1 - line);
-        const shade = 1 - 0.4 * wet - 0.2 * line + 0.1 * (noise - 0.5);
+        const shade = 1.12 - 0.52 * wet - 0.2 * line * wet + 0.1 * (noise - 0.5);
         pos[k * 3] = p.x + nx * n;
         pos[k * 3 + 1] = y;
         pos[k * 3 + 2] = p.z + nz * n;
@@ -566,7 +574,7 @@ export class MxScene {
           uv[k * 2] = n / 1.6;
           uv[k * 2 + 1] = (f.s0 + t) / 1.6;
           // packed, wet earth: darker on the flat top and the faces, a bit paler at the foot
-          const v = 0.64 + 0.08 * noise + 0.12 * (1 - Math.min(1, h / 0.4)) * (Math.abs(n) > JUMP_FLAT ? 1 : 0.4);
+          const v = 0.82 + 0.08 * noise + 0.12 * (1 - Math.min(1, h / 0.4)) * (Math.abs(n) > JUMP_FLAT ? 1 : 0.4); // lighter than the track (0.6), darker than the ground around (1.12)
           col[k * 3] = col[k * 3 + 1] = col[k * 3 + 2] = v;
         }
       }
@@ -1056,11 +1064,11 @@ export class MxScene {
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 1.75 + 20.8 * 0.0175 + sw * 2.5; // always the distance of 75 km/h
+    const dist = 1.75 + 20.8 * 0.0175 + clamp((b.forwardSpeed - 20.8) / 25, -1, 1) * 0.15 + sw * 2.5; // the distance of 75 km/h, give or take 15 cm
     const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.75 + sw * 0.6 /* helmet (≈ +1.15) + 60 cm */, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
-      const k = Math.min(1, dt * 7);
+      const k = Math.min(1, dt * 30); // a tight follow: a lag would let the bike run into / away from the lens when it brakes or accelerates
       this.camPos.x += (want.x - this.camPos.x) * k;
       this.camPos.z += (want.z - this.camPos.z) * k;
       this.camPos.y += (want.y - this.camPos.y) * Math.min(1, dt * 4);
