@@ -4,7 +4,7 @@ import type { Game } from '../game';
 import type { Bike } from '../physics/bike';
 import type { Bike3D } from '../gl/bike3d';
 import { clamp } from '../core/math';
-import { loopAt, MX_CIRCUITS, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
+import { loopAt, mxCircuit, MX_CIRCUITS, MX_RUNOFF, MX_ENTRY, MX_EXIT, MX_FEATURES, MX_FEATURES_CRUISE, MX_HALF_WIDTH, MX_LEN, MX_STRAIGHT, mxLatScale, mxPose } from './track';
 import type { MxWorld } from './track';
 import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
@@ -101,6 +101,76 @@ function asphaltTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** A tileable, detailed earth texture drawn with the canvas: mottling, clods, pebbles, fine grain. */
+function earthTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#cdbfae';
+  g.fillRect(0, 0, S, S);
+  let seed = 99;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const wrapped = (x: number, y: number, r: number, draw: (px: number, py: number) => void) => {
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) if (x + ox > -r && x + ox < S + r && y + oy > -r && y + oy < S + r) draw(x + ox, y + oy);
+  };
+  const blob = (x: number, y: number, r: number, rgba: string) =>
+    wrapped(x, y, r, (px, py) => {
+      const gr = g.createRadialGradient(px, py, 0, px, py, r);
+      gr.addColorStop(0, rgba);
+      gr.addColorStop(1, rgba.replace(/[\d.]+\)$/, '0)'));
+      g.fillStyle = gr;
+      g.fillRect(px - r, py - r, r * 2, r * 2);
+    });
+  for (let i = 0; i < 110; i++) blob(rnd() * S, rnd() * S, 24 + rnd() * 70, rnd() < 0.5 ? 'rgba(70,52,38,0.10)' : 'rgba(255,240,220,0.10)');
+  for (let i = 0; i < 700; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 2 + rnd() * 6;
+    blob(x, y, r * 1.6, 'rgba(60,44,32,0.28)'); // clod, dark body
+    blob(x - r * 0.3, y - r * 0.3, r * 0.8, 'rgba(235,220,200,0.22)'); // sunny side
+  }
+  for (let i = 0; i < 320; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 0.8 + rnd() * 1.6;
+    wrapped(x, y, r + 2, (px, py) => {
+      g.fillStyle = 'rgba(40,30,22,0.35)';
+      g.beginPath(); g.arc(px + 0.8, py + 0.8, r, 0, 6.3); g.fill();
+      g.fillStyle = `rgba(${200 + rnd() * 40},${190 + rnd() * 35},${170 + rnd() * 30},0.85)`;
+      g.beginPath(); g.arc(px, py, r, 0, 6.3); g.fill();
+    });
+  }
+  for (let i = 0; i < 16000; i++) {
+    const v = 90 + Math.floor(rnd() * 150);
+    g.fillStyle = `rgba(${v},${Math.floor(v * 0.92)},${Math.floor(v * 0.82)},0.35)`;
+    g.fillRect(Math.floor(rnd() * S), Math.floor(rnd() * S), 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** Where the bikes ride (tools/sim_ruts.ts): per circuit, bytes of wheel traffic and of sliding on a ds × dn grid. */
+interface RutData {
+  ds: number;
+  dn: number;
+  n0: number;
+  cols: number;
+  rows: number;
+  d: Uint8Array;
+  s: Uint8Array;
+}
+let rutsPromise: Promise<{ ds: number; dn: number; n0: number; cols: number; circuits: { id: string; rows: number; d: string; s: string }[] } | null> | null = null;
+function loadRuts(): Promise<{ ds: number; dn: number; n0: number; cols: number; circuits: { id: string; rows: number; d: string; s: string }[] } | null> {
+  rutsPromise ??= fetch(`${BASE}res/mx-ruts.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return rutsPromise;
+}
+const b64 = (t: string): Uint8Array => Uint8Array.from(atob(t), (ch) => ch.charCodeAt(0));
+const hash2 = (a: number, b: number): number => {
+  let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+
 export class MxScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
@@ -138,6 +208,9 @@ export class MxScene {
   private time = 0;
 
   private theme: Theme;
+  /** The loop's earth: a coarse ribbon at first, replaced by the detailed one once the ruts are loaded. */
+  private loopRibbon: THREE.Mesh | null = null;
+  private earth = new THREE.MeshLambertMaterial({ vertexColors: true });
   /** Middle of the circuit (the ground and the panorama are centred on it). */
   private cx = 0;
   private cz = 80;
@@ -235,6 +308,13 @@ export class MxScene {
     this.smoke.frustumCulled = false;
     s.add(this.smoke);
     this.loadKit();
+    this.earth.map = earthTexture();
+    this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.25);
+    void loadRuts().then((d) => {
+      const c = d?.circuits.find((x) => x.id === MX_CIRCUITS[this.circuit].id);
+      if (!d || !c || mxCircuit !== this.circuit || c.rows !== Math.ceil(MX_LEN / d.ds)) return;
+      this.buildEarth({ ds: d.ds, dn: d.dn, n0: d.n0, cols: d.cols, rows: c.rows, d: b64(c.d), s: b64(c.s) });
+    });
   }
 
   // ---------------------------------------------------------------- track
@@ -273,10 +353,121 @@ export class MxScene {
     return mesh;
   }
 
+  /**
+   * The earth of the circuit, finer than the first ribbon: a cell every 0.25 m across the track
+   * and every 0.6 m along it. The ground is shaped by the bikes that rode it (simulated laps): the
+   * lines of the wheels are sunk into the dirt (up to 5 cm) and polished darker, the spots where
+   * the rear spun and slid are loose and pale, and a 40 cm bank of earth closes the track where
+   * the run-off ends.
+   */
+  private buildEarth(R: RutData): void {
+    const HW = MX_HALF_WIDTH;
+    const OUT = HW + MX_RUNOFF; // end of the rideable ground (9 m)
+    const lat: number[] = [];
+    for (const n of [-11.2, -10.6, -10, -9.6, -9.2, -8.5, -7.6, -6.7, -6]) lat.push(n);
+    for (let n = -5.5; n <= 5.5001; n += 0.25) lat.push(Math.round(n * 100) / 100);
+    for (const n of [6, 6.7, 7.6, 8.5, 9.2, 9.6, 10, 10.6, 11.2]) lat.push(n);
+    const L = lat.length;
+    const STEP = 0.6;
+    const m = Math.ceil(MX_LEN / STEP);
+    const pos = new Float32Array(m * L * 3);
+    const uv = new Float32Array(m * L * 2);
+    const col = new Float32Array(m * L * 3);
+    const sample = (A: Uint8Array, s: number, n: number): number => {
+      const fr = s / R.ds;
+      const r0 = Math.floor(fr);
+      const a = fr - r0;
+      const fc = (n - R.n0) / R.dn;
+      const c0 = Math.floor(fc);
+      const b = fc - c0;
+      let v = 0;
+      for (let dr = 0; dr < 2; dr++)
+        for (let dc = 0; dc < 2; dc++) {
+          const c = c0 + dc;
+          if (c < 0 || c >= R.cols) continue;
+          v += A[(((r0 + dr) % R.rows) + R.rows) % R.rows * R.cols + c] * (dr ? a : 1 - a) * (dc ? b : 1 - b);
+        }
+      return v / 255;
+    };
+    // the cruising entry / exit lanes run straight on: no bank of earth where they come near the loop
+    const laneAt: [number, number][] = [];
+    const out = MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0];
+    for (const [from, to] of [[-40, MX_ENTRY + 2], [out - 2, out + MX_EXIT + 40]] as [number, number][])
+      for (let u = from; u <= to; u += 4) {
+        const q = mxPose(u, true);
+        laneAt.push([q.x, q.z]);
+      }
+    const smooth = (a: number, b: number, x: number) => {
+      const t = clamp((x - a) / (b - a), 0, 1);
+      return t * t * (3 - 2 * t);
+    };
+    for (let i = 0; i < m; i++) {
+      const sm = (i * STEP) % MX_LEN;
+      const p = loopAt(sm);
+      const nx = -Math.sin(p.th);
+      const nz = Math.cos(p.th);
+      let nearLane = 1e9;
+      for (const [lx, lz] of laneAt) nearLane = Math.min(nearLane, Math.hypot(lx - p.x, lz - p.z));
+      const bankOn = nearLane > 24 ? 1 : smooth(14, 24, nearLane);
+      for (let j = 0; j < L; j++) {
+        const n = lat[j];
+        const an = Math.abs(n);
+        const k = i * L + j;
+        let y = bankAt(p.k, clamp(n, -HW, HW)) + 0.02;
+        let shade = 1;
+        let warm = 0;
+        if (an <= OUT) {
+          const d = Math.min(1, sample(R.d, sm, n) * 1.15);
+          const sl = sample(R.s, sm, n);
+          const noise = hash2(Math.floor(sm * 2.2), Math.floor((n + 20) * 4));
+          // wheel lines: sunk into the dirt and polished; roost: loose and pale; always a little rough
+          y -= 0.05 * smooth(0.12, 0.85, d) + 0.012 * noise * (1 - d) + 0.01 * sl * noise;
+          shade = 1 - 0.34 * smooth(0.1, 0.9, d) + 0.1 * (noise - 0.5);
+          warm = 0.16 * smooth(0.15, 0.8, sl) * (1 - d);
+        } else {
+          // the bank of earth that closes the circuit: 40 cm high, a little irregular
+          const rise = smooth(OUT, OUT + 0.8, an) * (1 - smooth(OUT + 1.2, OUT + 2.2, an)) * bankOn;
+          const wob = 0.8 + 0.2 * hash2(Math.floor(sm / 1.5), 7) + 0.1 * Math.sin(sm / 5.3);
+          y = rise * 0.4 * wob - (1 - rise) * 0.05;
+          shade = 0.92 + 0.12 * hash2(Math.floor(sm), Math.floor(an * 3));
+        }
+        pos[k * 3] = p.x + nx * n;
+        pos[k * 3 + 1] = y;
+        pos[k * 3 + 2] = p.z + nz * n;
+        uv[k * 2] = n / 1.6;
+        uv[k * 2 + 1] = sm / 1.6;
+        col[k * 3] = clamp(shade + warm, 0, 1.2);
+        col[k * 3 + 1] = clamp(shade + warm * 0.7, 0, 1.2);
+        col[k * 3 + 2] = clamp(shade + warm * 0.2, 0, 1.2);
+      }
+    }
+    const idx: number[] = [];
+    for (let i = 0; i < m; i++) {
+      const a = i * L;
+      const b = ((i + 1) % m) * L;
+      for (let j = 0; j < L - 1; j++) idx.push(a + j, a + j + 1, b + j, a + j + 1, b + j + 1, b + j);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, this.earth);
+    mesh.receiveShadow = true;
+    if (this.loopRibbon) {
+      this.scene.remove(this.loopRibbon);
+      this.loopRibbon.geometry.dispose();
+    }
+    this.loopRibbon = mesh;
+    this.scene.add(mesh);
+  }
+
   private buildTrack(): void {
     const loop = [];
     for (let s = 0; s < MX_LEN; s++) loop.push({ ...loopAt(s), h: 0 }); // flat: the jumps are the kit's pieces
-    this.scene.add(this.ribbon(loop, true));
+    this.loopRibbon = this.ribbon(loop, true);
+    this.scene.add(this.loopRibbon);
     // entry and exit lanes (cruising): straight, flat, a hair above the grass
     const out = MX_ENTRY + MX_LEN + MX_STRAIGHT[1] - MX_STRAIGHT[0];
     for (const [from, to] of [[-40, MX_ENTRY + 2], [out - 2, out + MX_EXIT + 40]] as [number, number][]) {
@@ -717,28 +908,26 @@ export class MxScene {
     const far = mxPose(u + 16, zone.cruise);
     const wx = pose.x - Math.sin(pose.th) * game.mxN;
     const wz = pose.z + Math.cos(pose.th) * game.mxN;
-    const groundY = pose.h + bankAt(pose.k, game.mxN);
     const [, oy] = b.pointWorld(0, 0);
     const bikeY = oy - zone.h0;
-    const v = Math.max(0, b.forwardSpeed);
     // heading the camera settles behind: mostly the track just ahead, a little the bike itself
     let wantYaw = ahead.th + game.mxPsi * 0.35;
     let d = wantYaw - this.camYaw;
     while (d > Math.PI) d -= 2 * Math.PI;
     while (d < -Math.PI) d += 2 * Math.PI;
     wantYaw = this.camYaw + d;
-    const targetY = groundY + 0.35 * Math.max(0, bikeY - groundY - 0.9); // follows the jumps, softly
+    const targetY = bikeY; // the camera follows the rider's height (smoothly, below)
     if (this.fresh) {
       this.camYaw = wantYaw;
       this.camY = targetY;
     } else {
       this.camYaw += (wantYaw - this.camYaw) * Math.min(1, dt * 2.2); // turns into the bends a bit slower
-      this.camY += (targetY - this.camY) * Math.min(1, dt * 2.6);
+      this.camY += (targetY - this.camY) * Math.min(1, dt * 3.4);
     }
     const sw = swing * swing * (3 - 2 * swing);
     const yaw = this.camYaw - sw * 1.2; // swinging in from the side the 2.5D camera sits on
-    const dist = 1.75 + v * 0.0175 + sw * 2.5; // 65 % closer behind the rider
-    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.35 + sw * 0.6, wz - Math.sin(yaw) * dist);
+    const dist = 1.75 + 20.8 * 0.0175 + sw * 2.5; // always the distance of 75 km/h
+    const want = new THREE.Vector3(wx - Math.cos(yaw) * dist, this.camY + 1.75 + sw * 0.6 /* helmet (≈ +1.15) + 60 cm */, wz - Math.sin(yaw) * dist);
     if (this.fresh) this.camPos.copy(want);
     else {
       const k = Math.min(1, dt * 7);
@@ -749,12 +938,12 @@ export class MxScene {
     // look a few metres ahead of the bike, and a touch towards where the track goes next
     const lx = wx + Math.cos(this.camYaw) * 4 * 0.78 + (far.x - wx) * 0.22;
     const lz = wz + Math.sin(this.camYaw) * 4 * 0.78 + (far.z - wz) * 0.22;
-    const lookWant = new THREE.Vector3(lx, this.camY + 1.1, lz);
+    const lookWant = new THREE.Vector3(lx, this.camY + 0.85, lz);
     if (this.fresh) this.look.copy(lookWant);
     else this.look.lerp(lookWant, Math.min(1, dt * 6));
     this.fresh = false;
     this.camera.aspect = aspect;
-    this.camera.fov = 60 + clamp(v / 25, 0, 1) * 9;
+    this.camera.fov = 60 + clamp(20.8 / 25, 0, 1) * 9; // the 75 km/h framing, always
     this.camera.updateProjectionMatrix();
     this.camera.position.copy(this.camPos);
     if (game.shake > 0) this.camera.position.y += (Math.random() - 0.5) * game.shake * game.shake * 0.12;

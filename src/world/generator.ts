@@ -49,6 +49,7 @@ type FeatureName =
   | 'enduroObs'
   | 'bigHill'
   | 'cruiseHill'
+  | 'miniHills'
   | 'speedJump'
   | 'techHill'
   // desert
@@ -356,7 +357,7 @@ export class Generator {
       // sections, big jumps), plus the speed-window jumps of v2.21
       // v2.36: a ride, not a trap: round hills and long easy descents, jumps with a landing to aim for
       // (no sudden drops, no gaps, no steep technical pitches)
-      feats = { cruiseHill: 5, bigHill: 2, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
+      feats = { miniHills: 7, cruiseHill: 2, bigHill: 1.5, tabletop: 1.5, double: 1, speedJump: 1.6 + d0 * 1.5 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -1352,6 +1353,8 @@ export class Generator {
         return this.techHill();
       case 'cruiseHill':
         return this.cruiseHill(d);
+      case 'miniHills':
+        return this.miniHills(d);
       case 'enduroObs': {
         // one to three enduro obstacles (roots, fallen trees, stones, mossy logs) in a row
         const list = assetsFor(['enduro'], 'obstacle');
@@ -1562,6 +1565,39 @@ export class Generator {
    * Cruising: a journey, not a trap. Big hills with changing inclines and long varied
    * descents (no bumps, gentle crests); goes down when the road is already high.
    */
+  /**
+   * Cruising: a run of little rounded hills (5 to 45 m long, from gentle to quite steep, never a
+   * sudden drop), often riding on a much bigger hill that is gentle to medium steep.
+   */
+  private miniHills(d: number): Segment[] {
+    const r = this.rng;
+    const L = r.range(220, 430);
+    // the big hill underneath (or none): sin² so that it starts and ends flat
+    const maxSlope = r.range(0.05, 0.3);
+    const Hb = r.chance(0.65) ? Math.min((maxSlope * L) / Math.PI, r.range(6, 30)) : 0;
+    const bumps: { t0: number; len: number; h: number }[] = [];
+    let t = r.range(8, 24);
+    while (t < L - 50) {
+      const len = r.chance(0.3) ? r.range(5, 14) : r.range(10, 45);
+      // target steepness of the hump: mostly easy, sometimes steep (still smooth)
+      const steep = r.chance(0.3) ? r.range(0.3, 0.3 + 0.25 * (0.4 + d)) : r.range(0.06, 0.28);
+      const h = Math.min(4.2, (steep * len) / Math.PI);
+      bumps.push({ t0: t, len, h });
+      t += len + (r.chance(0.35) ? 0 : r.range(2, 26));
+    }
+    const shape = (x: number): number => {
+      let y = Hb * Math.sin((Math.PI * Math.min(L, Math.max(0, x))) / L) ** 2;
+      for (const b of bumps) {
+        if (x <= b.t0 || x >= b.t0 + b.len) continue;
+        y += b.h * 0.5 * (1 - Math.cos((2 * Math.PI * (x - b.t0)) / b.len));
+      }
+      return y;
+    };
+    const seg: Segment = { len: L, shape, props: 1.1 };
+    seg.coins = r.chance(0.35) ? 'line' : undefined;
+    return [seg];
+  }
+
   private cruiseHill(d: number): Segment[] {
     const r = this.rng;
     const H = r.range(6, 14) + d * 8;
