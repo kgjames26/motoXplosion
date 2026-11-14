@@ -37,6 +37,16 @@ sept motos à gagner au garage.
 | **Enduro** | **30 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **30 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
+### v2.57 — décor du circuit 3D nettement plus riche
+Tout est dans `src/mx/scenery.ts` ; chaque élément est isolé (s'il échoue, le circuit se charge quand même).
+- **Ciel** : un dôme prolonge le panorama peint (plus de bande de couleur unie au-dessus), avec le **soleil et son halo** là d'où vient la lumière ; le haut du panorama se fond dans le ciel.
+- **Relief au loin** : le sol n'est plus une plaque plate. Il reste plat près de la piste puis ondule en **collines** (forêt 10 m, Alpes 16 m, canyon 9 m, désert 7 m, ville : plat) qui cachent le pied du panorama ; de grandes taches claires et sombres cassent l'effet de carrelage de la texture. Arbres et décors lointains sont posés sur ce relief.
+- **Touffes d'herbe en 3D** le long de la piste (dégagement et derrière le talus), qui **bougent au vent** ; herbe sèche et clairsemée au canyon et au désert, aucune en ville. Leur nombre suit le réglage de qualité.
+- **Ombre douce au pied de chaque arbre**, étirée à l'opposé du soleil et inclinée avec la pente.
+- **Terre en relief** : mottes et cailloux accrochent la lumière (normal map tirée de la texture de terre).
+- **Drapeaux-plumes** qui flottent des deux côtés de la ligne droite de départ.
+- **Qualité basse** (sans ombres portées) : une ombre douce sous chaque moto, couchée sur la pente.
+
 ### v2.27 — les sauts sont les vraies pièces du kit, décor simplifié
 - **Les bosses du circuit sont désormais les pièces du kit lui-même** (`tools/build_mx_kit.py` mesure chaque module — longueur, largeur, hauteur, profil de roulage le long de son grand axe — dans `src/mx/kitData.ts`). Le tracé (`src/mx/track.ts`) choisit parmi les modules de terre pure et pose **la vraie pièce 3D** à chaque saut ; la physique roule sur le **profil mesuré de cette pièce précise**, redimensionné exactement comme elle est affichée. Fini le profil générique : ce qu'on voit est ce sur quoi on roule.
 - **Décor épuré comme demandé** : autour du circuit, plus de modules du kit géants éparpillés au hasard — juste une texture de terre simple (celle du reste du jeu), les **arbres 2D de la Grande Forêt** déjà dessinés (sprites plantés en bordure, plus denses en s'éloignant de la piste), et un **panorama forestier déjà peint** au loin en cylindre à 360°.

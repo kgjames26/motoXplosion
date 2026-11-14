@@ -11,6 +11,10 @@ import { KIT_MODULES } from './kitData';
 import { assetsFor } from '../catalog';
 import { smokeRate } from '../render/particles';
 import type { AssetDef, AssetGroup } from '../catalog';
+import { bankAt, BlobShadows, featherFlags, grassTufts, hash2, normalFromCanvas, panoFade, skirtW, Sky, SUN, Terrain, topColor, trackLine, treeShadows, vnoise } from './scenery';
+import type { TuftLook } from './scenery';
+
+export { bankAt };
 
 /**
  * v2.26 — the motocross track in 3D: the loop (dirt ribbon with its jumps, whoops and banked
@@ -31,13 +35,6 @@ interface Module {
   group: THREE.Group;
   cx: number;
   cz: number;
-}
-
-/** Height of the banking on the outside of a turn (m) at lateral offset n. */
-export function bankAt(k: number, n: number): number {
-  const B = clamp((Math.abs(k) - 0.012) * 45, 0, 1) * 1.5;
-  const out = (-Math.sign(k) * n) / MX_HALF_WIDTH; // > 0 on the outside of the turn
-  return out > 0 ? B * Math.pow(Math.min(1.4, out), 1.6) : 0;
 }
 
 /**
@@ -61,13 +58,17 @@ interface Theme {
   trackside: boolean;
   /** Share of the planting spots kept (1 = full forest). */
   density: number;
+  /** Height of the hills far from the track (m; 0 = flat). */
+  hills: number;
+  /** Tufts of grass along the track (none in the city). */
+  tuft: TuftLook | null;
 }
 const THEMES: Record<MxWorld, Theme> = {
-  foret: { pano: 'foret.0', bg: 0x8fc6f4, fog: 0xcfe6f6, hemiGround: 0x5a7a3a, ground: { tex: 'tex-grass', tint: 0xa8c888, rep: 150 }, verge: [0.5, 0.95, 0.36], track: { tex: 'tex-dirt', tint: 0x9a7a62 }, groups: ['foret', 'green'], far: [], trackside: false, density: 1 },
-  alpes: { pano: 'alpes.0', bg: 0x7fb4ee, fog: 0xd4e4f2, hemiGround: 0x6a7a58, ground: { tex: 'tex-grass', tint: 0xb4d098, rep: 150 }, verge: [0.52, 0.95, 0.4], track: { tex: 'tex-dirt', tint: 0x8a7664 }, groups: ['alpes', 'green'], far: ['alpes'], trackside: false, density: 0.8 },
-  canyon: { pano: 'canyon.p2', bg: 0x6aa6ea, fog: 0xe8d2bc, hemiGround: 0x9a5a3a, ground: { tex: 'tex-rock-warm', tint: 0xe6b894, rep: 120 }, verge: [1.2, 0.95, 0.78], track: { tex: 'tex-sand', tint: 0xc0704a }, groups: ['canyon'], far: ['canyon'], trackside: false, density: 0.45 },
-  desert: { pano: 'desert.p1', bg: 0x74aef0, fog: 0xf0dfc4, hemiGround: 0xb08a5a, ground: { tex: 'tex-sand', tint: 0xf0d6a4, rep: 140 }, verge: [1.3, 1.15, 0.9], track: { tex: 'tex-sand', tint: 0xb88a56 }, groups: ['desert'], far: ['desert'], trackside: false, density: 0.35 },
-  sf: { pano: 'sf.p2', bg: 0x6aa6ea, fog: 0xdfe5ec, hemiGround: 0x6a6c70, ground: { tex: 'asphalt', tint: 0xffffff, rep: 130 }, verge: [0.75, 0.76, 0.78], track: { tex: 'tex-dirt', tint: 0x86705e }, groups: ['sf'], far: ['sf'], trackside: true, density: 0.22 },
+  foret: { pano: 'foret.0', bg: 0x8fc6f4, fog: 0xcfe6f6, hemiGround: 0x5a7a3a, ground: { tex: 'tex-grass', tint: 0xa8c888, rep: 150 }, verge: [0.5, 0.95, 0.36], track: { tex: 'tex-dirt', tint: 0x9a7a62 }, groups: ['foret', 'green'], far: [], trackside: false, density: 1, hills: 10, tuft: { base: '#2c6e1e', tip: '#8fcf4c', n: 1 } },
+  alpes: { pano: 'alpes.0', bg: 0x7fb4ee, fog: 0xd4e4f2, hemiGround: 0x6a7a58, ground: { tex: 'tex-grass', tint: 0xb4d098, rep: 150 }, verge: [0.52, 0.95, 0.4], track: { tex: 'tex-dirt', tint: 0x8a7664 }, groups: ['alpes', 'green'], far: ['alpes'], trackside: false, density: 0.8, hills: 16, tuft: { base: '#33752a', tip: '#a5d95e', n: 0.9 } },
+  canyon: { pano: 'canyon.p2', bg: 0x6aa6ea, fog: 0xe8d2bc, hemiGround: 0x9a5a3a, ground: { tex: 'tex-rock-warm', tint: 0xe6b894, rep: 120 }, verge: [1.2, 0.95, 0.78], track: { tex: 'tex-sand', tint: 0xc0704a }, groups: ['canyon'], far: ['canyon'], trackside: false, density: 0.45, hills: 9, tuft: { base: '#7a6a34', tip: '#c9b46a', n: 0.3 } },
+  desert: { pano: 'desert.p1', bg: 0x74aef0, fog: 0xf0dfc4, hemiGround: 0xb08a5a, ground: { tex: 'tex-sand', tint: 0xf0d6a4, rep: 140 }, verge: [1.3, 1.15, 0.9], track: { tex: 'tex-sand', tint: 0xb88a56 }, groups: ['desert'], far: ['desert'], trackside: false, density: 0.35, hills: 7, tuft: { base: '#8a7a40', tip: '#d8c680', n: 0.2 } },
+  sf: { pano: 'sf.p2', bg: 0x6aa6ea, fog: 0xdfe5ec, hemiGround: 0x6a6c70, ground: { tex: 'asphalt', tint: 0xffffff, rep: 130 }, verge: [0.75, 0.76, 0.78], track: { tex: 'tex-dirt', tint: 0x86705e }, groups: ['sf'], far: ['sf'], trackside: true, density: 0.22, hills: 0, tuft: null },
 };
 
 /** A procedural asphalt (no photo needed): dark grey with grain, patches and the odd crack. */
@@ -105,7 +106,7 @@ function asphaltTexture(): THREE.CanvasTexture {
 }
 
 /** A tileable earth texture, dark and wet: packed loam, glossy clods, wet streaks, a few pebbles. */
-function earthTexture(): THREE.CanvasTexture {
+function earthTexture(): { map: THREE.CanvasTexture; canvas: HTMLCanvasElement } {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -161,7 +162,7 @@ function earthTexture(): THREE.CanvasTexture {
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 8;
-  return t;
+  return { map: t, canvas: c };
 }
 
 /** Where the bikes ride (tools/sim_ruts.ts): per circuit, bytes of wheel traffic and of sliding on a ds × dn grid. */
@@ -180,18 +181,6 @@ function loadRuts(): Promise<{ ds: number; dn: number; n0: number; cols: number;
   return rutsPromise;
 }
 const b64 = (t: string): Uint8Array => Uint8Array.from(atob(t), (ch) => ch.charCodeAt(0));
-const hash2 = (a: number, b: number): number => {
-  let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-};
-
-/** Direction towards the sun (also used to bake light and shade into the earth, shadows on or off). */
-const SUN = (() => {
-  const v = [-0.62, 0.62, 0.48];
-  const l = Math.hypot(v[0], v[1], v[2]);
-  return v.map((x) => x / l) as [number, number, number];
-})();
 /**
  * v2.50: light baked into the vertex colours, so the relief reads even with shadows off (phones):
  * faces turned to the sun lighter, faces turned away clearly darker, a soft dark band at the foot
@@ -208,17 +197,6 @@ function bakeLight(g: THREE.BufferGeometry, k = 1): void {
   g.attributes.color.needsUpdate = true;
 }
 
-/** Width of the grass slope that brings the relief under the loop back down to the ground (m). */
-const skirtW = (b: number) => 3 + 4 * b;
-/** Smooth value noise in [0, 1] on a grid of `cell` metres. */
-function vnoise(x: number, z: number, cell: number, salt: number): number {
-  const fx = x / cell, fz = z / cell;
-  const ix = Math.floor(fx), iz = Math.floor(fz);
-  const ax = fx - ix, az = fz - iz;
-  const sx = ax * ax * (3 - 2 * ax), sz = az * az * (3 - 2 * az);
-  const h = (a: number, b: number) => hash2(a * 7 + salt, b * 13 - salt);
-  return (h(ix, iz) * (1 - sx) + h(ix + 1, iz) * sx) * (1 - sz) + (h(ix, iz + 1) * (1 - sx) + h(ix + 1, iz + 1) * sx) * sz;
-}
 /**
  * v2.48: everything inclined on the circuit (jump faces, berms, banks, steep skirts) takes a darker,
  * redder earth colour. The edge between flat and inclined is ragged: the slope threshold is shifted
@@ -284,8 +262,21 @@ export class MxScene {
   /** Middle of the circuit (the ground and the panorama are centred on it). */
   private cx = 0;
   private cz = 80;
+  /** v2.57: rolling ground, sky dome, wind (grass, flags), soft shadows. */
+  private terrain!: Terrain;
+  private sky: Sky | null = null;
+  private wind = { value: 0 };
+  private blobs: BlobShadows | null = null;
+  /** A piece of decor must never keep the circuit from loading. */
+  private safe(what: string, build: () => void): void {
+    try {
+      build();
+    } catch (err) {
+      console.warn(`mx decor: ${what}`, err);
+    }
+  }
 
-  constructor(readonly circuit = 0) {
+  constructor(readonly circuit = 0, private detail = 1) {
     const s = this.scene;
     const th = (this.theme = THEMES[MX_CIRCUITS[circuit].world]);
     {
@@ -311,10 +302,14 @@ export class MxScene {
     this.sun.shadow.bias = -0.0006;
     s.add(this.sun, this.sun.target);
     // ground: the world's own texture (asphalt in the city), the track in the world's earth
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1500, 1500).rotateX(-Math.PI / 2), this.grass);
-    ground.position.set(this.cx, -0.06, this.cz);
-    ground.receiveShadow = true;
-    s.add(ground);
+    const line = trackLine();
+    this.grass.vertexColors = true;
+    this.terrain = new Terrain(this.cx, this.cz, th.hills, line, this.grass);
+    s.add(this.terrain.mesh);
+    this.safe('sky', () => {
+      this.sky = new Sky(th.bg);
+      s.add(this.sky.dome);
+    });
     const loader = new THREE.TextureLoader();
     if (th.ground.tex === 'asphalt') {
       this.useMap(this.grass, asphaltTexture(), th.ground.rep);
@@ -334,8 +329,12 @@ export class MxScene {
       t.colorSpace = THREE.SRGBColorSpace;
       t.wrapS = THREE.MirroredRepeatWrapping;
       t.repeat.set(4, 1);
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(600, 600, 300, 48, 1, true), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false }));
+      // its top edge melts into the sky dome, which takes the colour the painting has up there
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(600, 600, 300, 48, 1, true), new THREE.MeshBasicMaterial({ map: t, alphaMap: this.sky ? panoFade() : null, transparent: !!this.sky, depthWrite: false, side: THREE.BackSide, fog: false }));
       ring.position.set(this.cx, 150 - 300 * 0.3, this.cz);
+      ring.renderOrder = -5;
+      const top = this.sky ? topColor(t.image) : null;
+      if (top && this.sky) this.sky.setHorizon(top[0], top[1], top[2]);
       s.add(ring);
     });
     this.plantDecor();
@@ -380,7 +379,27 @@ export class MxScene {
     this.loadKit();
     this.buildJumps();
     this.buildTrackside();
-    this.earth.map = earthTexture();
+    const earth = earthTexture();
+    this.earth.map = earth.map;
+    this.safe('earth relief', () => {
+      const nm = normalFromCanvas(earth.canvas, 2.2);
+      if (!nm) return;
+      this.earth.normalMap = nm;
+      this.earth.normalScale.set(0.8, 0.8);
+      this.earth.specular.set(0x2a241c);
+      this.earth.shininess = 18;
+    });
+    this.safe('grass', () => {
+      const tufts = th.tuft ? grassTufts(th.tuft, line, this.detail, this.circuit, this.wind) : null;
+      if (!tufts) return;
+      (tufts.material as THREE.MeshLambertMaterial).color.set(th.ground.tint).lerp(new THREE.Color(0xffffff), 0.35);
+      s.add(tufts);
+    });
+    this.safe('flags', () => s.add(featherFlags(line, this.wind)));
+    this.safe('blob shadows', () => {
+      this.blobs = new BlobShadows();
+      s.add(this.blobs.mesh);
+    });
     this.earth.color.set(th.track.tint).lerp(new THREE.Color(0xffffff), 0.6);
     void loadRuts().then((d) => {
       const c = d?.circuits.find((x) => x.id === MX_CIRCUITS[this.circuit].id);
@@ -1186,13 +1205,17 @@ export class MxScene {
       for (const [lx, lz] of line) d = Math.min(d, (lx - x) ** 2 + (lz - z) ** 2);
       return Math.sqrt(d);
     };
-    const put = (list: { mat: THREE.SpriteMaterial; sp: { w: number; h: number; ax: number; ay: number } }[], x: number, z: number, k: number) => {
+    // the slopes around the loop, then the hills of the world's ground further away
+    const groundY = (x: number, z: number): number => groundAt(x, z) + this.terrain.heightAt(x, z);
+    const shaded: { x: number; z: number; w: number }[] = [];
+    const put = (list: { mat: THREE.SpriteMaterial; sp: { w: number; h: number; ax: number; ay: number } }[], x: number, z: number, k: number, shadow = false) => {
       const { mat, sp } = list[Math.floor(rnd() * list.length)];
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(sp.w * k, sp.h * k, 1);
       sprite.center.set(sp.ax / sp.w, 1 - sp.ay / sp.h);
-      sprite.position.set(x, groundAt(x, z) - 0.05, z);
+      sprite.position.set(x, groundY(x, z) - 0.05, z);
       this.scene.add(sprite);
+      if (shadow) shaded.push({ x, z, w: Math.min(9, sp.w * k * 0.7) });
     };
     const R = 300;
     // trees and bushes: a clear strip along the track, then more and more of them
@@ -1205,7 +1228,7 @@ export class MxScene {
       const bush = bushes.length > 0 && (trees.length === 0 || rnd() < 0.3);
       const list = bush ? bushes : trees;
       if (!list.length) continue;
-      put(list, x, z, (bush ? 0.9 : 1.1) + rnd() * 0.7);
+      put(list, x, z, (bush ? 0.9 : 1.1) + rnd() * 0.7, true);
       n++;
     }
     // far scenery (structures: mesas, farms, houses): never close to the track
@@ -1232,6 +1255,7 @@ export class MxScene {
         c++;
       }
     }
+    this.safe('tree shadows', () => this.scene.add(treeShadows(shaded, groundY)));
   }
 
   // ---------------------------------------------------------------- bikes
@@ -1257,6 +1281,20 @@ export class MxScene {
     b3.group.position.z = Math.sin(lean) * 0.75;
     b3.group.position.y -= (1 - Math.cos(lean)) * 0.75;
     return car;
+  }
+
+  /** Low quality (no shadow map): a soft shadow on the ground under a bike, lying on the slope it is over. */
+  private blob(bike: Bike, zone: { x0: number; h0: number; cruise: boolean }, n: number): void {
+    if (!this.blobs) return;
+    const u = bike.x - zone.x0;
+    const pose = mxPose(u, zone.cruise);
+    const at = (du: number): number => {
+      const q = mxPose(u + du, zone.cruise);
+      return (Number.isNaN(q.s) ? 0 : loopHeightN(q.s, n, zone.cruise)) + bankAt(q.k, n);
+    };
+    const y = at(0);
+    const [, oy] = bike.pointWorld(0, 0);
+    this.blobs.add(pose.x - Math.sin(pose.th) * n, y, pose.z + Math.cos(pose.th) * n, pose.th, (at(0.7) - at(-0.7)) / 1.4, oy - zone.h0 - y - 0.5);
   }
 
   /** Give the bikes back to the 2.5D scene. */
@@ -1291,6 +1329,8 @@ export class MxScene {
       for (const g of this.cruiseMeshes) g.visible = zone.cruise;
     }
     this.updateGate(game, zone, dt);
+    this.wind.value = this.time;
+    this.blobs?.begin();
     // ---- bikes
     const crashed = !!(game.ragdoll && game.crashTimer > 0);
     player.lane = 0;
@@ -1310,7 +1350,10 @@ export class MxScene {
       b3.steer = o.crashTimer > 0 ? 0 : Math.atan((1.48 * 9.81 * 1.55 * Math.tan(o.mxLean ?? 0)) / (ov * ov));
       b3.update(o.bike, dt, o.crashTimer > 0);
       this.place(b3, o.bike, zone, o.mxN ?? 0, 0, o.mxLean ?? 0);
+      if (!renderer.shadowMap.enabled) this.blob(o.bike, zone, o.mxN ?? 0);
     }
+    if (!renderer.shadowMap.enabled && !crashed) this.blob(b, zone, game.mxN);
+    this.blobs?.end(!renderer.shadowMap.enabled);
     // ---- camera: third person, smooth; it does not take the bike's knocks
     const u = b.x - zone.x0;
     const pose = mxPose(u, zone.cruise);
@@ -1365,6 +1408,7 @@ export class MxScene {
     if (game.shake > 0) this.camera.position.y += (Math.random() - 0.5) * game.shake * game.shake * 0.12;
     this.camera.lookAt(this.look);
     this.camera.updateMatrixWorld();
+    this.sky?.dome.position.copy(this.camera.position);
     // sun and its shadow follow the bike
     this.sun.position.set(wx + SUN[0] * 70, SUN[1] * 70, wz + SUN[2] * 70); // a lower sun: long shadows behind the jumps
     this.sun.target.position.set(wx, 0, wz);

@@ -506,7 +506,7 @@ export class GLRenderer {
         this.mx.release(this.scene);
         this.mx = null;
       }
-      if (!this.mx) this.mx = new MxScene(game.mxCircuit);
+      if (!this.mx) this.mx = new MxScene(game.mxCircuit, PRESETS[this.quality].trees);
       this.mxOn = true;
       this.syncRivals(game, 0, true);
       this.mx.render(this.renderer, game, dt, this.bike3d, this.rivals, this.W / this.H, (1 - mxT) * 2);
