@@ -1531,23 +1531,50 @@ export class Game {
       this.particles.spawn({ kind: 'spark', x, y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.3) * 6, life: 0.5, size: 0.12, grow: 0, r, g, b });
   }
 
+  /**
+   * Dust cloud where the wheels touch down. v2.58: it follows the ground (snow powder, water
+   * splash, less dust on wet ground) and a firm landing also throws clods of earth / mud / snow.
+   */
   private landingDust(strength: number): void {
     const b = this.bike;
     for (const w of [b.rear, b.front]) {
       const s = SURFACES[w.surface];
-      for (let i = 0; i < 6 + strength * 14; i++) {
+      const water = w.surface === Surface.Water;
+      const gw = this.groundWeather(w.x);
+      const snow = gw === 2 && !water;
+      const nDust = (6 + strength * 14) * (water ? 0.8 : gw === 1 ? 0.45 : 1);
+      for (let i = 0; i < nDust; i++) {
         this.particles.spawn({
-          kind: 'dust',
+          kind: water ? 'splash' : 'dust',
           x: w.x + (Math.random() - 0.5) * 0.6,
           y: w.y - w.radius + 0.1,
           vx: (Math.random() - 0.5) * 5 + b.vx * 0.2,
-          vy: Math.random() * 1.5,
-          life: 0.8 + Math.random() * 0.6,
-          size: 0.25 + Math.random() * 0.25,
-          grow: 1.2,
-          r: s.dust[0],
-          g: s.dust[1],
-          b: s.dust[2],
+          vy: water ? 1.5 + Math.random() * 3 : Math.random() * 1.5,
+          life: water ? 0.7 : 0.8 + Math.random() * 0.6,
+          size: water ? 0.07 + Math.random() * 0.08 : 0.25 + Math.random() * 0.25,
+          grow: water ? 0 : 1.2,
+          r: snow ? 230 - Math.random() * 30 : s.dust[0],
+          g: snow ? 232 - Math.random() * 30 : s.dust[1],
+          b: snow ? 238 - Math.random() * 25 : s.dust[2],
+        });
+      }
+      // clods only from a real impact (a gentle touchdown just raises dust)
+      if (water || strength < 0.35) continue;
+      const nClods = Math.round(strength * (gw === 0 ? 4 : 7));
+      for (let i = 0; i < nClods; i++) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        this.particles.spawn({
+          kind: 'clod',
+          x: w.x + side * w.radius * 0.5,
+          y: w.y - w.radius + 0.05,
+          vx: side * (1 + Math.random() * 3) * strength + b.vx * 0.3,
+          vy: 1.5 + Math.random() * 3 * strength,
+          life: 1.1,
+          size: 0.04 + Math.random() * 0.05,
+          grow: 0,
+          r: snow ? (Math.random() < 0.5 ? 235 : 120) : s.dust[0] * 0.6,
+          g: snow ? (Math.random() < 0.5 ? 238 : 95) : s.dust[1] * 0.6,
+          b: snow ? (Math.random() < 0.5 ? 245 : 70) : s.dust[2] * 0.6,
         });
       }
     }

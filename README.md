@@ -37,6 +37,10 @@ sept motos à gagner au garage.
 | **Enduro** | **30 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **30 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
+### v2.58 — atterrissages plus vivants (balade, trial, enduro)
+- À l'atterrissage, la gerbe sous les roues suit maintenant le sol et la météo : **poudre blanche** sur la neige, **éclaboussures** dans l'eau, moins de poussière sur sol mouillé.
+- Un atterrissage franc projette en plus quelques **mottes** (terre, boue ou neige) de chaque côté des roues ; un simple contact ne soulève que de la poussière. Coût négligeable (quelques particules, plafond du système inchangé).
+
 ### v2.57 — décor du circuit 3D nettement plus riche
 Tout est dans `src/mx/scenery.ts` ; chaque élément est isolé (s'il échoue, le circuit se charge quand même).
 - **Ciel** : un dôme prolonge le panorama peint (plus de bande de couleur unie au-dessus), avec le **soleil et son halo** là d'où vient la lumière ; le haut du panorama se fond dans le ciel.
