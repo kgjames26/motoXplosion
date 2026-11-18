@@ -516,6 +516,17 @@
             <span>Vibrations</span>
             <input type="checkbox" id="set-vibration" />
           </label>
+          <div class="set-row dev-row">
+            <span>Mode développeur</span>
+            <div class="dev-box" id="dev-off">
+              <input type="password" id="dev-pass" placeholder="Mot de passe" autocomplete="off" spellcheck="false" />
+              <button class="btn-secondary" id="dev-go">OK</button>
+            </div>
+            <div class="dev-box hidden" id="dev-on">
+              <b class="dev-badge">ACTIF · tout est débloqué</b>
+              <button class="btn-secondary" id="dev-stop">Désactiver</button>
+            </div>
+          </div>
         </div>
         <button class="btn-primary" id="btn-settings-back">RETOUR</button>
       </div>

@@ -18,7 +18,8 @@ import { bestKey, loadProfile, saveProfile } from './profile';
 import { outfitById, OUTFITS } from './outfits';
 import { MAX_LEVEL, PARTS, upgradedSpec } from './upgrades';
 import { rockCapacity } from './climb';
-import { DIFF_ORDER, diffIndex, tyreBonus, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
+import { DIFF_ORDER, diffIndex, tyreBonus, TYRES, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
+import { CRUISE_CONTROL } from './upgrades';
 import {
   CIRCUITS,
   CircuitMode,
@@ -132,14 +133,62 @@ const MODE_SHORT: Record<ModeId, string> = {
   course: '8 pilotes',
 };
 
-const rec = (mode: CircuitMode, n: number, d: Difficulty): CircuitRecord | undefined => profile.circuits[circuitKey(mode, settings.region, n, d)];
-const doneAny = (mode: CircuitMode, n: number) => DIFF_ORDER.some((d) => rec(mode, n, d)?.done);
-const unlocked = (mode: CircuitMode, n: number) => n === 1 || doneAny(mode, n - 1);
+// ---------------------------------------------------------------- progression (v2.60)
+/**
+ * Developer mode (password in the settings): every world, circuit, difficulty and the cross
+ * circuits open, every bike, outfit, tyre and gadget owned. The profile from before is kept
+ * aside and comes back when the mode is switched off.
+ */
+const DEV_KEY = 'mx.dev';
+const DEV_BACKUP = 'mx.profile.beforeDev';
+const DEV_PASSWORD = 'ludogo';
+let devMode = ((): boolean => {
+  try {
+    return localStorage.getItem(DEV_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
+
+const rec = (mode: CircuitMode, n: number, d: Difficulty, region: RegionId = settings.region): CircuitRecord | undefined => profile.circuits[circuitKey(mode, region, n, d)];
+const doneAny = (mode: CircuitMode, n: number, region: RegionId = settings.region) => DIFF_ORDER.some((d) => rec(mode, n, d, region)?.done);
+const unlocked = (mode: CircuitMode, n: number) => devMode || n === 1 || doneAny(mode, n - 1);
 /** Each difficulty (= weather) of a circuit opens once the previous one is finished. */
 const diffUnlocked = (mode: CircuitMode, n: number, d: Difficulty) => {
   const i = diffIndex(d);
-  return i === 0 || !!rec(mode, n, DIFF_ORDER[i - 1])?.done;
+  return devMode || i === 0 || !!rec(mode, n, DIFF_ORDER[i - 1])?.done;
 };
+/** Worlds open one after the other: finish WORLD_UNLOCK circuits (trial, enduro or course) in the previous one. */
+const WORLD_UNLOCK = 8;
+/** The motocross circuit of a world opens after CROSS_UNLOCK circuits finished in that world. */
+const CROSS_UNLOCK = 3;
+const WORLDS: RegionId[] = REGION_ORDER.filter((x) => x !== 'cross');
+/** Circuits finished in a world, every circuit mode together (any difficulty). */
+function worldDone(region: RegionId): number {
+  let n = 0;
+  for (const mode of ['trial', 'enduro', 'course'] as CircuitMode[]) for (let i = 1; i <= CIRCUITS; i++) if (doneAny(mode, i, region)) n++;
+  return n;
+}
+const prevWorld = (region: RegionId): RegionId | null => WORLDS[WORLDS.indexOf(region) - 1] ?? null;
+function worldOpen(region: RegionId): boolean {
+  const prev = prevWorld(region);
+  return devMode || !prev || (worldOpen(prev) && worldDone(prev) >= WORLD_UNLOCK);
+}
+const crossOpen = (region: RegionId = settings.region) => devMode || (worldOpen(region) && worldDone(region) >= CROSS_UNLOCK);
+/** Short message near the bottom of the screen (locked world, developer mode…). */
+let toastTimer = 0;
+function toast(html: string): void {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    document.getElementById('app')!.appendChild(el);
+  }
+  el.innerHTML = html;
+  el.classList.add('on');
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el!.classList.remove('on'), 3200);
+}
 const cruiseLevel = () => profile.cruiseUnlock[settings.region] ?? 0;
 /** Medal counts for a mode in the current world (every difficulty) and circuits done. */
 function medalCounts(mode: CircuitMode): { done: number; gold: number; silver: number; bronze: number } {
@@ -195,10 +244,25 @@ function updateBest(): void {
       box.innerHTML = `${medalIco(c.gold ? 3 : c.silver ? 2 : c.done ? 1 : 0)}${c.done}/${CIRCUITS}`;
     }
   }
+  const xm = $('mode-cross').querySelector('.medals');
+  if (xm) xm.textContent = crossOpen() ? '' : `🔒 ${Math.min(worldDone(settings.region), CROSS_UNLOCK)}/${CROSS_UNLOCK}`;
 }
 
 function refreshTitle(): void {
   if (profile.mode === 'cruising') profile.mode = lastCircuitMode; // back on the home screen
+  if (!worldOpen(settings.region)) settings.region = 'alpes';
+  if (profile.crossSel && !crossOpen()) profile.crossSel = false;
+  // locks on the world strip and on the cross card
+  for (const el of $('regions').querySelectorAll<HTMLElement>('.world-card')) {
+    const id = el.dataset.region as RegionId;
+    const open = worldOpen(id);
+    el.classList.toggle('locked', !open);
+    const prev = prevWorld(id);
+    const lk = el.querySelector('.w-lock')!;
+    lk.textContent = open || !prev ? '' : `🔒 ${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}`;
+  }
+  const xc = $('mode-cross');
+  xc.classList.toggle('locked', !crossOpen());
   const cross = onCross();
   // the motocross circuit of the world is one more mode, the last of the strip
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card[data-mode]')) el.classList.toggle('selected', !cross && el.dataset.mode === profile.mode);
@@ -239,6 +303,10 @@ function buildModes(): void {
     mp.open();
   });
   $('mode-cross').addEventListener('click', () => {
+    if (!crossOpen()) {
+      toast(`🔒 Termine ${CROSS_UNLOCK} circuits (trial, enduro ou course) dans le monde ${REGIONS[settings.region].name} pour ouvrir son circuit de cross.`);
+      return;
+    }
     profile.crossSel = true;
     if (profile.mode === 'cruising') profile.mode = 'enduro';
     saveP();
@@ -376,9 +444,14 @@ function buildRegions(): void {
     const photo = id === 'alpes' || id === 'foret';
     void thumb;
     void photo;
-    b.innerHTML = `<i class="w-ico">${WORLD_ICONS[id]}</i><span>${r.name}</span>`;
+    b.innerHTML = `<i class="w-ico">${WORLD_ICONS[id]}</i><span>${r.name}</span><small class="w-lock"></small>`;
     b.title = r.subtitle;
     b.addEventListener('click', () => {
+      if (!worldOpen(id)) {
+        const prev = prevWorld(id)!;
+        toast(`🔒 ${r.name} : termine ${WORLD_UNLOCK} circuits dans le monde ${REGIONS[prev].name} (${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}).`);
+        return;
+      }
       settings.region = id as RegionId;
       // worlds are for the circuits: leaving cruising when one is picked
       if (profile.mode === 'cruising') profile.mode = 'enduro';
@@ -455,8 +528,69 @@ function openSettings(from: ScreenName): void {
   applyLayout(settings.layout);
   applyQuality(settings.quality);
   syncTimerUI();
+  syncDevUI();
   show('settings');
 }
+
+// ---------------------------------------------------------------- developer mode (v2.60)
+function syncDevUI(): void {
+  $('dev-off').classList.toggle('hidden', devMode);
+  $('dev-on').classList.toggle('hidden', !devMode);
+  ($('dev-pass') as HTMLInputElement).value = '';
+}
+function devOn(): void {
+  const input = $('dev-pass') as HTMLInputElement;
+  if (input.value.trim().toLowerCase() !== DEV_PASSWORD) {
+    input.value = '';
+    toast('Mot de passe incorrect');
+    return;
+  }
+  try {
+    localStorage.setItem(DEV_BACKUP, JSON.stringify(profile));
+    localStorage.setItem(DEV_KEY, '1');
+  } catch {
+    /* storage unavailable: the mode lasts until the game is closed */
+  }
+  devMode = true;
+  for (const b of BIKES) if (!profile.owned.includes(b.id)) profile.owned.push(b.id);
+  for (const o of OUTFITS) if (!profile.outfits.includes(o.id)) profile.outfits.push(o.id);
+  for (const t of TYRES) if (!profile.tyres.includes(t.id)) profile.tyres.push(t.id);
+  if (!profile.gear.includes(CRUISE_CONTROL.id)) profile.gear.push(CRUISE_CONTROL.id);
+  profile.coins = Math.max(profile.coins, 999999);
+  saveP();
+  syncDevUI();
+  refreshTitle();
+  toast('🛠️ Mode développeur : mondes, circuits, météos, motos et tenues débloqués');
+}
+function devOff(): void {
+  devMode = false;
+  try {
+    localStorage.removeItem(DEV_KEY);
+    const raw = localStorage.getItem(DEV_BACKUP);
+    if (raw) {
+      // the game from before the developer mode comes back
+      localStorage.setItem('mx.profile.v1', raw);
+      localStorage.removeItem(DEV_BACKUP);
+      const back = loadProfile();
+      for (const k of Object.keys(profile)) delete (profile as unknown as Record<string, unknown>)[k];
+      Object.assign(profile, back);
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  if (!profile.owned.includes(profile.bike)) profile.bike = 'explorer';
+  if (!profile.outfits.includes(profile.outfit)) profile.outfit = 'moto';
+  saveP();
+  syncDevUI();
+  refreshTitle();
+  renderer.setPlayerModel(bikeById(profile.bike), outfit());
+  toast('Mode développeur désactivé : ta partie d’avant est revenue');
+}
+$('dev-go').addEventListener('click', devOn);
+$('dev-pass').addEventListener('keydown', (e) => {
+  if ((e as KeyboardEvent).key === 'Enter') devOn();
+});
+$('dev-stop').addEventListener('click', devOff);
 
 function bindSettings(): void {
   $('keys-toggle').addEventListener('click', () => setKeysOpen(!$('keys-panel').classList.contains('open')));
@@ -753,6 +887,7 @@ $('sleep-settings').addEventListener('click', () => openSettings('sleep'));
 
 function play(): void {
   if (asleep()) return show('sleep');
+  if (onCross() && !crossOpen()) return refreshTitle();
   if (onCross()) return start();
   if (isCircuitMode(profile.mode)) openCircuits();
   else start();
@@ -814,6 +949,9 @@ function finishRun(display: boolean): void {
   const mode = game.mode;
   let bestText = '';
   let unlockMsg = '';
+  // what was locked before this run, to announce what it opens
+  const worldsBefore = WORLDS.filter((w) => worldOpen(w));
+  const crossBefore = !r.mx && isCircuitMode(mode) ? crossOpen(game.region) : true;
   if (isCircuitMode(mode) && r.circuit) {
     const key = circuitKey(mode, game.region, r.circuit, game.difficulty);
     const old = profile.circuits[key] ?? { medal: 0, done: false };
@@ -861,6 +999,11 @@ function finishRun(display: boolean): void {
   }
   profile.coins += r.total;
   profile.totalEarned += r.total;
+  if (!devMode) {
+    const news = WORLDS.filter((w) => worldOpen(w) && !worldsBefore.includes(w));
+    if (news.length) unlockMsg += (unlockMsg ? '<br>' : '') + `🌍 Nouveau monde débloqué : ${news.map((w) => REGIONS[w].name).join(', ')} !`;
+    if (!crossBefore && crossOpen(game.region)) unlockMsg += (unlockMsg ? '<br>' : '') + `🏁 Circuit de cross débloqué dans le monde ${REGIONS[game.region].name} !`;
+  }
   saveP();
   if (!display) return;
   let title = OVER_TITLES[mode === 'cruising' && r.reason === 'quit' ? 'stop' : r.reason] ?? 'FIN';

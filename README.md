@@ -15,6 +15,16 @@ sept motos à gagner au garage.
 
 - Quand on installe le jeu (écran d'accueil du téléphone), l'icône reprend le pilote orange et blanc de l'affiche, détouré, en plein saut devant un grand **X** orange et turquoise (celui du logo), sur un coucher de soleil avec des rayons, des montagnes et une piste en terre. Une version « maskable » (pilote un peu plus petit) remplit les icônes rondes d'Android sans rien couper ; icône Apple 180 px et favicon 48 px. Sources en 1024 px dans `art/source/icon-1024.png` et `icon-maskable-1024.png`.
 
+## Progression et déblocages (v2.60)
+
+- **Mondes** : au départ, seules les **Alpes** sont ouvertes. Chaque monde suivant (Grande Forêt → Canyon → Désert → San Francisco) s'ouvre quand on a **terminé 8 circuits** (trial, enduro et course comptent ensemble, quelle que soit la météo) dans le monde précédent. Sur l'accueil, un monde fermé est grisé avec un cadenas et sa progression (« 🔒 5/8 ») ; un toucher explique ce qu'il reste à faire.
+- **Circuit de cross 3D** (style MXGP) : celui de chaque monde s'ouvre après **3 circuits terminés** dans ce monde.
+- **Circuits** : comme avant, terminer un circuit ouvre le suivant, et sur chaque circuit Facile ouvre Moyen, puis Moyen ouvre Difficile.
+- **Motos, pièces, pneus, tenues** : à acheter au garage avec les pièces gagnées (le cruising rapporte le plus).
+- Le **cruising** (qui traverse tous les mondes) et le **multijoueur** restent ouverts à tous.
+- L'écran de fin annonce les nouveaux mondes et circuits de cross débloqués.
+- **Mode développeur** (Paramètres, en bas) : mot de passe `Ludogo` (majuscules indifférentes). Il ouvre tous les mondes, circuits, météos et circuits de cross, donne toutes les motos, tenues, pneus et le régulateur, et 999 999 pièces. La partie d'avant est mise de côté : **Désactiver** la remet telle quelle.
+
 ## Multijoueur (2 à 4 pilotes, gratuit)
 
 - Dans le choix du mode, la carte **Multijoueur** ouvre l'écran des salons : **Créer un salon** (un code de 5 lettres s'affiche) ou **Rejoindre** avec ce code (on peut aussi ouvrir le jeu avec `?salon=CODE`).
