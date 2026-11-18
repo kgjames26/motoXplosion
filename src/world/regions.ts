@@ -83,7 +83,7 @@ export const REGIONS = {
 /** v2.25: the motocross track — an outdoor MX circuit, bump after bump. */
 REGIONS.cross = {
   id: 'cross',
-  name: 'Circuit de cross',
+  name: 'Circuit 3D',
   subtitle: 'Buttes à enchaîner, whoops et tables : un vrai terrain de motocross',
   biomes: { [Biome.Meadow]: 1 },
   start: Biome.Meadow,
