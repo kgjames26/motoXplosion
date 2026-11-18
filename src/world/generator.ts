@@ -360,9 +360,10 @@ export class Generator {
     } else if (this.mode === 'cruising') {
       // v2.55: cruising is built like enduro (big hills with a steep pitch, technical hills, climbs and
       // descents, fords, jumps), starting at the level of the first circuits and growing with distance;
-      // it keeps its own speed-window jumps and its jump coins
+      // v2.62: the enduro mix, plus its big soft jumps with coins. The speed-window jump (a pit, a
+      // long steep landing and a dip at the bottom) is gone: too much of a trap for a ride.
       this.grade = Math.min(0.35, d0 * 0.4);
-      feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6, cruiseJump: 1.5, speedJump: 1.2 + d0 * 1.2 };
+      feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6, cruiseJump: 1.2 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
