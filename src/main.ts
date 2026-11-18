@@ -158,23 +158,35 @@ const diffUnlocked = (mode: CircuitMode, n: number, d: Difficulty) => {
   const i = diffIndex(d);
   return devMode || i === 0 || !!rec(mode, n, DIFF_ORDER[i - 1])?.done;
 };
-/** Worlds open one after the other: finish WORLD_UNLOCK circuits (trial, enduro or course) in the previous one. */
-const WORLD_UNLOCK = 8;
-/** The motocross circuit of a world opens after CROSS_UNLOCK circuits finished in that world. */
-const CROSS_UNLOCK = 3;
+/**
+ * v2.63 — Worlds open one after the other: finish WORLD_UNLOCK circuits (trial, enduro or course,
+ * any difficulty) in the previous one. The first world is always open.
+ */
+const WORLD_UNLOCK = 10;
+/**
+ * The Circuit 3D (motocross tracks) is the last thing to unlock, like one more world after the
+ * last one: finish WORLD_UNLOCK circuits in the last world. Cruising needs no unlock (it crosses
+ * every world and the 3D track already).
+ */
 const WORLDS: RegionId[] = REGION_ORDER.filter((x) => x !== 'cross');
+const LAST_WORLD = WORLDS[WORLDS.length - 1];
 /** Circuits finished in a world, every circuit mode together (any difficulty). */
 function worldDone(region: RegionId): number {
   let n = 0;
   for (const mode of ['trial', 'enduro', 'course'] as CircuitMode[]) for (let i = 1; i <= CIRCUITS; i++) if (doneAny(mode, i, region)) n++;
   return n;
 }
+/** Players of older versions keep what they already played: a world (or the 3D circuit) with a finished circuit stays open. */
+const playedIn = (region: RegionId) => Object.entries(profile.circuits).some(([k, v]) => v.done && k.split(':')[1] === region);
 const prevWorld = (region: RegionId): RegionId | null => WORLDS[WORLDS.indexOf(region) - 1] ?? null;
 function worldOpen(region: RegionId): boolean {
   const prev = prevWorld(region);
-  return devMode || !prev || (worldOpen(prev) && worldDone(prev) >= WORLD_UNLOCK);
+  return devMode || !prev || playedIn(region) || (worldOpen(prev) && worldDone(prev) >= WORLD_UNLOCK);
 }
-const crossOpen = (region: RegionId = settings.region) => devMode || (worldOpen(region) && worldDone(region) >= CROSS_UNLOCK);
+/** The Circuit 3D is one for every world (each world has its own track once it is open). */
+const crossOpen = () => devMode || playedIn('cross') || (worldOpen(LAST_WORLD) && worldDone(LAST_WORLD) >= WORLD_UNLOCK);
+/** Lock label: progress toward the next unlock (x/10). */
+const lockProgress = (prev: RegionId) => `🔒 ${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}`;
 /** Short message near the bottom of the screen (locked world, developer mode…). */
 let toastTimer = 0;
 function toast(html: string): void {
@@ -245,7 +257,7 @@ function updateBest(): void {
     }
   }
   const xm = $('mode-cross').querySelector('.medals');
-  if (xm) xm.textContent = crossOpen() ? '' : `🔒 ${Math.min(worldDone(settings.region), CROSS_UNLOCK)}/${CROSS_UNLOCK}`;
+  if (xm) xm.textContent = crossOpen() ? '' : worldOpen(LAST_WORLD) ? lockProgress(LAST_WORLD) : '🔒';
 }
 
 function refreshTitle(): void {
@@ -259,10 +271,12 @@ function refreshTitle(): void {
     el.classList.toggle('locked', !open);
     const prev = prevWorld(id);
     const lk = el.querySelector('.w-lock')!;
-    lk.textContent = open || !prev ? '' : `🔒 ${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}`;
+    lk.textContent = open || !prev ? '' : worldOpen(prev) ? lockProgress(prev) : '🔒';
+    el.title = open || !prev ? REGIONS[id].subtitle : `Termine ${WORLD_UNLOCK} niveaux à ${REGIONS[prev].name} pour débloquer ${REGIONS[id].name}`;
   }
   const xc = $('mode-cross');
   xc.classList.toggle('locked', !crossOpen());
+  xc.title = crossOpen() ? 'Circuit 3D' : `Termine ${WORLD_UNLOCK} niveaux à ${REGIONS[LAST_WORLD].name} pour débloquer le Circuit 3D`;
   const cross = onCross();
   // the motocross circuit of the world is one more mode, the last of the strip
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card[data-mode]')) el.classList.toggle('selected', !cross && el.dataset.mode === profile.mode);
@@ -297,14 +311,14 @@ function buildModes(): void {
   $('modes').innerHTML =
     MODES.filter((m) => m.id !== 'cruising').map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
     `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>` +
-    `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Circuit</b><small>Style MXGP</small><span class="medals"></span></button>`;
+    `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Circuit 3D</b><small>Style MXGP</small><span class="medals"></span></button>`;
   $('mode-multi').addEventListener('click', () => {
     closePickers();
     mp.open();
   });
   $('mode-cross').addEventListener('click', () => {
     if (!crossOpen()) {
-      toast(`🔒 Termine ${CROSS_UNLOCK} circuits (trial, enduro ou course) dans le monde ${REGIONS[settings.region].name} pour ouvrir son circuit de cross.`);
+      toast(`🔒 Circuit 3D : termine ${WORLD_UNLOCK} niveaux à ${REGIONS[LAST_WORLD].name} (${Math.min(worldOpen(LAST_WORLD) ? worldDone(LAST_WORLD) : 0, WORLD_UNLOCK)}/${WORLD_UNLOCK}).`);
       return;
     }
     profile.crossSel = true;
@@ -449,7 +463,7 @@ function buildRegions(): void {
     b.addEventListener('click', () => {
       if (!worldOpen(id)) {
         const prev = prevWorld(id)!;
-        toast(`🔒 ${r.name} : termine ${WORLD_UNLOCK} circuits dans le monde ${REGIONS[prev].name} (${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}).`);
+        toast(`🔒 ${r.name} : termine ${WORLD_UNLOCK} niveaux à ${REGIONS[prev].name} (${Math.min(worldOpen(prev) ? worldDone(prev) : 0, WORLD_UNLOCK)}/${WORLD_UNLOCK}).`);
         return;
       }
       settings.region = id as RegionId;
@@ -951,7 +965,7 @@ function finishRun(display: boolean): void {
   let unlockMsg = '';
   // what was locked before this run, to announce what it opens
   const worldsBefore = WORLDS.filter((w) => worldOpen(w));
-  const crossBefore = !r.mx && isCircuitMode(mode) ? crossOpen(game.region) : true;
+  const crossBefore = !r.mx && isCircuitMode(mode) ? crossOpen() : true;
   if (isCircuitMode(mode) && r.circuit) {
     const key = circuitKey(mode, game.region, r.circuit, game.difficulty);
     const old = profile.circuits[key] ?? { medal: 0, done: false };
@@ -1002,7 +1016,7 @@ function finishRun(display: boolean): void {
   if (!devMode) {
     const news = WORLDS.filter((w) => worldOpen(w) && !worldsBefore.includes(w));
     if (news.length) unlockMsg += (unlockMsg ? '<br>' : '') + `🌍 Nouveau monde débloqué : ${news.map((w) => REGIONS[w].name).join(', ')} !`;
-    if (!crossBefore && crossOpen(game.region)) unlockMsg += (unlockMsg ? '<br>' : '') + `🏁 Circuit de cross débloqué dans le monde ${REGIONS[game.region].name} !`;
+    if (!crossBefore && crossOpen()) unlockMsg += (unlockMsg ? '<br>' : '') + `🏁 Circuit 3D débloqué !`;
   }
   saveP();
   if (!display) return;
@@ -1012,7 +1026,7 @@ function finishRun(display: boolean): void {
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
   }
   $('over-title').textContent = title;
-  $('over-score-label').textContent = r.mx ? `Circuit de cross · ${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
+  $('over-score-label').textContent = r.mx ? `Circuit 3D ·${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;
   $('over-best').textContent = bestText;
   $('over-record').classList.toggle('hidden', !r.newRecord);

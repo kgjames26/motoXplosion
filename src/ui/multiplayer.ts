@@ -175,7 +175,7 @@ export class MultiUI {
       ${roundsOpen ? `<div class="mp-row"><span>Nombre de manches</span>${[1, 2, 3, 4, 5, 6, 8].map((k) => opt('rounds', k, String(k), (L.final ? 3 : L.rounds) === k)).join('')}</div>` : ''}
       <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
       <div class="mp-row"><span>Monde</span>${REGION_ORDER.filter((r) => r !== 'cross').map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
-      ${host && this.h.crossOpen(S.region) ? `<div class="mp-row"><span>Cross</span>${opt('cross', 0, 'Non', !S.cross)}${opt('cross', 1, 'Circuit MXGP', !!S.cross)}</div>` : !host && S.cross ? `<div class="mp-row"><span>Cross</span><b class="mp-num">Circuit MXGP</b></div>` : ''}
+      ${host && this.h.crossOpen(S.region) ? `<div class="mp-row"><span>Cross</span>${opt('cross', 0, 'Non', !S.cross)}${opt('cross', 1, 'Circuit 3D', !!S.cross)}</div>` : !host && S.cross ? `<div class="mp-row"><span>Cross</span><b class="mp-num">Circuit 3D</b></div>` : ''}
       <div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>
       <div class="mp-row"><span>Météo</span>${DIFFICULTIES.map((d, i) => opt('difficulty', d.id, `${WEATHER_ICONS[i]}${WEATHER_NAMES[i]}`, S.difficulty === d.id)).join('')}</div>
       ${host ? `<button class="neon-play mp-start"${L.running ? ' disabled' : ''}>${L.final ? 'NOUVEAU CHAMPIONNAT' : `LANCER LA MANCHE ${n} / ${L.rounds}`}</button>` : '<p class="mp-wait-host">L’hôte lance la manche…</p>'}`;
