@@ -164,12 +164,10 @@ const diffUnlocked = (mode: CircuitMode, n: number, d: Difficulty) => {
  */
 const WORLD_UNLOCK = 10;
 /**
- * The Circuit 3D (motocross tracks) is the last thing to unlock, like one more world after the
- * last one: finish WORLD_UNLOCK circuits in the last world. Cruising needs no unlock (it crosses
+ * The Circuit 3D (motocross tracks): finish CROSS_UNLOCK circuits in the whole universe (v2.64). Cruising needs no unlock (it crosses
  * every world and the 3D track already).
  */
 const WORLDS: RegionId[] = REGION_ORDER.filter((x) => x !== 'cross');
-const LAST_WORLD = WORLDS[WORLDS.length - 1];
 /** Circuits finished in a world, every circuit mode together (any difficulty). */
 function worldDone(region: RegionId): number {
   let n = 0;
@@ -183,8 +181,11 @@ function worldOpen(region: RegionId): boolean {
   const prev = prevWorld(region);
   return devMode || !prev || playedIn(region) || (worldOpen(prev) && worldDone(prev) >= WORLD_UNLOCK);
 }
+/** v2.64 — The Circuit 3D opens once CROSS_UNLOCK circuits are finished in the whole universe (all worlds together). */
+const CROSS_UNLOCK = 15;
+const universeDone = () => WORLDS.reduce((n, w) => n + worldDone(w), 0);
 /** The Circuit 3D is one for every world (each world has its own track once it is open). */
-const crossOpen = () => devMode || playedIn('cross') || (worldOpen(LAST_WORLD) && worldDone(LAST_WORLD) >= WORLD_UNLOCK);
+const crossOpen = () => devMode || playedIn('cross') || universeDone() >= CROSS_UNLOCK;
 /** Lock label: progress toward the next unlock (x/10). */
 const lockProgress = (prev: RegionId) => `🔒 ${Math.min(worldDone(prev), WORLD_UNLOCK)}/${WORLD_UNLOCK}`;
 /** Short message near the bottom of the screen (locked world, developer mode…). */
@@ -257,7 +258,7 @@ function updateBest(): void {
     }
   }
   const xm = $('mode-cross').querySelector('.medals');
-  if (xm) xm.textContent = crossOpen() ? '' : worldOpen(LAST_WORLD) ? lockProgress(LAST_WORLD) : '🔒';
+  if (xm) xm.textContent = crossOpen() ? '' : `🔒 ${Math.min(universeDone(), CROSS_UNLOCK)}/${CROSS_UNLOCK}`;
 }
 
 function refreshTitle(): void {
@@ -276,7 +277,7 @@ function refreshTitle(): void {
   }
   const xc = $('mode-cross');
   xc.classList.toggle('locked', !crossOpen());
-  xc.title = crossOpen() ? 'Circuit 3D' : `Termine ${WORLD_UNLOCK} niveaux à ${REGIONS[LAST_WORLD].name} pour débloquer le Circuit 3D`;
+  xc.title = crossOpen() ? 'Circuit 3D' : `Termine ${CROSS_UNLOCK} niveaux dans l'univers pour débloquer le Circuit 3D`;
   const cross = onCross();
   // the motocross circuit of the world is one more mode, the last of the strip
   for (const el of $('modes').querySelectorAll<HTMLElement>('.mode-card[data-mode]')) el.classList.toggle('selected', !cross && el.dataset.mode === profile.mode);
@@ -318,7 +319,7 @@ function buildModes(): void {
   });
   $('mode-cross').addEventListener('click', () => {
     if (!crossOpen()) {
-      toast(`🔒 Circuit 3D : termine ${WORLD_UNLOCK} niveaux à ${REGIONS[LAST_WORLD].name} (${Math.min(worldOpen(LAST_WORLD) ? worldDone(LAST_WORLD) : 0, WORLD_UNLOCK)}/${WORLD_UNLOCK}).`);
+      toast(`🔒 Circuit 3D : termine ${CROSS_UNLOCK} niveaux dans l'univers (${Math.min(universeDone(), CROSS_UNLOCK)}/${CROSS_UNLOCK}).`);
       return;
     }
     profile.crossSel = true;
