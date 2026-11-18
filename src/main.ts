@@ -519,9 +519,29 @@ type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
 const fsSupported = () => !!(document.documentElement.requestFullscreen || (document.documentElement as FsEl).webkitRequestFullscreen);
 const isFullscreen = () => !!(document.fullscreenElement || (document as FsDoc).webkitFullscreenElement);
 
+/**
+ * v2.59: running inside the Play Store app (TWA) or as an installed PWA. The app is already
+ * fullscreen (manifest "display": "fullscreen"), so the fullscreen buttons are hidden and the
+ * Fullscreen API is never called there, to avoid conflicts. Checked once at start-up, before any
+ * requestFullscreen (which would also make "display-mode: fullscreen" match in a plain browser tab).
+ */
+const IN_APP = ((): boolean => {
+  try {
+    if (document.referrer.startsWith('android-app://')) {
+      sessionStorage.setItem('mx-in-app', '1');
+      return true;
+    }
+    if (sessionStorage.getItem('mx-in-app') === '1') return true;
+  } catch {
+    /* storage unavailable */
+  }
+  return ['fullscreen', 'standalone'].some((m) => matchMedia(`(display-mode: ${m})`).matches);
+})();
+document.documentElement.classList.toggle('in-app', IN_APP);
+
 async function enterFullscreen(): Promise<void> {
   const el = document.documentElement as FsEl;
-  if (isFullscreen()) return;
+  if (IN_APP || isFullscreen()) return;
   try {
     if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
     else await el.webkitRequestFullscreen?.();
@@ -531,6 +551,7 @@ async function enterFullscreen(): Promise<void> {
 }
 
 async function toggleFullscreen(): Promise<void> {
+  if (IN_APP) return;
   if (isFullscreen()) {
     const d = document as FsDoc;
     try {
@@ -544,7 +565,7 @@ async function toggleFullscreen(): Promise<void> {
 
 /** Fullscreen class on <html>: out of fullscreen the buttons keep a small margin from the edges. */
 function syncFullscreen(): void {
-  const fs = isFullscreen();
+  const fs = IN_APP || isFullscreen();
   document.documentElement.classList.toggle('fs', fs);
   document.documentElement.classList.toggle('no-fs-api', !fsSupported());
   for (const b of document.querySelectorAll('.fs-btn, .fs-toggle')) b.classList.toggle('active', fs);
@@ -556,6 +577,7 @@ document.addEventListener('fullscreenchange', syncFullscreen);
 document.addEventListener('webkitfullscreenchange', syncFullscreen);
 
 async function immersive(): Promise<void> {
+  if (IN_APP) return; // the app is already fullscreen and in landscape (Android manifest)
   try {
     await enterFullscreen();
     const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };

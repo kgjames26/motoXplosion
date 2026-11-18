@@ -3478,6 +3478,10 @@ html.no-fs-api .fs-row {
   height: 1.1em;
 }
 html.no-fs-api #btn-fs-pause { display: none; }
+/* v2.59: in the Play Store app (or installed PWA) the game is always fullscreen: no button */
+html.in-app .fs-btn,
+html.in-app .fs-row,
+html.in-app #btn-fs-pause { display: none !important; }
 
 /* ------------------------------------------------------------------ v2.14 championship rounds, cup */
 .champ-next {
