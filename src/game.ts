@@ -916,7 +916,7 @@ export class Game {
       // follow the centre line: the yaw rate the track asks for, plus a pull back to the middle
       const want = pose.k * v + (-this.mxPsi * 2.4 - this.mxN * 0.35) * Math.min(1, v / 4);
       stick = clamp(want / vEff / kMax, -1, 1);
-    }
+    } else if (!this.multi) stick = this.mxAssist(stick, pose, v, vEff, kMax, G);
     const autoRide = this.mxAuto || this.crashTimer > 0 || this.finished || this.countdown > 0;
     if (USE_NEW_MX_PHYSICS && !autoRide) {
       if (!this.mxNewOn) {
@@ -1102,6 +1102,30 @@ export class Game {
     this.mxDrift = out.drift;
     this.mxSlide += (out.slide - this.mxSlide) * Math.min(1, dt * 8);
     if (out.scrub > 0 && b.vx !== 0) b.vx -= Math.sign(b.vx) * Math.min(Math.abs(b.vx) * 0.45, out.scrub);
+  }
+
+  /**
+   * v2.61 light riding aid on the 3D circuit (solo only), meant not to be felt: a quarter of the
+   * lean a bend asks for is added to the stick, and near the edge of the track, heading out, a
+   * small pull back towards the middle. It fades as the player steers harder, so the player
+   * always has the last word; on a straight in the middle of the track it does nothing.
+   */
+  private mxAssist(stick: number, pose: MxPose, v: number, vEff: number, kMax: number, G: number): number {
+    if (v < 2 || !this.bike.grounded) return stick;
+    // part of the bend
+    let r = pose.k * v * 0.25;
+    // edge of the track, heading out: steer back a little
+    const n = this.mxN;
+    const edge = clamp((Math.abs(n) - MX_HALF_WIDTH * 0.45) / (MX_HALF_WIDTH * 0.5), 0, 1);
+    if (edge > 0 && (Math.sign(this.mxPsi) === Math.sign(n) || Math.abs(this.mxPsi) < 0.04)) r += edge * 0.5 * (-this.mxPsi * 2.4 - n * 0.3) * Math.min(1, v / 4);
+    // yaw rate → stick, in the model that is running
+    let a: number;
+    if (USE_NEW_MX_PHYSICS) {
+      const phiMax = Math.atan(clamp(this.mxMu * 0.98, 0.32, 1.15));
+      a = Math.atan((r * v) / G) / phiMax;
+    } else a = r / vEff / kMax;
+    a = clamp(a, -0.3, 0.3) * (1 - 0.5 * Math.abs(stick));
+    return clamp(stick + a, -1, 1);
   }
 
   /** Put the bike back on the track where it last was on it, at half speed, straight. */

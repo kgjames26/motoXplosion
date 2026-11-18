@@ -47,6 +47,9 @@ sept motos à gagner au garage.
 | **Enduro** | **30 circuits par monde** avec une **ligne d'arrivée** (1,3 à 2,8 km) : **grosses collines** à monter et à descendre sans tomber (6 à 20 m, types mélangés, souvent un passage plus raide dès les premiers circuits, bosses sur les pentes), racines, troncs, gués ; chrono (plus d'essence ni d'eau) | prime de fin de circuit + médailles |
 | **Course** | **30 circuits par monde** contre **7 pilotes**, chacun jouable en **Facile, Moyen ou Difficile**. Tracés **35 % plus relevés** qu'en cruising (sauts, doubles, berms, whoops), départ arrêté (3-2-1-GO), classement en direct | prix selon la place × circuit × difficulté + médailles |
 
+### v2.61 — aide au pilotage discrète sur le circuit 3D
+- En solo sur le circuit de cross 3D (time attack et course), une aide très légère accompagne le joystick : elle ajoute environ un quart de l'inclinaison que demande le virage, et au bord de la piste, quand la moto s'en va vers l'extérieur, elle la ramène un peu vers le milieu. Elle s'efface quand on braque fort (le joueur a toujours le dernier mot), ne fait rien en ligne droite au milieu de la piste ni en l'air, et marche avec les deux gameplays (nouveau et ancien). Pas d'aide en multijoueur.
+
 ### v2.58 — atterrissages plus vivants (balade, trial, enduro)
 - À l'atterrissage, la gerbe sous les roues suit maintenant le sol et la météo : **poudre blanche** sur la neige, **éclaboussures** dans l'eau, moins de poussière sur sol mouillé.
 - Un atterrissage franc projette en plus quelques **mottes** (terre, boue ou neige) de chaque côté des roues ; un simple contact ne soulève que de la poussière. Coût négligeable (quelques particules, plafond du système inchangé).
