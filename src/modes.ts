@@ -1,5 +1,5 @@
 /** Game modes. Every mode is played on the region maps (Alpes, Forêt, Canyon, Désert). */
-export type ModeId = 'cruising' | 'trial' | 'enduro' | 'course';
+export type ModeId = 'cruising' | 'trial' | 'enduro' | 'course' | 'envol';
 
 export interface ModeDef {
   id: ModeId;
@@ -32,6 +32,12 @@ export const MODES: ModeDef[] = [
     name: 'Course',
     short: '8 pilotes',
     description: 'Départ arrêté contre 7 pilotes. Monte sur le podium pour gagner une médaille.',
+  },
+  {
+    id: 'envol',
+    name: 'Envol',
+    short: 'Record de saut',
+    description: 'Prends de la vitesse sur la colline, enchaîne les buttes, puis saute le plus loin possible depuis le tremplin. Atterris sans tomber pour que le saut compte !',
   },
 ];
 

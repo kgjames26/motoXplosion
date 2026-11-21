@@ -256,6 +256,12 @@ export class Generator {
       this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
       return;
     }
+    if (mode === 'envol') {
+      // v2.68: the jump record mode, one fixed track (see buildEnvol)
+      this.queue.push(...this.buildEnvol());
+      this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
+      return;
+    }
     // A calm start straight.
     this.queue.push(this.flat(mode === 'trial' ? 20 : 60, Surface.Dirt));
     this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
@@ -915,6 +921,61 @@ export class Generator {
 
   private flat(len: number, surf?: Surface): Segment {
     return { len, shape: () => 0, surface: surf !== undefined ? () => surf : undefined };
+  }
+
+  /** Height offset (0 at t = 0) from a slope function, integrated numerically (slope > 0 climbs). */
+  private integrateSlope(len: number, slopeAt: (t: number) => number, step = 0.25): (t: number) => number {
+    const n = Math.ceil(len / step) + 1;
+    const ys = new Float32Array(n);
+    let y = 0;
+    for (let k = 1; k < n; k++) {
+      y += slopeAt((k - 0.5) * step) * step;
+      ys[k] = y;
+    }
+    return (t) => {
+      const f = Math.min(n - 1.001, Math.max(0, t / step));
+      const i = Math.floor(f);
+      return ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+    };
+  }
+
+  /**
+   * v2.68 Envol: a long descent that gets steeper (the run-up), three small humps to take with
+   * little jumps and keep the speed, a flat approach, then the kicker and a very long steep
+   * landing slope that flattens out into a huge run-out. The game measures the jump from the lip
+   * (world.envolLipX) to the first wheel back on the ground.
+   */
+  private buildEnvol(): Segment[] {
+    const r = this.rng;
+    // --- the run-up: a high hill, ever steeper, easing out at the bottom
+    const L = 380, s0 = 0.1, s1 = 0.3, easeOut = 70;
+    const down = this.integrateSlope(L, (t) => -(s0 + (s1 - s0) * (t / L)) * smoothstep((L - t) / easeOut));
+    const humps = [175, 235, 295].map((c) => ({ c: c + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
+    const hump = (t: number) => {
+      let h = 0;
+      for (const b of humps) {
+        const u = (t - (b.c - b.w / 2)) / b.w;
+        if (u > 0 && u < 1) h += b.h * Math.sin(Math.PI * u) ** 2;
+      }
+      return h;
+    };
+    const run: Segment = { len: L, shape: (t) => down(t) + hump(t), surface: () => Surface.Dirt, noPickup: [[0, L]], props: 0.5 };
+    // --- the kicker, then the landing slope (steep, long) and the run-out
+    const Hk = 4.5, Lk = 12, sLand = 0.55, Lland = 520, easeL = 90, Lrun = 2500;
+    // the ground falls away steeply right after the lip, then settles on the landing slope: a long hang time
+    const extra = 1.0, decay = 200;
+    const land = this.integrateSlope(Lland + Lrun, (u) => (u < Lland ? -(sLand + extra * Math.exp(-u / decay)) * smoothstep((Lland - u) / easeL) : 0), 0.5);
+    const kicker: Segment = {
+      len: Lk + Lland + Lrun,
+      shape: (t) => (t < Lk ? Hk * Math.pow(t / Lk, 1.7) : Hk + land(t - Lk)),
+      surface: () => Surface.Dirt,
+      noPickup: [[0, Lk + Lland + Lrun]],
+      props: 0.3,
+      onStart: (x0) => {
+        this.world.envolLipX = x0 + Lk;
+      },
+    };
+    return [this.flat(30, Surface.Dirt), run, this.flat(45, Surface.Dirt), kicker];
   }
 
   /**

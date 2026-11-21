@@ -168,6 +168,14 @@ export class Game {
   /** Lump-sum milestone bonuses earned this ride (coins, paid as is). */
   cruiseBonusCoins = 0;
   private cruiseMilestone = 0;
+  // ---- Envol (v2.68): run-up, kicker, record jump
+  envolState: 'run' | 'flight' | 'landed' | 'done' | 'fail' = 'run';
+  /** Metres from the kicker's lip to the first wheel on the ground (live during the flight). */
+  envolDist = 0;
+  /** Speed (km/h) at the lip. */
+  envolSpeed = 0;
+  private envolT = 0;
+  private envolFx = 0;
   private cruiseLastDist = 0;
   world!: World;
   bike = new Bike();
@@ -355,6 +363,11 @@ export class Game {
     this.cruiseCoins = 0;
     this.cruiseBonusCoins = 0;
     this.cruiseMilestone = 0;
+    this.envolState = 'run';
+    this.envolDist = 0;
+    this.envolSpeed = 0;
+    this.envolT = 0;
+    this.envolFx = 0;
     this.cruiseLastDist = 0;
     this.finished = false;
     this.finishOrder = [];
@@ -510,7 +523,8 @@ export class Game {
         this.popup(bike.x + 2, bike.y + 2.5, `${cp * CHECKPOINT_EVERY} m !  BONUS ×${fmtMult(this.cruiseMult)}`, '#ffd23f');
         this.events.checkpoint = true;
       }
-    } else if (this.mode === 'enduro') this.enduroRules(dt);
+    } else if (this.mode === 'envol') this.envolRules(dt);
+    else if (this.mode === 'enduro') this.enduroRules(dt);
     else if (this.mode === 'trial') this.trialRules(dt);
     else if (this.mode === 'course') this.raceRules(dt);
 
@@ -677,6 +691,62 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- modes
+
+  /**
+   * Envol: ride the hill and its humps, take off at the kicker, land. The jump is measured from the
+   * lip to the first wheel back on the ground and only counts if the rider does not fall.
+   */
+  private envolRules(dt: number): void {
+    const bike = this.bike;
+    const lip = this.world.envolLipX;
+    if (this.envolState === 'run') {
+      if (lip <= 0) return;
+      if (bike.x >= lip - 0.5 && !bike.grounded && this.crashTimer <= 0) {
+        this.envolState = 'flight';
+        this.envolSpeed = Math.round(bike.speed * 3.6);
+        this.popup(bike.x, bike.y + 2.6, `${this.envolSpeed} km/h`, '#ffd23f');
+      } else if (bike.x > lip + 30) {
+        // rolled down the landing slope without ever leaving the ground: no jump
+        this.envolFail('PAS ASSEZ DE VITESSE');
+      }
+    } else if (this.envolState === 'flight') {
+      this.envolDist = Math.max(0, bike.x - lip);
+      if (bike.grounded) {
+        this.envolState = 'landed';
+        this.envolT = 0;
+      }
+    } else if (this.envolState === 'landed') {
+      // still rolling: a fall in this second cancels the jump (see crash)
+      this.envolT += dt;
+      if (this.envolT > 1.4) {
+        this.envolState = 'done';
+        this.finished = true;
+        this.bike.invulnerable = true; // the celebration is never ruined by a late fall
+        this.envolT = 0;
+        this.popup(bike.x + 2, bike.y + 3.2, `${Math.round(this.envolDist)} m !`, '#ffd23f');
+        this.events.finish = 1;
+      }
+    } else if (this.envolState === 'done') {
+      // fireworks, then the result
+      this.envolT += dt;
+      this.envolFx -= dt;
+      if (this.envolFx <= 0) {
+        this.envolFx = 0.14;
+        const cols: number[][] = [[255, 90, 70], [255, 210, 60], [90, 200, 255], [140, 255, 120], [255, 120, 220]];
+        this.sparkle(bike.x + (Math.random() - 0.5) * 18, bike.y + 5 + Math.random() * 6, cols[Math.floor(Math.random() * cols.length)], 26);
+      }
+      if (this.envolT > 3) this.endRun('finish');
+    }
+  }
+
+  /** Envol: the jump is cancelled (fall, or not enough speed to take off). */
+  private envolFail(msg: string): void {
+    if (this.envolState === 'fail' || this.envolState === 'done') return;
+    this.envolState = 'fail';
+    this.envolDist = 0;
+    this.popup(this.bike.x, this.bike.y + 3, msg, '#ff6b5a');
+    setTimeout(() => this.endRun('quit'), 1600);
+  }
 
   private enduroRules(dt: number): void {
     const bike = this.bike;
@@ -1311,6 +1381,13 @@ export class Game {
         lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins * CRUISE_DIST_PAY) });
         if (this.cruiseBonusCoins > 0) lines.push({ label: 'Bonus d’étape', coins: this.cruiseBonusCoins });
         break;
+      case 'envol': {
+        const d = this.envolState === 'done' ? Math.round(this.envolDist) : 0;
+        score = d;
+        scoreLabel = d > 0 ? `${d.toLocaleString('fr-FR')} m` : 'Saut annulé';
+        if (d > 0) lines.push({ label: `Saut de ${d} m (à ${this.envolSpeed} km/h)`, coins: Math.round(d * 0.8) });
+        break;
+      }
       case 'enduro':
       case 'trial':
         if (done) {
@@ -1499,6 +1576,7 @@ export class Game {
     this.events.crash = true;
     this.landingDust(1);
     this.falls++;
+    if (this.mode === 'envol') this.envolFail('SAUT ANNULÉ');
     if (this.mode === 'trial') {
       this.zoneRetry();
       this.penalty += TRIAL_PENALTY;

@@ -48,7 +48,9 @@ setMxPhysics(settings.gameplay !== 'ancien');
 settings.layout = 'gauche'; // v2.31: no left-handed layout any more
 const profile = loadProfile();
 // the home screen opens on a circuit mode (cruising has its own big button)
-if (profile.mode === 'cruising') profile.mode = 'enduro';
+/** Modes with no world to pick and no circuit list: they start at once from their own button. */
+const isSolo = (m: ModeId): boolean => m === 'cruising' || m === 'envol';
+if (isSolo(profile.mode)) profile.mode = 'enduro';
 if (profile.mxKind === 'tricks') profile.mxKind = 'time'; // the Figures event is gone from the cross world
 let lastCircuitMode: ModeId = profile.mode;
 settings.region = 'alpes';
@@ -60,12 +62,12 @@ const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:$
 /** The motocross track is its own world with its own three events. */
 /** The motocross circuit of the selected world (1..5): each world has its own. */
 const mxCircuitOf = () => Math.max(1, MX_CIRCUITS.findIndex((c) => c.id === settings.region) + 1);
-const onCross = () => profile.crossSel && profile.mode !== 'cruising';
+const onCross = () => profile.crossSel && !isSolo(profile.mode);
 const MX_EVENTS: { id: 'time' | 'tricks' | 'race'; name: string; icon: string; desc: string }[] = [
   { id: 'time', name: 'Time attack', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="24" cy="20" r="12"/><path d="M24 20v-7M24 20l5 3M20 4h8M24 4v4"/></svg>', desc: 'Un seul tour, départ arrêté : bats ton propre chrono. Or, argent ou bronze selon le temps.' },
   { id: 'race', name: 'Course', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M10 32V4M10 6h26l-5 7 5 7H10"/><path d="M18 6v14M26 6v14M10 13h24"/></svg>', desc: 'Deux tours contre 7 pilotes qui freinent, se penchent et prennent la corde. Monte sur le podium.' },
 ];
-const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: profile.mode === 'cruising' ? ('alpes' as RegionId) : onCross() ? ('cross' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? mxCircuitOf() : circuitOf(), mxCircuit: onCross() ? mxCircuitOf() - 1 : 0, cruiseControl: profile.gear.includes('cruise') });
+const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: isSolo(profile.mode) ? ('alpes' as RegionId) : onCross() ? ('cross' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? mxCircuitOf() : circuitOf(), mxCircuit: onCross() ? mxCircuitOf() - 1 : 0, cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -115,6 +117,7 @@ const MODE_ICONS: Record<ModeId, string> = {
   cruising: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 32 L15 14 L22 22 L32 8 L46 32Z"/><circle cx="39" cy="8" r="4"/><path d="M16 32 L24 24 L30 32" /></svg>',
   trial: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M3 33h11V21h18v12h13"/><circle cx="13" cy="15" r="4.5"/><circle cx="30" cy="9" r="4.5"/><path d="M13 15 L21 8 L30 9"/></svg>',
   enduro: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 34 C12 12 19 9 24 9 C30 9 37 14 46 34Z"/><path d="M24 9V2 l8 2.6 -8 2.6"/><path d="M10 29 l3 -3 M36 27 l3 3"/></svg>',
+  envol: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 8c8 0 14 6 20 14l5 6"/><path d="M27 28l4-3 6-1"/><path d="M30 12c4-3 9-3 13 0"/><circle cx="37" cy="17" r="2"/></svg>',
   course: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M9 35V3"/><path d="M9 4h30v17H9z"/><path d="M9 4h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 8.25H24v4.25h-7.5zm15 0H39v4.25h-7.5zM9 12.5h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 16.75H24V21h-7.5zm15 0H39V21h-7.5z" fill="currentColor" stroke="none"/></svg>',
 };
 const WORLD_ICONS: Record<RegionId, string> = {
@@ -131,6 +134,7 @@ const MODE_SHORT: Record<ModeId, string> = {
   trial: 'Obstacles',
   enduro: 'Collines',
   course: '8 pilotes',
+  envol: 'Record de saut',
 };
 
 // ---------------------------------------------------------------- progression (v2.60)
@@ -262,7 +266,7 @@ function updateBest(): void {
 }
 
 function refreshTitle(): void {
-  if (profile.mode === 'cruising') profile.mode = lastCircuitMode; // back on the home screen
+  if (isSolo(profile.mode)) profile.mode = lastCircuitMode; // back on the home screen
   if (!worldOpen(settings.region)) settings.region = 'alpes';
   if (profile.crossSel && !crossOpen()) profile.crossSel = false;
   // locks on the world strip and on the cross card
@@ -284,7 +288,7 @@ function refreshTitle(): void {
   $('mode-cross').classList.toggle('selected', cross);
   const m = MODES.find((x) => x.id === profile.mode)!;
   // cruising crosses every world: no world is picked (a tap on one goes to its circuits)
-  for (const el of $('regions').querySelectorAll<HTMLElement>('.world-card')) el.classList.toggle('selected', profile.mode !== 'cruising' && el.dataset.region === settings.region);
+  for (const el of $('regions').querySelectorAll<HTMLElement>('.world-card')) el.classList.toggle('selected', !isSolo(profile.mode) && el.dataset.region === settings.region);
   $('world-all').classList.toggle('hidden', m.id !== 'cruising');
   $('mode-desc').textContent = cross ? `${MX_CIRCUITS[mxCircuitOf() - 1].name} · ${MX_EVENTS.find((e) => e.id === profile.mxKind)!.desc}` : m.description;
   buildMxCircuits(cross);
@@ -310,7 +314,7 @@ function buildMxCircuits(show: boolean): void {
 
 function buildModes(): void {
   $('modes').innerHTML =
-    MODES.filter((m) => m.id !== 'cruising').map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
+    MODES.filter((m) => !isSolo(m.id)).map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
     `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>` +
     `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Circuit 3D</b><small>Style MXGP</small><span class="medals"></span></button>`;
   $('mode-multi').addEventListener('click', () => {
@@ -323,7 +327,7 @@ function buildModes(): void {
       return;
     }
     profile.crossSel = true;
-    if (profile.mode === 'cruising') profile.mode = 'enduro';
+    if (isSolo(profile.mode)) profile.mode = 'enduro';
     saveP();
     refreshTitle();
     closePickers();
@@ -469,7 +473,7 @@ function buildRegions(): void {
       }
       settings.region = id as RegionId;
       // worlds are for the circuits: leaving cruising when one is picked
-      if (profile.mode === 'cruising') profile.mode = 'enduro';
+      if (isSolo(profile.mode)) profile.mode = 'enduro';
       saveP();
       refreshTitle();
       saveSettings(settings);
@@ -1026,8 +1030,9 @@ function finishRun(display: boolean): void {
     if (mode === 'course') title = r.place === 1 ? 'VICTOIRE !' : r.place! <= 3 ? 'PODIUM !' : `${r.place}e PLACE`;
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
   }
+  if (mode === 'envol') title = r.reason === 'finish' ? 'SAUT RÉUSSI !' : 'SAUT ANNULÉ';
   $('over-title').textContent = title;
-  $('over-score-label').textContent = r.mx ? `Circuit 3D ·${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
+  $('over-score-label').textContent = mode === 'envol' ? 'Saut' : r.mx ? `Circuit 3D ·${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;
   $('over-best').textContent = bestText;
   $('over-record').classList.toggle('hidden', !r.newRecord);
@@ -1070,6 +1075,13 @@ $('btn-play').addEventListener('click', play);
 /** Cruising: a big button on the home screen, it starts the ride at once. */
 $('btn-cruising').addEventListener('click', () => {
   profile.mode = 'cruising';
+  saveP();
+  start();
+});
+/** Envol (v2.68): the record jump, one tap from the home screen as well. */
+$('btn-envol').addEventListener('click', () => {
+  profile.mode = 'envol';
+  profile.crossSel = false;
   saveP();
   start();
 });

@@ -4394,6 +4394,27 @@ button.wallet {
   font-size: calc(var(--u) * 2.1);
 }
 
+/* v2.68 : Envol, sous Cruising (un peu plus discret) */
+#btn-envol.neon-sel {
+  margin-top: 0;
+  min-width: calc(var(--u) * 58);
+  min-height: calc(var(--u) * 12);
+  grid-template-columns: calc(var(--u) * 8) 1fr calc(var(--u) * 4.6);
+  gap: calc(var(--u) * 1.8);
+  border-radius: calc(var(--u) * 3.4);
+}
+#btn-envol.neon-sel .ns-ico {
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  background: radial-gradient(circle at 35% 30%, #ffe9c8, #ff9a3f 55%, #a8510b);
+}
+#btn-envol.neon-sel b {
+  font-size: calc(var(--u) * 4.2);
+}
+#btn-envol.neon-sel small {
+  font-size: calc(var(--u) * 1.9);
+}
+
 /* v2.36 : compteur de paliers de 500 m (cruising uniquement) */
 .laps500 {
   display: none;

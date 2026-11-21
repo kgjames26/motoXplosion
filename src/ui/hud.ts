@@ -190,6 +190,19 @@ export class Hud {
           this.mult.textContent = '×' + fmtMult(game.cruiseMult);
         }
         break;
+      case 'envol': {
+        // run-up: live speed (keep it as high as possible); then the jump distance
+        const lip = game.world.envolLipX;
+        p = lip > 0 ? clamp((game.bike.x - game.startX) / (lip - game.startX), 0, 1) : 0;
+        if (game.envolState === 'run') {
+          text = String(Math.round(game.bike.speed * 3.6));
+          unit = 'km/h';
+        } else {
+          text = String(Math.round(game.envolDist));
+          unit = 'm';
+        }
+        break;
+      }
       case 'enduro':
         p = game.progress;
         text = String(Math.max(0, Math.round(game.finishX - game.bike.x)));

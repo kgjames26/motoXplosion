@@ -140,6 +140,8 @@ export class World {
    * the terrain generated from then on is gentler. The player is never told.
    */
   cruiseAssist = 0;
+  /** Envol (v2.68): world x of the kicker's lip, where the jump is measured from. */
+  envolLipX = 0;
   /** Tyre sets owned (dynamic weather picks the right one on the fly). */
   tyres: string[] = [];
 
