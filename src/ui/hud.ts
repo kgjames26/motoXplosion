@@ -25,6 +25,8 @@ export class Hud {
   private lapsN = $('laps500-n');
   private timer = $('timer');
   private timerBox = $('hud-timer');
+  private rockBox = $('hud-rock');
+  private rockGap = $('rock-gap');
   private zone = $('trial-zone');
   private falls = $('trial-falls');
   private level = $('hud-level');
@@ -169,7 +171,13 @@ export class Hud {
     let p = 0;
     let text = '';
     let unit = 'm';
-    if (mode === 'trial' || mode === 'enduro') {
+    if (mode === 'fuite') {
+      const gap = Math.max(0, Math.round(game.rockGap));
+      this.rockGap.textContent = String(gap);
+      this.rockBox.classList.toggle('danger', gap < 22 || game.rockSurge === 2);
+      this.rockBox.classList.toggle('warn', gap >= 22 && (gap < 45 || game.rockSurge === 1));
+    }
+    if (mode === 'trial' || mode === 'enduro' || mode === 'fuite') {
       const t = Math.floor(game.chrono * 10);
       if (t !== this.last.clock) {
         this.last.clock = t;
@@ -203,6 +211,12 @@ export class Hud {
         }
         break;
       }
+      case 'fuite':
+        // metres to the finish; the gap to the rock is the real danger (see the warning bar)
+        p = game.progress;
+        text = String(Math.max(0, Math.round(game.finishX - game.bike.x)));
+        unit = 'm';
+        break;
       case 'enduro':
         p = game.progress;
         text = String(Math.max(0, Math.round(game.finishX - game.bike.x)));

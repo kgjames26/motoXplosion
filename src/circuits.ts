@@ -9,10 +9,10 @@ import type { RegionId } from './world/regions';
  * number and drives obstacle size, hill height, opponents and par times.
  */
 export const CIRCUITS = 30;
-export type CircuitMode = 'trial' | 'enduro' | 'course';
+export type CircuitMode = 'trial' | 'enduro' | 'course' | 'fuite';
 
 export function isCircuitMode(m: ModeId): m is CircuitMode {
-  return m === 'trial' || m === 'enduro' || m === 'course';
+  return m === 'trial' || m === 'enduro' || m === 'course' || m === 'fuite';
 }
 
 /** Steepness of the difficulty curve: > 1 means gentle first circuits, hard last ones. */
@@ -24,7 +24,7 @@ export function circuitGrade(n: number): number {
   return Math.pow(lin, GRADE_CURVE);
 }
 
-const MODE_SALT: Record<CircuitMode, number> = { trial: 0x7a11, enduro: 0x3d0e, course: 0x9c3b };
+const MODE_SALT: Record<CircuitMode, number> = { trial: 0x7a11, enduro: 0x3d0e, course: 0x9c3b, fuite: 0x5f0e };
 const REGION_SALT: Record<RegionId, number> = { alpes: 11, foret: 23, canyon: 37, desert: 51, sf: 67, cross: 83 };
 
 /** Same circuit = same track every time. */
@@ -40,8 +40,43 @@ export function circuitLength(mode: CircuitMode, n: number): number {
   const g = circuitGrade(n);
   if (mode === 'enduro') return Math.round(1300 + g * 1500);
   if (mode === 'course') return Math.round(1300 + g * 900);
+  if (mode === 'fuite') return Math.round(1500 + g * 1500);
   return 0;
 }
+
+/**
+ * Fuite (v2.70): the scripted rock behind the rider. Same plan every time for a level:
+ * a head start (gap0), a cruise speed (v, m/s, horizontal) and a few announced surges (progress
+ * range 0..1 and speed factor) before which a warning is shown. Smalls = trailing small rocks (m behind).
+ */
+export interface RockPlan {
+  gap0: number;
+  v: number;
+  surges: [number, number, number][];
+  smalls: number[];
+  radius: number;
+}
+export function fuitePlan(n: number): RockPlan {
+  const g = circuitGrade(n);
+  const lin = Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1)));
+  const surges: [number, number, number][] = [];
+  if (n >= 6) surges.push([0.45, 0.55, 1.1]);
+  if (n >= 14) surges.push([0.75, 0.83, 1.12]);
+  if (n >= 24) surges.push([0.25, 0.32, 1.1]);
+  surges.sort((a, b) => a[0] - b[0]);
+  return {
+    gap0: Math.round(90 - lin * 25),
+    v: FUITE_V0 + g * FUITE_V1,
+    surges,
+    smalls: [4, 9, 15, 23].slice(0, 1 + Math.floor(lin * 3.99)),
+    radius: 2.2 + lin * 1.6,
+  };
+}
+/** Rock cruise speed (m/s): level 1, and how much more at level 30 (see the simulation). */
+export const FUITE_V0 = 11.5;
+export const FUITE_V1 = 9;
+/** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
+export const FUITE_GOLD = 22.5;
 
 /** Trial: number of zones in the circuit (4 → 10). */
 export function trialZones(n: number): number {
@@ -80,6 +115,7 @@ export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number
   // trial: a fast, clean ride (a careful rider gets silver)
   if (mode === 'trial') gold = (trialZones(n) * (10 + g * 14) + 6) * 0.92;
   // enduro: set for the bike the player can afford by then (see expectedBike)
+  else if (mode === 'fuite') gold = circuitLength(mode, n) / FUITE_GOLD;
   else gold = circuitLength(mode, n) / (mode === 'enduro' ? 22.5 + g * 2.5 : 22);
   gold = Math.round(gold * [1, 1.08, 1.16][diff]);
   return { gold, silver: Math.round(gold * (mode === 'trial' ? 1.22 : 1.3)) };

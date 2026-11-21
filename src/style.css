@@ -1303,12 +1303,48 @@ button {
 
 .hud-timer,
 .hud-trial,
-.hud-race {
+.hud-race,
+.hud-rock {
   display: none;
 }
 #hud[data-mode='enduro'] .hud-timer,
-#hud[data-mode='trial'] .hud-timer {
+#hud[data-mode='trial'] .hud-timer,
+#hud[data-mode='fuite'] .hud-timer,
+#hud[data-mode='fuite'] .hud-rock {
   display: flex;
+}
+/* v2.70 Fuite : distance au rocher (rouge et qui clignote quand il est tout près) */
+.hud-rock {
+  align-items: center;
+  gap: calc(var(--u) * 1);
+  padding: calc(var(--u) * 0.8) calc(var(--u) * 1.8);
+}
+.hud-rock b {
+  font-size: calc(var(--u) * 4);
+  min-width: calc(var(--u) * 6);
+  text-align: right;
+}
+.hud-rock small {
+  opacity: 0.8;
+}
+.hud-rock .rock-ico {
+  width: calc(var(--u) * 3.6);
+  height: calc(var(--u) * 3.6);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #c9bfb0, #6e6458 60%, #3d352c);
+}
+.hud-rock.warn b {
+  color: #ffb347;
+}
+.hud-rock.danger {
+  animation: rockBlink 0.45s infinite alternate;
+}
+.hud-rock.danger b {
+  color: #ff5a4a;
+}
+@keyframes rockBlink {
+  from { box-shadow: 0 0 0 0 rgba(255, 70, 50, 0.9); }
+  to { box-shadow: 0 0 calc(var(--u) * 3) calc(var(--u) * 0.8) rgba(255, 70, 50, 0.9); }
 }
 #hud[data-mode='trial'] .hud-trial {
   display: flex;
@@ -4412,6 +4448,27 @@ button.wallet {
   font-size: calc(var(--u) * 4.2);
 }
 #btn-envol.neon-sel small {
+  font-size: calc(var(--u) * 1.9);
+}
+
+/* v2.70 : Fuite, sous Envol */
+#btn-fuite.neon-sel {
+  margin-top: 0;
+  min-width: calc(var(--u) * 58);
+  min-height: calc(var(--u) * 12);
+  grid-template-columns: calc(var(--u) * 8) 1fr calc(var(--u) * 4.6);
+  gap: calc(var(--u) * 1.8);
+  border-radius: calc(var(--u) * 3.4);
+}
+#btn-fuite.neon-sel .ns-ico {
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  background: radial-gradient(circle at 35% 30%, #e6e0d6, #9a8f80 55%, #4d4339);
+}
+#btn-fuite.neon-sel b {
+  font-size: calc(var(--u) * 4.2);
+}
+#btn-fuite.neon-sel small {
   font-size: calc(var(--u) * 1.9);
 }
 

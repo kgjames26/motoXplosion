@@ -117,6 +117,7 @@ export class World {
 
   /** The world at x (cruising: the journey; other modes: the level's world). */
   regionAt(x: number): RegionDef {
+    if (this.mode === 'fuite') return this.fuiteRegionAt(x);
     if (this.mode !== 'cruising') return this.region;
     const i = this.stayAt(Math.max(0, x));
     const s = this.stays[i];
@@ -131,6 +132,29 @@ export class World {
       if (((h ^ (h >>> 13)) >>> 0) % 1000 < t * t * (3 - 2 * t) * 1000) return REGIONS[next.id];
     }
     return REGIONS[s.id];
+  }
+
+  /**
+   * Fuite (v2.70): one mountain, from the snowy summit down to the city. Altitude decides the scenery
+   * (alpes → foret → sf), with patches of the next world over the last 140 m before each change.
+   */
+  private fuiteRegionAt(x: number): RegionDef {
+    const L = isFinite(this.finishX) ? this.finishX : 3000;
+    const f = Math.max(0, x) / L;
+    const cuts = [0.34, 0.72];
+    const ids = ['alpes', 'foret', 'sf'] as const;
+    let i = f < cuts[0] ? 0 : f < cuts[1] ? 1 : 2;
+    if (i < 2) {
+      const dist = cuts[i] * L - x;
+      if (dist < 140) {
+        const t = 1 - dist / 140;
+        const cell = Math.floor(x / 24);
+        let h = (this.seed ^ Math.imul(cell + 7, 0x27d4eb2d)) >>> 0;
+        h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+        if (((h ^ (h >>> 13)) >>> 0) % 1000 < t * t * (3 - 2 * t) * 1000) i++;
+      }
+    }
+    return REGIONS[ids[i]];
   }
 
   /** Cruising: the weather changes along the ride (every 2000 m). */

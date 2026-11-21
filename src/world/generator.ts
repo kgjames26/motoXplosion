@@ -243,14 +243,14 @@ export class Generator {
     private diff = 0,
   ) {
     this.rng = new Rng(seed);
-    if (mode === 'cruising') this.region = region = world.regionAt(0);
+    if (mode === 'cruising' || mode === 'fuite') this.region = region = world.regionAt(0);
     this.biome = region.start;
     this.biomeEnd = mode === 'cruising' ? 750 : 380;
     const circ = circuit > 0 && isCircuitMode(mode);
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
     this.raceLen = circ && mode !== 'trial' ? circuitLength(mode, circuit) : raceLength(level);
-    this.hard = (mode === 'cruising' ? 1.35 * 1.2 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
+    this.hard = (mode === 'cruising' ? 1.35 * 1.2 : mode === 'course' ? 1.05 * 1.5 : mode === 'enduro' || mode === 'fuite' ? 1.35 * 1.2 : 1) * [1, 0.97, 0.92][diff];
     if (circ && mode === 'trial') this.trialZones = trialZones(circuit);
     if (mode === 'enduro') this.nextCheckpoint = ENDURO_CP;
     if (region.id === 'cross' && mode !== 'cruising') {
@@ -268,7 +268,7 @@ export class Generator {
     // A calm start straight.
     this.queue.push(this.flat(mode === 'trial' ? 20 : 60, Surface.Dirt));
     this.world.marks.push({ x0: 6, x1: 10, kind: 'start' });
-    if (mode === 'course' || (circ && mode === 'enduro')) this.setFinish(5 + this.raceLen);
+    if (mode === 'course' || (circ && (mode === 'enduro' || mode === 'fuite'))) this.setFinish(5 + this.raceLen);
   }
 
   private setFinish(x: number): void {
@@ -311,16 +311,36 @@ export class Generator {
     this.spawnProps(this.segX0, this.segX0 + this.seg.len, this.seg.props ?? 1);
   }
 
-  /** Decide what comes next: maybe switch biome, then a base stretch and a feature. */
+  /**
+   * Fuite (v2.70): every planned segment gets the slope of the mountain on top of its own shape,
+   * so the whole track goes down (about 3° at level 1, 6° at level 30).
+   */
   private plan(): void {
+    const n0 = this.queue.length;
+    const x = this.segX0;
+    this.planInner();
+    if (this.mode !== 'fuite' || x > this.world.finishX - 5) return;
+    const k = 0.05 + this.grade * 0.05;
+    for (let i = n0; i < this.queue.length; i++) {
+      const s = this.queue[i];
+      const sh = s.shape;
+      s.shape = (t) => sh(t) - k * t;
+      const vi = s.visual;
+      if (vi) s.visual = (t) => vi(t) - k * t;
+    }
+  }
+
+  /** Decide what comes next: maybe switch biome, then a base stretch and a feature. */
+  private planInner(): void {
     const x = this.segX0;
     if (x > this.world.finishX - 5 || this.trialDone) {
       // after the finish line: a long calm run-out
       this.queue.push(this.flat(300, Surface.Dirt));
       return;
     }
-    if (this.mode === 'cruising') {
+    if (this.mode === 'cruising' || this.mode === 'fuite') {
       // v2.25: the journey decides the world; a new environment of it every 1000 m
+      // v2.70: Fuite does the same, by altitude
       const reg = this.world.regionAt(x);
       if (reg !== this.region) {
         this.region = reg;
@@ -328,7 +348,7 @@ export class Generator {
         const all = (Object.keys(reg.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
         if (!all.includes(this.biome)) this.biome = this.rng.weighted(all, all.map((b) => reg.biomes[b]!));
       }
-      if (reg.id === 'cross' && !this.world.mxAt(x - 1)) {
+      if (this.mode === 'cruising' && reg.id === 'cross' && !this.world.mxAt(x - 1)) {
         // v2.26: the track is ridden in 3D: entry lane, a lap and the main straight, exit lane
         const circ = this.world.crossCircuitAt(x);
         const zl = mxZoneLenOf(circ);
@@ -336,7 +356,7 @@ export class Generator {
         this.biomeEnd = Math.max(this.biomeEnd, x + zl);
         return;
       }
-      if (reg.id === 'cross') {
+      if (this.mode === 'cruising' && reg.id === 'cross') {
         // (the visit is over but the journey still says "cross" for a few metres)
         this.queue.push(this.flat(40, Surface.Dirt));
         return;
@@ -375,6 +395,10 @@ export class Generator {
       // quietly after repeated falls (world.cruiseAssist, set by the game)
       this.grade = Math.min(0.5, d0 * 0.5) * (1 - 0.6 * this.world.cruiseAssist);
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6, cruiseJump: 1.2 };
+    } else if (this.mode === 'fuite') {
+      // v2.70: a mountain descent: big soft hills, descents, jumps that stay visible and fair
+      const gf = this.grade * 0.85;
+      feats = { bigHill: 2.5 + gf * 2, techHill: 1 + gf * 2.5, descent: 3, tabletop: 2, double: 1 + gf, gap: 0.2 + gf * 0.8 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -392,7 +416,7 @@ export class Generator {
     }
     this.queue.push(...segs);
     const every = this.mode === 'enduro' ? ENDURO_CP : 500;
-    if (this.mode !== 'course' && x + 120 > this.nextCheckpoint && this.nextCheckpoint < this.world.finishX - 100) {
+    if (this.mode !== 'course' && this.mode !== 'fuite' && x + 120 > this.nextCheckpoint && this.nextCheckpoint < this.world.finishX - 100) {
       const cx = this.nextCheckpoint;
       this.world.marks.push({ x0: cx, x1: cx + 2, kind: 'checkpoint', n: Math.round(cx / every) });
       this.nextCheckpoint += every;

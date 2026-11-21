@@ -27,6 +27,7 @@ import {
   circuitLength,
   CircuitRecord,
   circuitRaceLevel,
+  fuitePlan,
   trialRockRange,
   fmtTime,
   isCircuitMode,
@@ -49,7 +50,9 @@ settings.layout = 'gauche'; // v2.31: no left-handed layout any more
 const profile = loadProfile();
 // the home screen opens on a circuit mode (cruising has its own big button)
 /** Modes with no world to pick and no circuit list: they start at once from their own button. */
-const isSolo = (m: ModeId): boolean => m === 'cruising' || m === 'envol';
+const isSolo = (m: ModeId): boolean => m === 'cruising' || m === 'envol' || m === 'fuite';
+/** Fuite (v2.70) has its own single mountain: its levels are saved under the 'alpes' key. */
+const regionOf = (m: ModeId = profile.mode): RegionId => (m === 'fuite' ? 'alpes' : settings.region);
 if (isSolo(profile.mode)) profile.mode = 'enduro';
 if (profile.mxKind === 'tricks') profile.mxKind = 'time'; // the Figures event is gone from the cross world
 let lastCircuitMode: ModeId = profile.mode;
@@ -58,7 +61,7 @@ const saveP = () => saveProfile(profile);
 import { MX_CIRCUITS } from './mx/track';
 const renderer = new GLRenderer($('app'), settings.quality);
 /** Circuit currently picked for the selected mode and world. */
-const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${settings.region}`] ?? 1;
+const circuitOf = (mode: ModeId = profile.mode) => profile.circuitSel[`${mode}:${regionOf(mode)}`] ?? 1;
 /** The motocross track is its own world with its own three events. */
 /** The motocross circuit of the selected world (1..5): each world has its own. */
 const mxCircuitOf = () => Math.max(1, MX_CIRCUITS.findIndex((c) => c.id === settings.region) + 1);
@@ -67,7 +70,7 @@ const MX_EVENTS: { id: 'time' | 'tricks' | 'race'; name: string; icon: string; d
   { id: 'time', name: 'Time attack', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="24" cy="20" r="12"/><path d="M24 20v-7M24 20l5 3M20 4h8M24 4v4"/></svg>', desc: 'Un seul tour, départ arrêté : bats ton propre chrono. Or, argent ou bronze selon le temps.' },
   { id: 'race', name: 'Course', icon: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M10 32V4M10 6h26l-5 7 5 7H10"/><path d="M18 6v14M26 6v14M10 13h24"/></svg>', desc: 'Deux tours contre 7 pilotes qui freinent, se penchent et prennent la corde. Monte sur le podium.' },
 ];
-const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: isSolo(profile.mode) ? ('alpes' as RegionId) : onCross() ? ('cross' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? mxCircuitOf() : circuitOf(), mxCircuit: onCross() ? mxCircuitOf() - 1 : 0, cruiseControl: profile.gear.includes('cruise') });
+const runOpts = () => ({ mx: onCross() ? profile.mxKind : null, region: isSolo(profile.mode) ? ('alpes' as RegionId) : onCross() ? ('cross' as RegionId) : settings.region, mode: onCross() ? (profile.mxKind === 'race' ? ('course' as ModeId) : ('enduro' as ModeId)) : profile.mode, model: bikeById(profile.bike), spec: upgradedSpec(bikeById(profile.bike), profile.upgrades[profile.bike]), tyres: profile.tyres, difficulty: onCross() || profile.mode === 'fuite' ? ('facile' as Difficulty) : profile.difficulty, circuit: onCross() ? mxCircuitOf() : circuitOf(), mxCircuit: onCross() ? mxCircuitOf() - 1 : 0, cruiseControl: profile.gear.includes('cruise') });
 const outfit = () => outfitById(profile.outfit);
 const game = new Game({ ...runOpts(), mode: 'cruising', difficulty: 'facile', calm: true });
 renderer.setPlayerModel(game.model, outfit());
@@ -118,6 +121,7 @@ const MODE_ICONS: Record<ModeId, string> = {
   trial: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M3 33h11V21h18v12h13"/><circle cx="13" cy="15" r="4.5"/><circle cx="30" cy="9" r="4.5"/><path d="M13 15 L21 8 L30 9"/></svg>',
   enduro: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 34 C12 12 19 9 24 9 C30 9 37 14 46 34Z"/><path d="M24 9V2 l8 2.6 -8 2.6"/><path d="M10 29 l3 -3 M36 27 l3 3"/></svg>',
   envol: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 8c8 0 14 6 20 14l5 6"/><path d="M27 28l4-3 6-1"/><path d="M30 12c4-3 9-3 13 0"/><circle cx="37" cy="17" r="2"/></svg>',
+  fuite: '<svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="12" cy="14" r="9"/><path d="M6 12l4 2 3-4M10 20l4-1"/><path d="M2 34l44-12"/><path d="M30 30l4-5 4 3"/></svg>',
   course: '<svg viewBox="0 0 48 36" aria-hidden="true"><path d="M9 35V3"/><path d="M9 4h30v17H9z"/><path d="M9 4h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 8.25H24v4.25h-7.5zm15 0H39v4.25h-7.5zM9 12.5h7.5v4.25H9zm15 0h7.5v4.25H24zM16.5 16.75H24V21h-7.5zm15 0H39V21h-7.5z" fill="currentColor" stroke="none"/></svg>',
 };
 const WORLD_ICONS: Record<RegionId, string> = {
@@ -135,6 +139,7 @@ const MODE_SHORT: Record<ModeId, string> = {
   enduro: 'Collines',
   course: '8 pilotes',
   envol: 'Record de saut',
+  fuite: 'Rocher en chasse',
 };
 
 // ---------------------------------------------------------------- progression (v2.60)
@@ -154,12 +159,13 @@ let devMode = ((): boolean => {
   }
 })();
 
-const rec = (mode: CircuitMode, n: number, d: Difficulty, region: RegionId = settings.region): CircuitRecord | undefined => profile.circuits[circuitKey(mode, region, n, d)];
-const doneAny = (mode: CircuitMode, n: number, region: RegionId = settings.region) => DIFF_ORDER.some((d) => rec(mode, n, d, region)?.done);
+const rec = (mode: CircuitMode, n: number, d: Difficulty, region: RegionId = regionOf(mode)): CircuitRecord | undefined => profile.circuits[circuitKey(mode, region, n, d)];
+const doneAny = (mode: CircuitMode, n: number, region: RegionId = regionOf(mode)) => DIFF_ORDER.some((d) => rec(mode, n, d, region)?.done);
 const unlocked = (mode: CircuitMode, n: number) => devMode || n === 1 || doneAny(mode, n - 1);
 /** Each difficulty (= weather) of a circuit opens once the previous one is finished. */
 const diffUnlocked = (mode: CircuitMode, n: number, d: Difficulty) => {
   const i = diffIndex(d);
+  if (mode === 'fuite') return i === 0;
   return devMode || i === 0 || !!rec(mode, n, DIFF_ORDER[i - 1])?.done;
 };
 /**
@@ -366,7 +372,7 @@ function openCircuits(): void {
   // pick the selected circuit, or the first one not finished yet
   let n = circuitOf();
   if (!unlocked(mode, n)) n = 1;
-  profile.circuitSel[`${mode}:${settings.region}`] = n;
+  profile.circuitSel[`${mode}:${regionOf(mode)}`] = n;
   renderCircuits();
   show('circuits');
 }
@@ -375,11 +381,11 @@ function renderCircuits(): void {
   const mode = profile.mode as CircuitMode;
   const sel = circuitOf();
   // keep the chosen difficulty only if it is open on this circuit
-  while (!diffUnlocked(mode, sel, profile.difficulty)) profile.difficulty = DIFF_ORDER[diffIndex(profile.difficulty) - 1];
-  const dsel = profile.difficulty;
+  if (mode !== 'fuite') while (!diffUnlocked(mode, sel, profile.difficulty)) profile.difficulty = DIFF_ORDER[diffIndex(profile.difficulty) - 1];
+  const dsel: Difficulty = mode === 'fuite' ? 'facile' : profile.difficulty;
   const di = diffIndex(dsel);
   $('circ-mode').textContent = MODES.find((m) => m.id === mode)!.name;
-  $('circ-world').textContent = REGIONS[settings.region].name;
+  $('circ-world').textContent = mode === 'fuite' ? 'La Montagne' : REGIONS[settings.region].name;
   const c = medalCounts(mode);
   $('circ-medals').innerHTML = `<span>${medalIco(3)} ${c.gold}</span><span>${medalIco(2)} ${c.silver}</span><span>${medalIco(1)} ${c.bronze}</span>`;
   let next = 0;
@@ -406,10 +412,11 @@ function renderCircuits(): void {
     const need = BIKES.find((b) => rockClimb(b.id, di) >= hi - 0.05);
     meta = `${trialZones(sel)} zones · rochers jusqu’à ${hi.toFixed(1).replace('.', ',')} m · chute = +15 s`;
     if (cap < hi - 0.05) meta += ` <b class="warn">⚠ ${bikeById(profile.bike).name} trop faible : il faut ${need ? need.name : 'une meilleure moto'}</b>`;
-  } else if (mode === 'enduro') meta = `${km} km · grosses collines`;
+  } else if (mode === 'fuite') meta = `${km} km · rocher à ${Math.round(fuitePlan(sel).v * 3.6)} km/h${fuitePlan(sel).surges.length ? ' · accélérations' : ''}`;
+  else if (mode === 'enduro') meta = `${km} km · grosses collines`;
   else meta = `${km} km · pilotes niveau ${circuitRaceLevel(sel)}`;
   $('circ-meta').innerHTML = meta;
-  $('circ-diffs').classList.remove('hidden');
+  $('circ-diffs').classList.toggle('hidden', mode === 'fuite');
   $('circ-diffs').innerHTML = diffButtons((d) => diffUnlocked(mode, sel, d));
   const r = rec(mode, sel, dsel);
   const got = r?.medal ?? 0;
@@ -421,7 +428,7 @@ function renderCircuits(): void {
     $('circ-goals').innerHTML = [
       `<li class="${got >= 3 ? 'got' : ''}">${medalIco(3)} moins de ${fmtTime(p.gold)}</li>`,
       `<li class="${got >= 2 ? 'got' : ''}">${medalIco(2)} moins de ${fmtTime(p.silver)}</li>`,
-      `<li class="${got >= 1 ? 'got' : ''}">${medalIco(1)} arriver au bout</li>`,
+      `<li class="${got >= 1 ? 'got' : ''}">${medalIco(1)} ${mode === 'fuite' ? 'échapper au rocher' : 'arriver au bout'}</li>`,
     ].join('');
     $('circ-best').textContent = r?.time ? `Record : ${fmtTime(r.time)}` : '';
   }
@@ -432,7 +439,7 @@ $('circ-grid').addEventListener('click', (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>('.circ-tile');
   if (!el || el.classList.contains('locked')) return;
   const n = Number(el.dataset.n);
-  const key = `${profile.mode}:${settings.region}`;
+  const key = `${profile.mode}:${regionOf()}`;
   if (profile.circuitSel[key] === n) {
     start();
     return;
@@ -976,7 +983,7 @@ function finishRun(display: boolean): void {
     const old = profile.circuits[key] ?? { medal: 0, done: false };
     if (r.reason === 'finish') {
       const di = diffIndex(game.difficulty);
-      if (!old.done && di < 2 && !r.mx) unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué sur ce circuit : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
+      if (!old.done && di < 2 && !r.mx && mode !== 'fuite') unlockMsg = `${WEATHER_ICONS[di + 1]} ${DIFFICULTIES[di + 1].name} débloqué sur ce circuit : météo ${WEATHER_NAMES[di + 1].toLowerCase()} !`;
       const nr: CircuitRecord = { ...old, done: true };
       if (r.mx === 'tricks') {
         r.time = undefined;
@@ -1031,6 +1038,7 @@ function finishRun(display: boolean): void {
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
   }
   if (mode === 'envol') title = r.reason === 'finish' ? 'SAUT RÉUSSI !' : 'SAUT ANNULÉ';
+  if (mode === 'fuite') title = r.reason === 'finish' ? (r.medal === 3 ? "ÉVADÉ · MÉDAILLE D'OR !" : r.medal === 2 ? "ÉVADÉ · MÉDAILLE D'ARGENT !" : 'ÉVADÉ !') : 'ÉCRASÉ PAR LE ROCHER';
   $('over-title').textContent = title;
   $('over-score-label').textContent = mode === 'envol' ? 'Saut' : r.mx ? `Circuit 3D ·${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;
@@ -1048,7 +1056,7 @@ function finishRun(display: boolean): void {
   const canNext = !r.mx && isCircuitMode(mode) && r.reason === 'finish' && !!r.circuit && r.circuit < CIRCUITS;
   // same level again, under another weather (the ones already open)
   const ow = $('over-weather');
-  const others = !r.mx && isCircuitMode(mode) && r.reason === 'finish' && r.circuit ? DIFF_ORDER.filter((d) => d !== game.difficulty && diffUnlocked(mode, r.circuit!, d)) : [];
+  const others = !r.mx && mode !== 'fuite' && isCircuitMode(mode) && r.reason === 'finish' && r.circuit ? DIFF_ORDER.filter((d) => d !== game.difficulty && diffUnlocked(mode, r.circuit!, d)) : [];
   ow.classList.toggle('hidden', !others.length);
   ow.innerHTML = others.map((d) => `<button class="btn-secondary wx-retry" data-d="${d}">${WEATHER_ICONS[diffIndex(d)]} REJOUER · ${WEATHER_NAMES[diffIndex(d)].toUpperCase()}</button>`).join('');
   $('btn-next').classList.toggle('hidden', !canNext);
@@ -1081,6 +1089,13 @@ $('btn-cruising').addEventListener('click', () => {
 /** Envol (v2.68): the record jump, one tap from the home screen as well. */
 $('btn-envol').addEventListener('click', () => {
   profile.mode = 'envol';
+  profile.crossSel = false;
+  saveP();
+  start();
+});
+/** Fuite (v2.70): the rock chase, under Envol on the home screen. */
+$('btn-fuite').addEventListener('click', () => {
+  profile.mode = 'fuite';
   profile.crossSel = false;
   saveP();
   start();

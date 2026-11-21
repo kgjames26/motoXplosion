@@ -607,10 +607,64 @@ export class GLRenderer {
     (this.blob.material as THREE.MeshBasicMaterial).opacity = s;
 
     this.syncRivals(game, dt);
+    this.updateRock(game);
     this.updateCoins(game);
     this.updateParticles(game);
     this.renderer.render(this.scene, this.camera);
     this.updatePopups(game);
+  }
+
+  /** v2.70 Fuite: the chasing rock (one big boulder and its small ones), built on first use. */
+  private rockGroup: THREE.Group | null = null;
+  private rockBig: THREE.Mesh | null = null;
+  private rockSmalls: THREE.Mesh[] = [];
+  private updateRock(game: Game): void {
+    if (game.mode !== 'fuite') {
+      if (this.rockGroup) this.rockGroup.visible = false;
+      return;
+    }
+    if (!this.rockGroup) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.95, metalness: 0, flatShading: true });
+      const mk = (): THREE.Mesh => {
+        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), mat);
+        // a rough, uneven stone: every vertex pushed in or out by a fixed amount
+        const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+        for (let i = 0; i < pos.count; i++) {
+          const k = 0.86 + 0.28 * Math.abs(Math.sin(i * 12.9898 + 4.1));
+          pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * k, pos.getZ(i) * k);
+        }
+        m.geometry.computeVertexNormals();
+        g.add(m);
+        return m;
+      };
+      this.rockBig = mk();
+      for (let i = 0; i < 4; i++) this.rockSmalls.push(mk());
+      this.scene.add(g);
+      this.rockGroup = g;
+    }
+    const w = game.world;
+    const near = Math.abs(game.rockX - this.camX) < 90;
+    this.rockGroup.visible = near;
+    if (!near) return;
+    const t = performance.now() / 1000;
+    const place = (m: THREE.Mesh, x: number, r: number, hop: number): void => {
+      const gy = w.heightAt(Math.max(x, game.bike.x - 110));
+      m.visible = true;
+      m.scale.set(r, r, r * 0.45);
+      m.position.set(x, gy + r * 0.92 + hop, -0.2);
+      m.rotation.z = -x / r;
+    };
+    place(this.rockBig!, game.rockX, game.rockR, 0);
+    this.rockSmalls.forEach((m, i) => {
+      const off = game.rockSmall[i];
+      if (off === undefined) {
+        m.visible = false;
+        return;
+      }
+      const r = 0.55 + (i % 3) * 0.18;
+      place(m, game.rockX - game.rockR - off, r, Math.abs(Math.sin(t * 7 + i * 1.7)) * 0.5);
+    });
   }
 
   /** v2.25: cruising crosses several worlds: one ground builder per kind of world. */

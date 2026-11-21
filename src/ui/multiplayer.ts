@@ -173,7 +173,7 @@ export class MultiUI {
     return `
       <h3>${host ? `Programme la manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`}` : `Manche ${n}${roundsOpen ? '' : ` / ${L.rounds}`} (programmée par l’hôte)`}</h3>
       ${roundsOpen ? `<div class="mp-row"><span>Nombre de manches</span>${[1, 2, 3, 4, 5, 6, 8].map((k) => opt('rounds', k, String(k), (L.final ? 3 : L.rounds) === k)).join('')}</div>` : ''}
-      <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising' && x.id !== 'envol').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
+      <div class="mp-row"><span>Mode</span>${MODES.filter((x) => x.id !== 'cruising' && x.id !== 'envol' && x.id !== 'fuite').map((x) => opt('mode', x.id, x.name, S.mode === x.id)).join('')}</div>
       <div class="mp-row"><span>Monde</span>${REGION_ORDER.filter((r) => r !== 'cross').map((r) => opt('region', r, REGIONS[r].name, S.region === r)).join('')}</div>
       ${host && this.h.crossOpen(S.region) ? `<div class="mp-row"><span>Cross</span>${opt('cross', 0, 'Non', !S.cross)}${opt('cross', 1, 'Circuit 3D', !!S.cross)}</div>` : !host && S.cross ? `<div class="mp-row"><span>Cross</span><b class="mp-num">Circuit 3D</b></div>` : ''}
       <div class="mp-row"><span>Circuit</span>${opt('circuit', Math.max(1, S.circuit - 1), '−', false)}<b class="mp-num">${S.circuit}</b>${opt('circuit', Math.min(CIRCUITS, S.circuit + 1), '+', false)}</div>

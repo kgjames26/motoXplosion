@@ -1,5 +1,5 @@
 /** Game modes. Every mode is played on the region maps (Alpes, Forêt, Canyon, Désert). */
-export type ModeId = 'cruising' | 'trial' | 'enduro' | 'course' | 'envol';
+export type ModeId = 'cruising' | 'trial' | 'enduro' | 'course' | 'envol' | 'fuite';
 
 export interface ModeDef {
   id: ModeId;
@@ -38,6 +38,12 @@ export const MODES: ModeDef[] = [
     name: 'Envol',
     short: 'Record de saut',
     description: 'Prends de la vitesse sur la colline, enchaîne les buttes, puis saute le plus loin possible depuis le tremplin. Atterris sans tomber pour que le saut compte !',
+  },
+  {
+    id: 'fuite',
+    name: 'Fuite',
+    short: 'Un rocher te poursuit',
+    description: 'Descends la montagne avant que le rocher ne t’écrase ! Le décor change avec l’altitude : neige, forêt, plaine puis ville. S’il te rattrape, c’est perdu.',
   },
 ];
 
