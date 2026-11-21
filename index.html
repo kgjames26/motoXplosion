@@ -275,6 +275,7 @@
           <button class="neon-sel cruising" id="btn-cruising"><i class="ns-ico"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 32 L15 14 L22 22 L32 8 L46 32Z" /><circle cx="39" cy="8" r="4" /></svg></i><span><b>Cruising</b><small>BALADE INFINIE</small></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
           <button class="neon-sel envol" id="btn-envol"><i class="ns-ico"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M2 8c8 0 14 6 20 14l5 6" /><path d="M27 28l4-3 6-1" /><path d="M30 12c4-3 9-3 13 0" /><circle cx="37" cy="17" r="2" /></svg></i><span><b>Envol</b><small>RECORD DE SAUT</small></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
           <button class="neon-sel fuite" id="btn-fuite"><i class="ns-ico"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="13" cy="13" r="9" /><path d="M7 11l4 2 3-4M11 19l4-1" /><path d="M2 33l44-12" /><path d="M30 29l4-5 4 3" /></svg></i><span><b>Fuite</b><small>UN ROCHER TE POURSUIT</small></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
+          <button class="neon-sel album" id="btn-album"><i class="ns-ico"><svg viewBox="0 0 48 36" aria-hidden="true"><rect x="8" y="3" width="16" height="22" rx="2" /><rect x="26" y="8" width="14" height="20" rx="2" /><circle cx="16" cy="12" r="3.5" /><path d="M10 23c1-5 11-5 12 0" /></svg></i><span><b>Album</b><small>CARTES DE PILOTES</small></span><svg class="ns-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>
         </div>
         <!-- v2.25: everything is chosen in one tap: modes in a row, worlds as chips above (circuit modes) -->
         <div class="title-select">
@@ -329,6 +330,20 @@
           <button class="btn-secondary" id="btn-garage2">GARAGE</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
         </div>
+      </div>
+
+      <div id="screen-album" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="btn-album-back">‹ RETOUR</button>
+          <h2>Album</h2>
+          <div class="panel album-count" id="album-count"></div>
+        </div>
+        <div class="album-book">
+          <button class="btn-secondary album-nav" id="album-prev" aria-label="Page précédente">‹</button>
+          <div class="album-page" id="album-page"></div>
+          <button class="btn-secondary album-nav" id="album-next" aria-label="Page suivante">›</button>
+        </div>
+        <div class="album-dots" id="album-dots"></div>
       </div>
 
       <div id="screen-circuits" class="screen hidden">

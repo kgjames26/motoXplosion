@@ -20,6 +20,7 @@ import { MAX_LEVEL, PARTS, upgradedSpec } from './upgrades';
 import { rockCapacity } from './climb';
 import { DIFF_ORDER, diffIndex, tyreBonus, TYRES, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import { CRUISE_CONTROL } from './upgrades';
+import { ALBUM_PAGE, ALBUM_PAGES, CARDS, cardArt, cardOwned, type Card } from './album';
 import {
   CIRCUITS,
   CircuitMode,
@@ -81,7 +82,7 @@ const hud = new Hud();
 const audio = new Audio();
 audio.setVolumes(settings.music, settings.sfx);
 
-type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'stats' | 'sleep' | 'none';
+type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'stats' | 'sleep' | 'album' | 'none';
 const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   title: $('screen-title'),
   circuits: $('screen-circuits'),
@@ -94,6 +95,7 @@ const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   garage: $('screen-garage'),
   stats: $('screen-stats'),
   sleep: $('screen-sleep'),
+  album: $('screen-album'),
 };
 let garageReturn: ScreenName = 'title';
 const hudEl = $('hud');
@@ -1093,6 +1095,81 @@ $('btn-envol').addEventListener('click', () => {
   saveP();
   start();
 });
+// ---------------------------------------------------------------- album (v2.70)
+let albumPage = 0;
+const cardWhere = (c: Card): string => {
+  const r = c.req;
+  if (r.kind === 'envol') return `Envol · saut de ${r.dist} m`;
+  if (r.kind === 'fuite') return `Fuite · niveau ${r.n}`;
+  return `${MODES.find((x) => x.id === r.mode)!.name} · ${REGIONS[r.region].name} · niv. ${r.n}`;
+};
+function renderAlbum(): void {
+  const owned = (c: Card) => cardOwned(c, profile.circuits, profile.best);
+  $('album-count').textContent = `${CARDS.filter(owned).length}/${CARDS.length} cartes`;
+  const cards = CARDS.slice(albumPage * ALBUM_PAGE, (albumPage + 1) * ALBUM_PAGE);
+  $('album-page').innerHTML = cards
+    .map((c) => {
+      const has = owned(c);
+      return `<button class="acard t${c.tier} ${has ? '' : 'missing'}" data-id="${c.id}"><div class="art">${cardArt(c)}</div><div class="cap"><b>${has ? c.name : 'Carte manquante'}</b><small>${has ? `${c.country} · n°${c.no}` : cardWhere(c)}</small></div><div class="bio"><span><b>${c.name}</b><br>${c.country} · n°${c.no}<br>${c.bio}<br><i>${cardWhere(c)}</i></span></div></button>`;
+    })
+    .join('');
+  $('album-dots').innerHTML = Array.from({ length: ALBUM_PAGES }, (_, i) => `<i class="${i === albumPage ? 'on' : ''}"></i>`).join('');
+}
+function openAlbum(): void {
+  renderAlbum();
+  show('album');
+}
+$('btn-album').addEventListener('click', openAlbum);
+$('btn-album-back').addEventListener('click', () => {
+  refreshTitle();
+  show('title');
+});
+$('album-prev').addEventListener('click', () => {
+  albumPage = (albumPage + ALBUM_PAGES - 1) % ALBUM_PAGES;
+  renderAlbum();
+});
+$('album-next').addEventListener('click', () => {
+  albumPage = (albumPage + 1) % ALBUM_PAGES;
+  renderAlbum();
+});
+$('album-page').addEventListener('click', (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>('.acard');
+  if (!el) return;
+  const c = CARDS[Number(el.dataset.id)];
+  if (cardOwned(c, profile.circuits, profile.best)) {
+    el.classList.toggle('open');
+    return;
+  }
+  // a missing card leads straight to the level that gives it
+  const r = c.req;
+  profile.crossSel = false;
+  if (r.kind === 'envol') {
+    profile.mode = 'envol';
+    saveP();
+    start();
+    return;
+  }
+  const mode: CircuitMode = r.kind === 'fuite' ? 'fuite' : r.mode;
+  if (r.kind === 'circuit') {
+    if (!worldOpen(r.region)) {
+      toast(`🔒 ${REGIONS[r.region].name} : termine ${WORLD_UNLOCK} niveaux dans le monde précédent.`);
+      return;
+    }
+    settings.region = r.region;
+    saveSettings(settings);
+  }
+  profile.mode = mode;
+  let n = r.n;
+  for (let k = 1; k < r.n; k++)
+    if (!doneAny(mode, k)) {
+      n = k; // the level is not open yet: go to the first one left to finish
+      break;
+    }
+  profile.circuitSel[`${mode}:${regionOf(mode)}`] = n;
+  saveP();
+  openCircuits();
+});
+
 /** Fuite (v2.70): the rock chase, under Envol on the home screen. */
 $('btn-fuite').addEventListener('click', () => {
   profile.mode = 'fuite';

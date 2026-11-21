@@ -4472,6 +4472,47 @@ button.wallet {
   font-size: calc(var(--u) * 1.9);
 }
 
+/* v2.70 : Album */
+#btn-album.neon-sel {
+  margin-top: 0;
+  min-width: calc(var(--u) * 58);
+  min-height: calc(var(--u) * 12);
+  grid-template-columns: calc(var(--u) * 8) 1fr calc(var(--u) * 4.6);
+  gap: calc(var(--u) * 1.8);
+  border-radius: calc(var(--u) * 3.4);
+}
+#btn-album.neon-sel .ns-ico {
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  background: radial-gradient(circle at 35% 30%, #ffe9a8, #e0a92a 55%, #7a5208);
+}
+#btn-album.neon-sel b {
+  font-size: calc(var(--u) * 4.2);
+}
+#btn-album.neon-sel small {
+  font-size: calc(var(--u) * 1.9);
+}
+
+
+/* v2.70 : Album de cartes */
+.album-count { padding: calc(var(--u) * 1) calc(var(--u) * 2.4); font-weight: 800; }
+.album-book { flex: 1; width: 100%; display: flex; align-items: center; gap: calc(var(--u) * 1.5); min-height: 0; }
+.album-nav { width: calc(var(--u) * 7); height: calc(var(--u) * 12); font-size: calc(var(--u) * 6); padding: 0; flex: none; }
+.album-page { flex: 1; height: 100%; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(2, 1fr); gap: calc(var(--u) * 1.2); padding: calc(var(--u) * 1.5); border-radius: calc(var(--u) * 2.4); background: linear-gradient(160deg, #3a2a1a, #1e1409); box-shadow: inset 0 0 0 calc(var(--u) * 0.4) #c9a05a, 0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0,0,0,.5); }
+.acard { position: relative; border: 0; padding: 0; border-radius: calc(var(--u) * 1.4); overflow: hidden; background: #111; color: #fff; text-align: left; display: flex; flex-direction: column; min-height: 0; box-shadow: 0 0 0 calc(var(--u) * 0.35) var(--rim, #888); cursor: pointer; }
+.acard.t1 { --rim: #d98a4a; } .acard.t2 { --rim: #d6dbe4; } .acard.t3 { --rim: #f6c23a; }
+.acard .art { flex: 1; min-height: 0; } .acard .art svg { width: 100%; height: 100%; display: block; }
+.acard .cap { padding: calc(var(--u) * 0.5) calc(var(--u) * 0.8); background: rgba(0,0,0,.72); font-size: calc(var(--u) * 1.7); line-height: 1.15; }
+.acard .cap b { display: block; font-size: calc(var(--u) * 1.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acard .cap small { display: block; opacity: .75; font-size: calc(var(--u) * 1.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acard.missing .art { filter: grayscale(1) brightness(.35); }
+.acard.missing .cap { background: rgba(0,0,0,.85); }
+.acard.missing::after { content: '?'; position: absolute; top: 18%; left: 0; right: 0; text-align: center; font-size: calc(var(--u) * 9); font-weight: 900; color: rgba(255,255,255,.55); }
+.acard .bio { position: absolute; inset: 0; background: rgba(8,8,12,.9); padding: calc(var(--u) * 1); font-size: calc(var(--u) * 1.5); display: none; align-items: center; }
+.acard.open .bio { display: flex; }
+.album-dots { display: flex; gap: calc(var(--u) * 1.2); justify-content: center; padding: calc(var(--u) * 1) 0; }
+.album-dots i { width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%; background: rgba(255,255,255,.3); }
+.album-dots i.on { background: #f6c23a; }
 /* v2.36 : compteur de paliers de 500 m (cruising uniquement) */
 .laps500 {
   display: none;
