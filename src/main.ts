@@ -141,7 +141,7 @@ const MODE_SHORT: Record<ModeId, string> = {
   enduro: 'Collines',
   course: '8 pilotes',
   envol: 'Record de saut',
-  fuite: 'Rocher en chasse',
+  fuite: 'Éboulement',
 };
 
 // ---------------------------------------------------------------- progression (v2.60)
@@ -414,7 +414,7 @@ function renderCircuits(): void {
     const need = BIKES.find((b) => rockClimb(b.id, di) >= hi - 0.05);
     meta = `${trialZones(sel)} zones · rochers jusqu’à ${hi.toFixed(1).replace('.', ',')} m · chute = +15 s`;
     if (cap < hi - 0.05) meta += ` <b class="warn">⚠ ${bikeById(profile.bike).name} trop faible : il faut ${need ? need.name : 'une meilleure moto'}</b>`;
-  } else if (mode === 'fuite') meta = `${km} km · rocher à ${Math.round(fuitePlan(sel).v * 3.6)} km/h${fuitePlan(sel).surges.length ? ' · accélérations' : ''}`;
+  } else if (mode === 'fuite') meta = `${km} km · éboulement à ${Math.round(fuitePlan(sel).v * 3.6)} km/h${fuitePlan(sel).surges.length ? ' · accélérations' : ''}`;
   else if (mode === 'enduro') meta = `${km} km · grosses collines`;
   else meta = `${km} km · pilotes niveau ${circuitRaceLevel(sel)}`;
   $('circ-meta').innerHTML = meta;
@@ -430,7 +430,7 @@ function renderCircuits(): void {
     $('circ-goals').innerHTML = [
       `<li class="${got >= 3 ? 'got' : ''}">${medalIco(3)} moins de ${fmtTime(p.gold)}</li>`,
       `<li class="${got >= 2 ? 'got' : ''}">${medalIco(2)} moins de ${fmtTime(p.silver)}</li>`,
-      `<li class="${got >= 1 ? 'got' : ''}">${medalIco(1)} ${mode === 'fuite' ? 'échapper au rocher' : 'arriver au bout'}</li>`,
+      `<li class="${got >= 1 ? 'got' : ''}">${medalIco(1)} ${mode === 'fuite' ? 'échapper à l’éboulement' : 'arriver au bout'}</li>`,
     ].join('');
     $('circ-best').textContent = r?.time ? `Record : ${fmtTime(r.time)}` : '';
   }
@@ -1040,7 +1040,7 @@ function finishRun(display: boolean): void {
     else title = r.medal === 3 ? "MÉDAILLE D'OR !" : r.medal === 2 ? "MÉDAILLE D'ARGENT !" : 'ARRIVÉE !';
   }
   if (mode === 'envol') title = r.reason === 'finish' ? 'SAUT RÉUSSI !' : 'SAUT ANNULÉ';
-  if (mode === 'fuite') title = r.reason === 'finish' ? (r.medal === 3 ? "ÉVADÉ · MÉDAILLE D'OR !" : r.medal === 2 ? "ÉVADÉ · MÉDAILLE D'ARGENT !" : 'ÉVADÉ !') : 'ÉCRASÉ PAR LE ROCHER';
+  if (mode === 'fuite') title = r.reason === 'finish' ? (r.medal === 3 ? "ÉVADÉ · MÉDAILLE D'OR !" : r.medal === 2 ? "ÉVADÉ · MÉDAILLE D'ARGENT !" : 'ÉVADÉ !') : 'ÉCRASÉ PAR L’ÉBOULEMENT';
   $('over-title').textContent = title;
   $('over-score-label').textContent = mode === 'envol' ? 'Saut' : r.mx ? `Circuit 3D ·${MX_EVENTS.find((e) => e.id === r.mx)!.name}` : mode === 'course' ? 'Classement' : isCircuitMode(mode) ? (r.circuit ? `Circuit ${r.circuit} · Temps` : 'Temps') : 'Distance';
   $('over-score').textContent = r.scoreLabel;

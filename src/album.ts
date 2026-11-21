@@ -27,7 +27,7 @@ export const ALBUM_PAGE = 12;
 const WORLDS: RegionId[] = ['alpes', 'foret', 'canyon', 'desert', 'sf'];
 const MODES: CircuitMode[] = ['trial', 'enduro', 'course'];
 const FUITE_LEVELS = [3, 5, 8, 10, 13, 15, 18, 20, 23, 25, 28, 30];
-export const ENVOL_CARDS = [100, 150, 200];
+export const ENVOL_CARDS = [200, 250, 275]; // v2.74: jumps are longer (≈ 225 m to 280 m)
 
 const FIRST = ['Antoine', 'Tonio', 'Jorge', 'Jeremy', 'Romain', 'Max', 'Glenn', 'Ken', 'Dylan', 'Eli', 'Marvin', 'Calvin', 'Gautier', 'Mathys', 'Jago', 'Ryan', 'Tim', 'Brian', 'Kevin', 'Pauls', 'Valentin', 'Lucas', 'Hunter', 'Jett'];
 const LAST = [

@@ -13,7 +13,10 @@ import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_S
 import { expectedBike, moduleClimb } from '../bikes';
 
 /** Envol track shape (v2.68). Exported so it can be tuned (and swept in simulation). */
-export const ENVOL_TRACK = { runLen: 520, s0: 0.1, s1: 0.36, humps: [260, 340, 420], Hk: 2.5, Lk: 12, kickPow: 1.2, sLand: 0.85, extra: 1.5, decay: 320 };
+// v2.74: longer, steeper in-run; the landing hill of a ski jump: a gentle knoll after the lip, then a
+// slope that follows the flight a few metres below the rider (vRef = speed it is drawn for), never steeper than sMax
+export const ENVOL_TRACK = { runLen: 640, s0: 0.1, s1: 0.5, humps: [0.4, 0.55, 0.7], Hk: 2.5, Lk: 12, kickPow: 1.2, vRef: 29, clr0: 1.2, clrK: 0.03, sMax: 1.0, knoll: 0.25, Lsteep: 430, glide: 0.45 };
+// glide: gravity multiplier in the air after the lip (a ski jumper's gliding flight)
 
 /**
  * A terrain segment: a height profile relative to the height at its start.
@@ -408,7 +411,7 @@ export class Generator {
       // v2.70: a mountain descent: big soft hills, descents, jumps that stay visible and fair
       // v2.73: on the snow of the summit (little grip) no steep climbs: descents and jumps only
       const gf = this.grade * 0.85;
-      feats = this.world.fuiteZoneAt(x) === 0 ? { descent: 4, tabletop: 2.5, double: 1 + gf, bigHill: 0.6 } : { bigHill: 2.5 + gf * 2, techHill: 1 + gf * 2.5, descent: 3, tabletop: 2, double: 1 + gf, gap: 0.2 + gf * 0.8 };
+      feats = this.world.fuiteZoneAt(x) === 0 ? { descent: 4, tabletop: 2.5, double: 1 + gf, rollers: 1 } : { descent: 3, tabletop: 2.5, double: 1.2 + gf, rollers: 1.5, whoops: 0.6 + gf, gap: 0.2 + gf * 0.6 } /* v2.74: no big hills or rocky walls, a chase must flow (the slide sets the pace) */;
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };
@@ -418,7 +421,8 @@ export class Generator {
     const names = Object.keys(feats) as FeatureName[];
     const weights = names.map((n) => feats[n]!);
     const f = this.rng.weighted(names, weights);
-    const segs = this.feature(f, this.difficulty(x));
+    // v2.74 Fuite: the slide sets the pace, the climbs stay moderate (a steep wall would be a trap)
+    const segs = this.feature(f, this.mode === 'fuite' ? Math.min(0.5, this.difficulty(x)) : this.difficulty(x));
     if (f === 'tabletop' || f === 'double' || f === 'rollers' || f === 'dunes') {
       const main = segs.reduce((a, b) => (b.len > a.len ? b : a));
       // on the motocross track the coins hang in the air, on the ideal line of every jump
@@ -988,7 +992,8 @@ export class Generator {
     // --- the run-up: a high hill, ever steeper, easing out at the bottom
     const L = T.runLen, s0 = T.s0, s1 = T.s1, easeOut = 70;
     const down = this.integrateSlope(L, (t) => -(s0 + (s1 - s0) * (t / L)) * smoothstep((L - t) / easeOut));
-    const humps = T.humps.map((c) => ({ c: c * (L / 380) + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
+    // v2.74: hump centres as fractions of the run (they used to land past its end and break the track)
+    const humps = T.humps.map((f) => ({ c: f * L + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
     const hump = (t: number) => {
       let h = 0;
       for (const b of humps) {
@@ -1011,16 +1016,30 @@ export class Generator {
       if (k === 0) piece.onStart = (x0) => (this.world.envolHumps = humps.map((b) => x0 + b.c));
       runPieces.push(piece);
     }
-    // --- the kicker, then the landing slope (steep, long) and the run-out
-    const { Hk, Lk, kickPow, sLand, extra, decay } = T;
-    const Lland = 520, easeL = 90, Lrun = 2500;
-    // the ground falls away steeply right after the lip, then settles on the landing slope: a long hang time
-    const land = this.integrateSlope(Lland + Lrun, (u) => (u < Lland ? -(sLand + extra * Math.exp(-u / decay)) * smoothstep((Lland - u) / easeL) : 0), 0.5);
+    // --- the kicker, then the landing hill and the out-run (v2.74: ski-jump profile, no cliff)
+    const { Hk, Lk, kickPow, vRef, clr0, clrK, sMax, knoll, Lsteep } = T;
+    const gr = 9.81 * GRAVITY_SCALE * T.glide;
+    const tanA = (Hk * kickPow) / Lk; // slope of the kicker at the lip
+    const kq = gr / (2 * vRef * vRef) * (1 + tanA * tanA);
+    // the flight drawn for vRef, the clearance under it growing slowly, and a gentle knoll first
+    const hillRaw = (u: number) => Math.min(-knoll * u, tanA * u - kq * u * u - (clr0 * smoothstep(u / 25) + clrK * u));
+    const Lout = 160, Lflat = 2500;
+    const Lland = Lsteep + Lout + Lflat;
+    const land = this.integrateSlope(
+      Lland,
+      (u) => {
+        if (u < Lsteep) return Math.max(-sMax, Math.min(-0.04, (hillRaw(u + 0.25) - hillRaw(Math.max(0, u - 0.25))) / (u < 0.25 ? 0.25 + u : 0.5)));
+        // out-run: the slope eases back to flat
+        const s0 = Math.max(-sMax, (hillRaw(Lsteep) - hillRaw(Lsteep - 0.5)) / 0.5);
+        return s0 * smoothstep(1 - (u - Lsteep) / Lout);
+      },
+      0.5,
+    );
     const kicker: Segment = {
-      len: Lk + Lland + Lrun,
+      len: Lk + Lland,
       shape: (t) => (t < Lk ? Hk * Math.pow(t / Lk, kickPow) : Hk + land(t - Lk)),
       surface: () => Surface.Dirt,
-      noPickup: [[0, Lk + Lland + Lrun]],
+      noPickup: [[0, Lk + Lland]],
       props: 1.2,
       onStart: (x0) => {
         this.world.envolLipX = x0 + Lk;

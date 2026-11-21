@@ -174,8 +174,9 @@ export class Hud {
     if (mode === 'fuite') {
       const gap = Math.max(0, Math.round(game.rockGap));
       this.rockGap.textContent = String(gap);
-      this.rockBox.classList.toggle('danger', gap < 22 || game.rockSurge === 2);
-      this.rockBox.classList.toggle('warn', gap >= 22 && (gap < 45 || game.rockSurge === 1));
+      // v2.74: the slide stays within ~20 m (on screen); orange under 15 m, red and blinking under 8 m
+      this.rockBox.classList.toggle('danger', gap < 8 || game.rockSurge === 2);
+      this.rockBox.classList.toggle('warn', gap >= 8 && (gap < 15 || game.rockSurge === 1));
     }
     if (mode === 'trial' || mode === 'enduro' || mode === 'fuite') {
       const t = Math.floor(game.chrono * 10);

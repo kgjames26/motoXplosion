@@ -45,36 +45,39 @@ export function circuitLength(mode: CircuitMode, n: number): number {
 }
 
 /**
- * Fuite (v2.70): the scripted rock behind the rider. Same plan every time for a level:
- * a head start (gap0), a cruise speed (v, m/s, horizontal) and a few announced surges (progress
- * range 0..1 and speed factor) before which a warning is shown. Smalls = trailing small rocks (m behind).
+ * Fuite (v2.70, v2.74): a rockslide chasing the rider. Same plan every time for a level: the front
+ * of the slide starts gap0 m behind, rolls at v (m/s), with a few announced surges (progress range
+ * 0..1 and speed factor). v2.74: the slide never drops more than FUITE_VIEW m behind (it stays on
+ * screen, at the left edge) and it slows down while the rider is on the ground after a fall.
+ * rocks = the stones of the slide: metres behind the front, radius, bounce phase.
  */
 export interface RockPlan {
   gap0: number;
   v: number;
   surges: [number, number, number][];
-  smalls: number[];
-  radius: number;
+  rocks: { off: number; r: number; ph: number }[];
 }
+/** The slide is held at most this far behind the rider (m): always in view. */
+export const FUITE_VIEW = 20;
 export function fuitePlan(n: number): RockPlan {
   const g = circuitGrade(n);
   const lin = Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1)));
   const surges: [number, number, number][] = [];
-  if (n >= 6) surges.push([0.45, 0.55, 1.1]);
-  if (n >= 14) surges.push([0.75, 0.83, 1.12]);
-  if (n >= 24) surges.push([0.25, 0.32, 1.1]);
+  if (n >= 6) surges.push([0.45, 0.53, 1.06]);
+  if (n >= 14) surges.push([0.75, 0.82, 1.1]);
+  if (n >= 24) surges.push([0.25, 0.31, 1.06]);
   surges.sort((a, b) => a[0] - b[0]);
-  return {
-    gap0: Math.round(95 - lin * 15),
-    v: FUITE_V0 + (lin + g) * 0.5 * FUITE_V1, // v2.73: halfway between linear and the convex curve
-    surges,
-    smalls: [4, 9, 15, 23].slice(0, 1 + Math.floor(lin * 3.99)),
-    radius: 2.2 + lin * 1.6,
-  };
+  // the stones: one big boulder in front, more and bigger ones on the high levels, a trail of small ones
+  const rocks: { off: number; r: number; ph: number }[] = [{ off: 0, r: 2.2 + lin * 1.2, ph: 0 }];
+  const big = 1 + Math.round(lin * 2);
+  for (let i = 0; i < big; i++) rocks.push({ off: 3 + i * 6.5, r: 1.6 + ((i * 7) % 5) * 0.2 + lin * 0.6, ph: i * 1.3 + 0.5 });
+  const small = 7 + Math.round(lin * 6);
+  for (let i = 0; i < small; i++) rocks.push({ off: 1 + ((i * 37) % 23), r: 0.45 + ((i * 13) % 7) * 0.12, ph: i * 2.1 });
+  return { gap0: FUITE_VIEW + 4, v: FUITE_V0 + (lin + g) * 0.5 * FUITE_V1, surges, rocks };
 }
-/** Rock cruise speed (m/s): level 1, and how much more at level 30 (see the simulation). */
-export const FUITE_V0 = 11.5;
-export const FUITE_V1 = 8;
+/** Slide speed (m/s): level 1, and how much more at level 30 (see the simulation). */
+export const FUITE_V0 = 10.5;
+export const FUITE_V1 = 9;
 /** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
 export const FUITE_GOLD = 21;
 

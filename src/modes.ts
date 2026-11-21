@@ -42,8 +42,8 @@ export const MODES: ModeDef[] = [
   {
     id: 'fuite',
     name: 'Fuite',
-    short: 'Un rocher te poursuit',
-    description: 'Descends la montagne avant que le rocher ne t’écrase ! Le décor change avec l’altitude : neige au sommet, forêt, plaine puis ville. S’il te rattrape, c’est perdu.',
+    short: 'Éboulement !',
+    description: 'Un éboulement dévale la montagne derrière toi : fonce jusqu’en bas avant que les rochers ne t’écrasent ! Le décor change avec l’altitude : neige au sommet, forêt, plaine puis ville. S’ils te rattrapent, c’est perdu.',
   },
 ];
 

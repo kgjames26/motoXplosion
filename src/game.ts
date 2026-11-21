@@ -3,7 +3,8 @@ import { aiInput, createOpponents, Opponent } from './ai';
 import type { PlayerState } from './net/multi';
 import { bikeById, BikeModel, BIKES } from './bikes';
 import { clamp, GRAVITY_SCALE, Rng, wrapAngle } from './core/math';
-import { CircuitMode, fuitePlan, RockPlan, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
+import { ENVOL_TRACK } from './world/generator';
+import { CircuitMode, fuitePlan, FUITE_VIEW, RockPlan, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
 import { rockCapacity } from './climb';
 import { diffIndex, tyreBonus, Weather, weatherFor } from './weather';
@@ -181,9 +182,9 @@ export class Game {
   private runId = 0;
   /** Fuite (v2.70): the scripted rock chasing the rider (x of its centre, radius, current speed). */
   rockX = -1e9;
-  rockR = 2;
   rockV = 0;
-  rockSmall: number[] = [];
+  /** The stones of the slide (see RockPlan.rocks). */
+  rocks: { off: number; r: number; ph: number }[] = [];
   /** 0 = none, 1 = a surge has been announced, 2 = surge under way. */
   rockSurge = 0;
   rockCaught = false;
@@ -386,8 +387,7 @@ export class Game {
     this.runId++;
     this.rockPlan = this.mode === 'fuite' ? fuitePlan(this.circuit) : null;
     this.rockX = this.rockPlan ? this.startX - this.rockPlan.gap0 : -1e9;
-    this.rockR = this.rockPlan?.radius ?? 2;
-    this.rockSmall = this.rockPlan ? [...this.rockPlan.smalls] : [];
+    this.rocks = this.rockPlan ? this.rockPlan.rocks : [];
     this.rockV = 0;
     this.rockT = 0;
     this.rockSurge = 0;
@@ -741,6 +741,7 @@ export class Game {
       }
       if (bike.x >= lip - 0.5 && !bike.grounded && this.crashTimer <= 0) {
         this.envolState = 'flight';
+        bike.gravityScale = GRAVITY_SCALE * ENVOL_TRACK.glide; // v2.74: a gliding flight, like ski jumping
         this.envolSpeed = Math.round(bike.speed * 3.6);
         this.popup(bike.x, bike.y + 2.6, `${this.envolSpeed} km/h`, '#ffd23f');
       } else if (bike.x > lip + 30) {
@@ -750,6 +751,7 @@ export class Game {
     } else if (this.envolState === 'flight') {
       this.envolDist = Math.max(0, bike.x - lip);
       if (bike.grounded) {
+        bike.gravityScale = GRAVITY_SCALE;
         this.envolState = 'landed';
         this.envolT = 0;
       }
@@ -788,7 +790,7 @@ export class Game {
 
   /** Fuite: metres between the rock's front and the rider's rear wheel. */
   get rockGap(): number {
-    return this.bike.x - 0.9 - (this.rockX + this.rockR * 0.85);
+    return this.bike.x - 0.9 - this.rockX;
   }
 
   /**
@@ -807,7 +809,7 @@ export class Game {
       plan.surges.forEach(([a, b, m], i) => {
         if (prog >= a - 0.035 && prog < a && !this.rockWarned.has(i)) {
           this.rockWarned.add(i);
-          this.popup(bike.x + 3, bike.y + 3.6, 'LE ROCHER ACCÉLÈRE !', '#ff6b5a');
+          this.popup(bike.x + 3, bike.y + 3.6, 'L’ÉBOULEMENT ACCÉLÈRE !', '#ff6b5a');
           this.events.weak = true;
         }
         if (prog >= a - 0.035 && prog < a) this.rockSurge = 1;
@@ -817,20 +819,25 @@ export class Game {
         }
       });
       // the first seconds: it gets going (smooth start), then the full script speed
-      const ramp = Math.min(1, this.rockT / 5);
-      this.rockV = plan.v * k * (0.35 + 0.65 * ramp * ramp * (3 - 2 * ramp));
-      if (this.rockT < 1.2) this.rockV = 0;
-      this.rockX += this.rockV * dt;
-      // dust and gravel behind the rock
-      if (Math.abs(this.rockX - bike.x) < 70 && Math.random() < 0.7) {
-        const gy = this.world.heightAt(Math.max(this.rockX, bike.x - 110));
-        this.particles.spawn({ kind: 'dust', x: this.rockX - this.rockR * 0.5 + Math.random() * this.rockR, y: gy + 0.2 + Math.random() * this.rockR, vx: -1 - Math.random() * 3, vy: Math.random() * 2, life: 0.7, size: 0.5, grow: 1.6, r: 170, g: 160, b: 148 });
+      const ramp = Math.min(1, this.rockT / 4);
+      let v = plan.v * k * (0.5 + 0.5 * ramp * ramp * (3 - 2 * ramp));
+      if (this.rockT < 1) v = 0;
+      // v2.74: never further than FUITE_VIEW behind (always on screen), slower while the rider is down
+      if (this.rockGap > FUITE_VIEW) v = Math.max(v, bike.vx + (this.rockGap - FUITE_VIEW) * 2);
+      if (this.crashTimer > 0) v *= 0.4;
+      this.rockV = v;
+      this.rockX += v * dt;
+      // dust and gravel thrown up by the slide
+      if (this.rockT > 1 && Math.random() < 0.9) {
+        const x = this.rockX - Math.random() * 12;
+        const gy = this.world.heightAt(Math.max(x, bike.x - 110));
+        this.particles.spawn({ kind: 'dust', x, y: gy + 0.3 + Math.random() * 2.5, vx: v * 0.4 - 2 + Math.random() * 3, vy: 0.5 + Math.random() * 2.5, life: 0.9, size: 0.9, grow: 2.2, r: 165, g: 155, b: 142 });
       }
       if (this.rockGap <= 0) {
         this.rockCaught = true;
         this.rockV = 0;
         if (this.crashTimer <= 0) this.crash();
-        this.popup(bike.x, bike.y + 3.2, 'ÉCRASÉ PAR LE ROCHER !', '#ff6b5a');
+        this.popup(bike.x, bike.y + 3.2, 'ÉCRASÉ PAR LES ROCHERS !', '#ff6b5a');
         this.shake = 1;
         this.endLater('quit', 1500);
       }

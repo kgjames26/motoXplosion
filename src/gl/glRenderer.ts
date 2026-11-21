@@ -137,6 +137,8 @@ export class GLRenderer {
   private skyBase = new THREE.Color();
   camX = 0;
   camY = 0;
+  /** v2.74: extra framing height for Envol / Fuite (m), eased. */
+  private modeZoom = 0;
   private time = 0;
   private W = 1;
   private H = 1;
@@ -532,15 +534,30 @@ export class GLRenderer {
     this.sunset = snap ? (title ? 1 : 0) : approach(this.sunset, title ? 1 : 0, 2.5, dt);
     const heroZoom = 1 - this.sunset * 0.3;
     let visH = Math.max(9.5 * this.zoom, (15 * this.zoom) / aspect) * heroZoom; // portrait keeps ~15 m of width
+    // v2.74: Envol is framed wide like ski jumping (the whole jump hill), Fuite wide enough to see the
+    // rockslide behind the rider
+    let modeH = 0;
+    // in the air: the rider and the landing hill under him both stay in frame
+    const envolAir = !title && w.mode === 'envol' && game.envolState !== 'run';
+    const envolBelow = envolAir ? w.heightAt(b.x + 8) : 0;
+    if (!title && w.mode === 'envol') modeH = envolAir ? clamp((b.y - envolBelow) * 1.3 + 16, 24, 62) : 16 + clamp(b.speed / 32, 0, 1) * 10;
+    else if (!title && w.mode === 'fuite') modeH = 16;
+    this.modeZoom = snap ? modeH : approach(this.modeZoom, modeH, 0.8, dt);
+    visH = Math.max(visH, this.modeZoom);
     if (this.debugZoom) visH = this.debugZoom;
     const visW = visH * aspect;
-    const lookAhead = (clamp(b.vx * 0.3, -2, 6) + visW * 0.12) * (1 - this.sunset);
+    let lookAhead = (clamp(b.vx * 0.3, -2, 6) + visW * 0.12) * (1 - this.sunset);
+    // Fuite: the rider right of centre, the slide in the left part of the screen
+    if (!title && w.mode === 'fuite') lookAhead = -visW * 0.22; // ~25 m visible behind the rider
+    // Envol in the air: look far down the landing hill
+    if (envolAir) lookAhead = visW * 0.18;
     const tx = b.x + lookAhead;
     const ground = w.heightAt(b.x + lookAhead * 0.8);
     const br = w.bridgeAt(b.x + lookAhead * 0.5);
     const dipT = br ? Math.min(3, (br.deckY0 - br.floorY) * 0.22) : 0;
     this.dip = snap ? dipT : approach(this.dip, dipT, 1.2, dt);
-    const ty = Math.max(b.y, ground + 0.8) + visH * (0.06 - this.sunset * 0.2) + clamp(b.vy * 0.1, -1.2, 1.2) - this.dip;
+    let ty = Math.max(b.y, ground + 0.8) + visH * (0.06 - this.sunset * 0.2) + clamp(b.vy * 0.1, -1.2, 1.2) - this.dip;
+    if (envolAir) ty = (b.y + envolBelow) / 2 + 2; // halfway between the rider and the slope
     // light grading: day ↔ golden hour
     const k = this.sunset;
     this.sun.color.setRGB(1, 0.94 - 0.26 * k, 0.85 - 0.45 * k);
@@ -614,56 +631,53 @@ export class GLRenderer {
     this.updatePopups(game);
   }
 
-  /** v2.70 Fuite: the chasing rock (one big boulder and its small ones), built on first use. */
+  /** v2.70 Fuite (v2.74: a whole rockslide): the stones chasing the rider, built on first use. */
   private rockGroup: THREE.Group | null = null;
-  private rockBig: THREE.Mesh | null = null;
-  private rockSmalls: THREE.Mesh[] = [];
+  private rockMeshes: THREE.Mesh[] = [];
   private updateRock(game: Game): void {
-    if (game.mode !== 'fuite') {
+    if (game.mode !== 'fuite' || !game.rocks.length) {
       if (this.rockGroup) this.rockGroup.visible = false;
       return;
     }
     if (!this.rockGroup) {
-      const g = new THREE.Group();
-      const mat = new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.95, metalness: 0, flatShading: true });
-      const mk = (): THREE.Mesh => {
-        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), mat);
-        // a rough, uneven stone: every vertex pushed in or out by a fixed amount
-        const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-        for (let i = 0; i < pos.count; i++) {
-          const k = 0.86 + 0.28 * Math.abs(Math.sin(i * 12.9898 + 4.1));
-          pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * k, pos.getZ(i) * k);
-        }
-        m.geometry.computeVertexNormals();
-        g.add(m);
-        return m;
-      };
-      this.rockBig = mk();
-      for (let i = 0; i < 4; i++) this.rockSmalls.push(mk());
-      this.scene.add(g);
-      this.rockGroup = g;
+      this.rockGroup = new THREE.Group();
+      this.scene.add(this.rockGroup);
+    }
+    const g = this.rockGroup;
+    while (this.rockMeshes.length < game.rocks.length) {
+      const i = this.rockMeshes.length;
+      const shade = [0x8a7f72, 0x7a7065, 0x968a7a, 0x6d645a][i % 4];
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: shade, roughness: 0.95, metalness: 0, flatShading: true }));
+      // a rough, uneven stone: every vertex pushed in or out by a fixed amount
+      const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+      for (let k = 0; k < pos.count; k++) {
+        const f = 0.82 + 0.34 * Math.abs(Math.sin(k * 12.9898 + i * 4.1));
+        pos.setXYZ(k, pos.getX(k) * f, pos.getY(k) * f, pos.getZ(k) * f);
+      }
+      m.geometry.computeVertexNormals();
+      g.add(m);
+      this.rockMeshes.push(m);
     }
     const w = game.world;
-    const near = Math.abs(game.rockX - this.camX) < 90;
-    this.rockGroup.visible = near;
+    const near = Math.abs(game.rockX - this.camX) < 80;
+    g.visible = near;
     if (!near) return;
     const t = performance.now() / 1000;
-    const place = (m: THREE.Mesh, x: number, r: number, hop: number): void => {
-      const gy = w.heightAt(Math.max(x, game.bike.x - 110));
-      m.visible = true;
-      m.scale.set(r, r, r * 0.45);
-      m.position.set(x, gy + r * 0.92 + hop, -0.2);
-      m.rotation.z = -x / r;
-    };
-    place(this.rockBig!, game.rockX, game.rockR, 0);
-    this.rockSmalls.forEach((m, i) => {
-      const off = game.rockSmall[i];
-      if (off === undefined) {
+    const moving = game.rockV > 0.5;
+    this.rockMeshes.forEach((m, i) => {
+      const rk = game.rocks[i];
+      if (!rk) {
         m.visible = false;
         return;
       }
-      const r = 0.55 + (i % 3) * 0.18;
-      place(m, game.rockX - game.rockR - off, r, Math.abs(Math.sin(t * 7 + i * 1.7)) * 0.5);
+      const x = game.rockX - rk.off - rk.r;
+      const gy = w.heightAt(Math.max(x, game.bike.x - 110));
+      // small stones bounce, the big ones roll; spread a little in depth so the slide has volume
+      const hop = moving ? Math.abs(Math.sin(t * (rk.r < 1 ? 6 : 2.5) + rk.ph)) * (rk.r < 1 ? 1.4 : 0.35) : 0;
+      m.visible = true;
+      m.scale.set(rk.r, rk.r, rk.r * 0.8);
+      m.position.set(x, gy + rk.r * 0.9 + hop, -0.2 - (i % 3) * 0.35 * Math.min(1, rk.r));
+      m.rotation.set(rk.ph, rk.ph * 0.5, -x / rk.r);
     });
   }
 
