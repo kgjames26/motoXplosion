@@ -266,8 +266,16 @@ export class World {
   }
 
   /** Drop data far behind the player to bound memory. */
+  /** v2.79: world x below which the samples have been dropped (trim). */
+  loadedFrom = -Infinity;
+  /** Visual height at x, or null when that stretch is already dropped behind (never a fake 0). */
+  visualIfLoaded(x: number): number | null {
+    return x < this.loadedFrom + DX * 2 ? null : this.visualAt(x);
+  }
+
   trim(xBehind: number): void {
     const minChunk = Math.floor(xBehind / DX / CHUNK_SAMPLES) - 1;
+    this.loadedFrom = Math.max(this.loadedFrom, minChunk * CHUNK_SAMPLES * DX);
     for (const k of this.chunks.keys()) if (k < minChunk) this.chunks.delete(k);
     const minX = minChunk * CHUNK_SAMPLES * DX;
     if (this.props.length && this.props[0].x < minX) this.props = this.props.filter((p) => p.x >= minX);

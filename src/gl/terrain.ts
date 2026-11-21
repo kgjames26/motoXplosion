@@ -52,9 +52,28 @@ function smoothVisual(w: World, x: number): number {
 /** Set by the builder: shape of the hills (dunes in the desert). */
 let hillKind: TerrainStyle['kind'] = 'green';
 
+/**
+ * v2.79: upper envelope of the track around x (highest ground within ±70 m). On a long climb or descent
+ * the hills behind rise to the mountainside instead of dipping with the track, so no bare band ever
+ * opens between them and the painted backdrop (which stays put on screen). Flat ground: no change.
+ */
+function envelope(w: World, x: number): number {
+  let m = -Infinity;
+  // Envol is framed much wider (the whole jump hill): a wider envelope
+  const n = w.mode === 'envol' ? 12 : 7;
+  for (let k = -n; k <= n; k++) {
+    const v = w.visualIfLoaded(x + k * 10);
+    if (v !== null && v > m) m = v;
+  }
+  return m;
+}
+
 export function hillsY(w: World, x: number, z: number): number {
   const t = Math.min(1, Math.max(0, (FIELD_END - z) / (FIELD_END - HILLS_END)));
-  const base = smoothVisual(w, x);
+  const sv = smoothVisual(w, x);
+  const env = Math.max(sv, envelope(w, x));
+  // the back of the band follows the envelope, its front joins the field smoothly
+  const base = sv + (env - sv) * Math.min(1, t * 1.6) * (t < 0.6 ? t / 0.6 : 1);
   // Kept low and falling away in the distance so the far relief of the painted backdrop
   // (mountains, mesas) always stays visible above the hills.
   const swell = 0.5 + 1.6 * (fbm1(x / 55 + z * 0.01, 17, 3) * 0.5 + 0.5);
