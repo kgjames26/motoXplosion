@@ -141,7 +141,7 @@ export class GLRenderer {
   camY = 0;
   /** v2.74: extra framing height for Envol / Fuite (m), eased. */
   private modeZoom = 0;
-  /** v2.77: painting foot below the line of sight (far-plane units), eased. */
+  /** v2.77: painting foot relative to the line of sight (far-plane units), eased. */
   private footOff: number | null = null;
   private time = 0;
   private W = 1;
@@ -825,21 +825,25 @@ export class GLRenderer {
     const scale = d / D; // world units per "screen unit at z = 0"
     const screenH = visH * scale;
     const aspect = this.W / this.H;
-    const imgH = (0.2 * screenH) / (1 - bd.horizon);
-    const imgW = imgH * bd.aspect;
+    let imgH = (0.2 * screenH) / (1 - bd.horizon);
+    const imgW = imgH * bd.aspect; // horizontal tiling keeps the painting's own proportions
     const planeW = screenH * aspect * 1.25;
     const centerY = this.camera.position.y + (this.camY - this.camera.position.y) * scale; // line of sight
-    // v2.77: on a steep descent (Envol, Fuite) the ground runs diagonally across the screen and dips far
-    // below the painting's foot, leaving a bare band and a misplaced horizon. The foot follows the lowest
-    // ground in view instead (projected onto the far plane), never above its usual place.
-    const visW = visH * aspect;
-    let minG = Infinity;
-    for (let k = 0; k <= 24; k++) minG = Math.min(minG, w.visualAt(this.camX - visW * 0.6 + (visW * 1.2 * k) / 24));
+    // v2.78: whatever the altitude change (all modes), the painting's foot follows the ground around
+    // the camera (projected onto the far plane), and the painting is stretched upward when needed so its
+    // top edge never shows inside the screen (it used to cut the sky in two on long climbs or descents).
+    let gC = 0;
+    for (let k = -3; k <= 3; k++) gC += w.visualAt(this.camX + k * 5);
+    gC /= 7;
     const camPY = this.camera.position.y;
-    const terrFoot = camPY + (minG + 1.2 - camPY) * scale;
-    const footT = Math.min(centerY + screenH * (0.5 - 0.37), terrFoot) - centerY;
+    const groundFoot = camPY + (gC + 1.2 - camPY) * scale - centerY;
+    // never stretched more than 1.5× (the mountains would look tall): the foot rises instead
+    // (+0.10 screen: on flat ground the foot stays exactly where it always was, 0.13 above the centre)
+    const footT = Math.max(Math.min(screenH * 0.3, groundFoot + screenH * 0.1), screenH * 0.54 - imgH * 1.5);
     this.footOff = this.footOff === null || Math.abs(this.footOff - footT) > screenH ? footT : approach(this.footOff, footT, 4, this.frameDt);
     const bottomY = centerY + this.footOff;
+    const screenTop = centerY + screenH * 0.5;
+    imgH = Math.max(imgH, screenTop - bottomY + screenH * 0.04);
     this.backdrop.scale.set(planeW, imgH, 1);
     this.backdrop.position.set(this.camX, bottomY + imgH / 2, -dist);
     bd.tex.repeat.set(planeW / imgW, 1);
@@ -849,8 +853,8 @@ export class GLRenderer {
     this.fade.visible = this.fadeT > 0 && !!this.fadeBd;
     if (this.fade.visible && this.fadeBd) {
       const fb = this.fadeBd;
-      const fH = (0.2 * screenH) / (1 - fb.horizon);
-      const fW = fH * fb.aspect;
+      const fW = ((0.2 * screenH) / (1 - fb.horizon)) * fb.aspect;
+      const fH = Math.max((0.2 * screenH) / (1 - fb.horizon), screenTop - bottomY + screenH * 0.04);
       this.fade.scale.set(planeW, fH, 1);
       this.fade.position.set(this.camX, bottomY + fH / 2, -dist + 2);
       fb.tex.repeat.set(planeW / fW, 1);
