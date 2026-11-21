@@ -15,9 +15,13 @@ export function isCircuitMode(m: ModeId): m is CircuitMode {
   return m === 'trial' || m === 'enduro' || m === 'course';
 }
 
-/** 0 (circuit 1) → 1 (circuit 25). */
+/** Steepness of the difficulty curve: > 1 means gentle first circuits, hard last ones. */
+export const GRADE_CURVE = 1.6;
+
+/** 0 (circuit 1) → 1 (circuit 30), accelerating: circuit 10 ≈ 0.15, 20 ≈ 0.50, 30 = 1. */
 export function circuitGrade(n: number): number {
-  return Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1)));
+  const lin = Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1)));
+  return Math.pow(lin, GRADE_CURVE);
 }
 
 const MODE_SALT: Record<CircuitMode, number> = { trial: 0x7a11, enduro: 0x3d0e, course: 0x9c3b };
@@ -56,7 +60,8 @@ export function circuitRaceLevel(n: number): number {
 export function trialRockRange(n: number, diff = 0): [number, number] {
   // never higher than what the bike expected at this circuit climbs in this weather
   // v2.18: bigger from the start, close to what the bike can do
-  const cap = rockClimb(expectedBike(n, true).id, diff) - 0.1;
+  // v2.65: high circuits may go past the expected bike (needs a better bike or upgrades there)
+  const cap = rockClimb(expectedBike(n, true).id, diff) - 0.1 + Math.pow(circuitGrade(n), 2) * 0.2;
   const hi = Math.min(2.5, cap, (0.95 + circuitGrade(n) * 1.9) * OBSTACLE_SCALE[diff]);
   return [Math.max(0.6, hi - 0.45), Math.max(0.6, hi)];
 }
@@ -106,7 +111,7 @@ export function circuitKey(mode: CircuitMode, region: RegionId, n: number, d: Di
 }
 
 /** Cruising: distance (m) to ride in a difficulty to unlock the next one. */
-export const CRUISE_UNLOCK = 2000;
+export const CRUISE_UNLOCK = 1000; // v2.65: was 2000 (too long before the next difficulty)
 
 export function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
