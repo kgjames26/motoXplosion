@@ -1,6 +1,8 @@
 import { outfitById, type Outfit } from '../outfits';
 import { Backdrop, paintPanorama, panoramaAt } from './panoramas';
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { noise3, rockCanvases } from './rockTex';
 import type { Assets } from '../assets';
 import { approach, clamp } from '../core/math';
 import type { Game } from '../game';
@@ -631,9 +633,44 @@ export class GLRenderer {
     this.updatePopups(game);
   }
 
-  /** v2.70 Fuite (v2.74: a whole rockslide): the stones chasing the rider, built on first use. */
+  /** v2.70 Fuite (v2.74: a whole rockslide, v2.76: modelled boulders with a granite texture). */
   private rockGroup: THREE.Group | null = null;
   private rockMeshes: THREE.Mesh[] = [];
+  private rockGeos: THREE.BufferGeometry[] = [];
+  private rockMats: THREE.MeshStandardMaterial[] = [];
+  /** A boulder: a sphere roughened by noise, cut by a few flat faces (split stone), a flatter base. */
+  private makeRockGeo(seed: number): THREE.BufferGeometry {
+    let geo: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, 4);
+    geo.deleteAttribute('normal');
+    geo.deleteAttribute('uv');
+    geo = mergeVertices(geo);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const uv = new Float32Array(pos.count * 2);
+    // a few cutting planes: the flat, broken faces of a real rock
+    const planes: { n: THREE.Vector3; d: number }[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = noise3(seed * 3.1, i * 7.7, 1.3, seed) * Math.PI * 2;
+      const b = (noise3(i * 5.3, seed * 1.7, 4.1, seed) - 0.5) * Math.PI;
+      planes.push({ n: new THREE.Vector3(Math.cos(a) * Math.cos(b), Math.sin(b), Math.sin(a) * Math.cos(b)), d: 0.78 + noise3(i, seed, 9, seed) * 0.14 });
+    }
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+      uv[i * 2] = Math.atan2(v.z, v.x) / (Math.PI * 2) + 0.5;
+      uv[i * 2 + 1] = Math.acos(Math.max(-1, Math.min(1, v.y))) / Math.PI;
+      let r = 1 + (noise3(v.x * 1.6 + seed, v.y * 1.6, v.z * 1.6, seed) - 0.5) * 0.42 + (noise3(v.x * 4.5, v.y * 4.5 + seed, v.z * 4.5, seed + 1) - 0.5) * 0.12;
+      for (const p of planes) {
+        const c = v.dot(p.n);
+        if (c > 0.05) r = Math.min(r, p.d / c);
+      }
+      let y = v.y * r * 0.84;
+      y = Math.max(y, -0.72); // sits on its base
+      pos.setXYZ(i, v.x * r * (1 + noise3(seed, 2, 3, seed) * 0.25), y, v.z * r);
+    }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.computeVertexNormals();
+    return geo;
+  }
   private updateRock(game: Game): void {
     if (game.mode !== 'fuite' || !game.rocks.length) {
       if (this.rockGroup) this.rockGroup.visible = false;
@@ -642,19 +679,20 @@ export class GLRenderer {
     if (!this.rockGroup) {
       this.rockGroup = new THREE.Group();
       this.scene.add(this.rockGroup);
+      const tex = rockCanvases(7);
+      const map = new THREE.CanvasTexture(tex.map);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.wrapS = map.wrapT = THREE.RepeatWrapping;
+      map.anisotropy = 4;
+      const bump = new THREE.CanvasTexture(tex.bump);
+      bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+      for (const tint of [0xffffff, 0xe6ddd2, 0xd2d6da, 0xf2e6d4]) this.rockMats.push(new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 3, color: tint, roughness: 0.92, metalness: 0 }));
+      for (let k = 0; k < 5; k++) this.rockGeos.push(this.makeRockGeo(k * 13 + 3));
     }
     const g = this.rockGroup;
     while (this.rockMeshes.length < game.rocks.length) {
       const i = this.rockMeshes.length;
-      const shade = [0x8a7f72, 0x7a7065, 0x968a7a, 0x6d645a][i % 4];
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: shade, roughness: 0.95, metalness: 0, flatShading: true }));
-      // a rough, uneven stone: every vertex pushed in or out by a fixed amount
-      const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-      for (let k = 0; k < pos.count; k++) {
-        const f = 0.82 + 0.34 * Math.abs(Math.sin(k * 12.9898 + i * 4.1));
-        pos.setXYZ(k, pos.getX(k) * f, pos.getY(k) * f, pos.getZ(k) * f);
-      }
-      m.geometry.computeVertexNormals();
+      const m = new THREE.Mesh(this.rockGeos[i % this.rockGeos.length], this.rockMats[(i * 3) % this.rockMats.length]);
       g.add(m);
       this.rockMeshes.push(m);
     }
@@ -675,11 +713,12 @@ export class GLRenderer {
       // small stones bounce, the big ones roll; spread a little in depth so the slide has volume
       const hop = moving ? Math.abs(Math.sin(t * (rk.r < 1 ? 6 : 2.5) + rk.ph)) * (rk.r < 1 ? 1.4 : 0.35) : 0;
       m.visible = true;
-      m.scale.set(rk.r, rk.r, rk.r * 0.8);
+      m.scale.set(rk.r, rk.r, rk.r * 0.85);
       // a new slide comes down from the mountainside (from above), the small stones first
       const drop = game.rockDrop > 0 ? game.rockDrop * game.rockDrop * (16 + (i % 4) * 3) : 0;
       m.position.set(x, gy + rk.r * 0.9 + hop + drop, -0.2 - (i % 3) * 0.35 * Math.min(1, rk.r));
-      m.rotation.set(rk.ph, rk.ph * 0.5, -x / rk.r);
+      // rolling forward (the stones keep their own tilt)
+      m.rotation.set(rk.ph * 0.6, rk.ph * 1.7, -x / rk.r);
     });
   }
 
