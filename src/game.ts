@@ -459,6 +459,13 @@ export class Game {
       inp.balance = clamp(err * 2.5 + bike.omega * 0.35, -1, 1);
     }
     if (this.usesEnergy && this.fuel <= 0) inp.throttle = 0;
+    // Envol: in flight the bike is gently pulled in line with the landing slope, so a good jump
+    // does not end in a fall for lack of fine pitch control (the player's input still counts)
+    if (this.mode === 'envol' && this.envolState === 'flight' && !bike.grounded && this.crashTimer <= 0) {
+      const err = wrapAngle(bike.angle - this.world.slopeAt(bike.x + Math.max(1, bike.vx * 0.4)));
+      const assist = clamp(err * 2.2 + bike.omega * 0.35, -1, 1);
+      inp.balance = clamp(inp.balance * 0.5 + assist * 0.8, -1, 1);
+    }
     if (this.crashTimer > 0 || this.finished) {
       inp.throttle = this.finished ? 0.15 : 0;
       inp.balance = 0;

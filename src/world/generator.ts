@@ -12,6 +12,9 @@ import { J, jumpLength, jumpProfile, type JumpSpec } from '../mx/jumps';
 import { MX_CRUISE_LOOP, MX_ENTRY, MX_FEATURES, MX_FEATURES_CRUISE, MX_LEN, MX_STRAIGHT, mxBase, mxCircuit, mxPathHeight, mxZoneLenOf, setMxCircuit } from '../mx/track';
 import { expectedBike, moduleClimb } from '../bikes';
 
+/** Envol track shape (v2.68). Exported so it can be tuned (and swept in simulation). */
+export const ENVOL_TRACK = { runLen: 520, s0: 0.1, s1: 0.36, humps: [260, 340, 420], Hk: 2.5, Lk: 12, kickPow: 1.2, sLand: 0.85, extra: 1.5, decay: 320 };
+
 /**
  * A terrain segment: a height profile relative to the height at its start.
  * Segments are chained so the track is always continuous.
@@ -947,10 +950,11 @@ export class Generator {
    */
   private buildEnvol(): Segment[] {
     const r = this.rng;
+    const T = ENVOL_TRACK;
     // --- the run-up: a high hill, ever steeper, easing out at the bottom
-    const L = 380, s0 = 0.1, s1 = 0.3, easeOut = 70;
+    const L = T.runLen, s0 = T.s0, s1 = T.s1, easeOut = 70;
     const down = this.integrateSlope(L, (t) => -(s0 + (s1 - s0) * (t / L)) * smoothstep((L - t) / easeOut));
-    const humps = [175, 235, 295].map((c) => ({ c: c + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
+    const humps = T.humps.map((c) => ({ c: c * (L / 380) + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
     const hump = (t: number) => {
       let h = 0;
       for (const b of humps) {
@@ -961,13 +965,13 @@ export class Generator {
     };
     const run: Segment = { len: L, shape: (t) => down(t) + hump(t), surface: () => Surface.Dirt, noPickup: [[0, L]], props: 0.5 };
     // --- the kicker, then the landing slope (steep, long) and the run-out
-    const Hk = 4.5, Lk = 12, sLand = 0.55, Lland = 520, easeL = 90, Lrun = 2500;
+    const { Hk, Lk, kickPow, sLand, extra, decay } = T;
+    const Lland = 520, easeL = 90, Lrun = 2500;
     // the ground falls away steeply right after the lip, then settles on the landing slope: a long hang time
-    const extra = 1.0, decay = 200;
     const land = this.integrateSlope(Lland + Lrun, (u) => (u < Lland ? -(sLand + extra * Math.exp(-u / decay)) * smoothstep((Lland - u) / easeL) : 0), 0.5);
     const kicker: Segment = {
       len: Lk + Lland + Lrun,
-      shape: (t) => (t < Lk ? Hk * Math.pow(t / Lk, 1.7) : Hk + land(t - Lk)),
+      shape: (t) => (t < Lk ? Hk * Math.pow(t / Lk, kickPow) : Hk + land(t - Lk)),
       surface: () => Surface.Dirt,
       noPickup: [[0, Lk + Lland + Lrun]],
       props: 0.3,
