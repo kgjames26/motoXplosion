@@ -344,6 +344,7 @@ export class Game {
     this.penalty = 0;
     this.falls = 0;
     this.cruiseLevel = 0;
+    this.world.cruiseAssist = 0;
     this.cruiseCoins = 0;
     this.cruiseLastDist = 0;
     this.finished = false;
@@ -488,6 +489,7 @@ export class Game {
       const cp = Math.floor(this.distance / CHECKPOINT_EVERY);
       if (cp > this.lastCheckpoint) {
         this.lastCheckpoint = cp;
+        this.world.cruiseAssist = Math.max(0, this.world.cruiseAssist - 0.2); // clean 500 m: back toward normal
         if (this.cruiseMult < CRUISE_MAX) this.cruiseLevel++;
         this.popup(bike.x + 2, bike.y + 2.5, `${cp * CHECKPOINT_EVERY} m !  BONUS ×${fmtMult(this.cruiseMult)}`, '#ffd23f');
         this.events.checkpoint = true;
@@ -1485,6 +1487,8 @@ export class Game {
       this.penalty += TRIAL_PENALTY;
       this.popup(hx, hy + 1.5, `CHUTE  +${TRIAL_PENALTY} s`, '#ff6b5a');
     } else this.popup(hx, hy + 1.5, 'CHUTE !', '#ff6b5a');
+    // v2.65: a quiet assist, three falls in a short time make the terrain ahead noticeably gentler
+    if (this.mode === 'cruising') this.world.cruiseAssist = Math.min(1, this.world.cruiseAssist + 0.34);
     if (this.mode === 'cruising' && this.cruiseLevel > 0) {
       this.cruiseLevel--;
       this.popup(hx, hy + 2.3, `BONUS ×${fmtMult(this.cruiseMult)}`, '#ffb070');

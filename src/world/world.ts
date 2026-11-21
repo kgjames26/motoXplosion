@@ -135,6 +135,11 @@ export class World {
 
   /** Cruising: the weather changes along the ride (every 2000 m). */
   dynamic = false;
+  /**
+   * Cruising (v2.65): quiet assist 0..1. It rises with each fall and fades with clean kilometres;
+   * the terrain generated from then on is gentler. The player is never told.
+   */
+  cruiseAssist = 0;
   /** Tyre sets owned (dynamic weather picks the right one on the fly). */
   tyres: string[] = [];
 
