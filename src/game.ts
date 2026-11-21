@@ -4,7 +4,7 @@ import type { PlayerState } from './net/multi';
 import { bikeById, BikeModel, BIKES } from './bikes';
 import { clamp, GRAVITY_SCALE, Rng, wrapAngle } from './core/math';
 import { ENVOL_TRACK } from './world/generator';
-import { CircuitMode, fuitePlan, FUITE_VIEW, RockPlan, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
+import { CircuitMode, fuitePlan, FUITE_VIEW, FUITE_WAYPOINT, RockPlan, circuitGrade, circuitLength, circuitRaceLevel, circuitSeed, isCircuitMode, Medal, medalForPlace, medalForTime, trialZones } from './circuits';
 import { Difficulty, ModeId, raceLength } from './modes';
 import { rockCapacity } from './climb';
 import { diffIndex, tyreBonus, Weather, weatherFor } from './weather';
@@ -188,6 +188,9 @@ export class Game {
   /** 0 = none, 1 = a surge has been announced, 2 = surge under way. */
   rockSurge = 0;
   rockCaught = false;
+  /** Fuite: 1 → 0 while a new slide falls into place (drawn coming down from above). */
+  rockDrop = 0;
+  private rockWave = 0;
   private rockT = 0;
   private rockPlan: RockPlan | null = null;
   private rockWarned = new Set<number>();
@@ -392,7 +395,13 @@ export class Game {
     this.rockT = 0;
     this.rockSurge = 0;
     this.rockCaught = false;
+    this.rockDrop = 0;
+    this.rockWave = 0;
     this.rockWarned.clear();
+    if (this.rockPlan) {
+      // the waypoints, shown along the track like the enduro control points
+      for (let k = 1; this.startX + k * FUITE_WAYPOINT < this.world.finishX - 60; k++) this.world.marks.push({ x0: this.startX + k * FUITE_WAYPOINT, x1: this.startX + k * FUITE_WAYPOINT + 2, kind: 'checkpoint', n: k });
+    }
     this.cruiseLastDist = 0;
     this.finished = false;
     this.finishOrder = [];
@@ -822,9 +831,19 @@ export class Game {
       const ramp = Math.min(1, this.rockT / 4);
       let v = plan.v * k * (0.5 + 0.5 * ramp * ramp * (3 - 2 * ramp));
       if (this.rockT < 1) v = 0;
-      // v2.74: never further than FUITE_VIEW behind (always on screen), slower while the rider is down
-      if (this.rockGap > FUITE_VIEW) v = Math.max(v, bike.vx + (this.rockGap - FUITE_VIEW) * 2);
-      if (this.crashTimer > 0) v *= 0.4;
+      // v2.75: the slide follows its own script only (it never adapts to the rider's speed); at every
+      // waypoint, if the rider has left it far behind, a new slide comes down the mountain just behind him
+      const wp = Math.floor((bike.x - this.startX) / FUITE_WAYPOINT);
+      if (wp > this.rockWave) {
+        this.rockWave = wp;
+        if (this.rockGap > FUITE_VIEW + 8) {
+          this.rockX = bike.x - 0.9 - FUITE_VIEW;
+          this.rockDrop = 1;
+          this.popup(bike.x + 2, bike.y + 3.4, 'NOUVEL ÉBOULEMENT !', '#ff9a5a');
+          this.events.weak = true;
+        }
+      }
+      if (this.rockDrop > 0) this.rockDrop = Math.max(0, this.rockDrop - dt * 0.9);
       this.rockV = v;
       this.rockX += v * dt;
       // dust and gravel thrown up by the slide

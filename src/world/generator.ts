@@ -15,7 +15,7 @@ import { expectedBike, moduleClimb } from '../bikes';
 /** Envol track shape (v2.68). Exported so it can be tuned (and swept in simulation). */
 // v2.74: longer, steeper in-run; the landing hill of a ski jump: a gentle knoll after the lip, then a
 // slope that follows the flight a few metres below the rider (vRef = speed it is drawn for), never steeper than sMax
-export const ENVOL_TRACK = { runLen: 640, s0: 0.1, s1: 0.5, humps: [0.4, 0.55, 0.7], Hk: 2.5, Lk: 12, kickPow: 1.2, vRef: 29, clr0: 1.2, clrK: 0.03, sMax: 1.0, knoll: 0.25, Lsteep: 430, glide: 0.45 };
+export const ENVOL_TRACK = { runLen: 640, s0: 0.1, s1: 0.5, nHumps: 5, hMin: 2.0, hMax: 3.2, Hk: 2.5, Lk: 12, kickPow: 1.2, vRef: 27, clr0: 1.2, clrK: 0.03, sMax: 1.0, knoll: 0.25, Lsteep: 430, glide: 0.45 };
 // glide: gravity multiplier in the air after the lip (a ski jumper's gliding flight)
 
 /**
@@ -989,16 +989,34 @@ export class Generator {
   private buildEnvol(): Segment[] {
     const r = this.rng;
     const T = ENVOL_TRACK;
-    // --- the run-up: a high hill, ever steeper, easing out at the bottom
+    // --- the run-up (v2.75): a steep start, then a gentler rhythm section with big humps to take
+    // exactly right (absorb or jump them onto their back side: a wrong hit costs speed or a fall),
+    // then the final steep ramp down to the table
     const L = T.runLen, s0 = T.s0, s1 = T.s1, easeOut = 70;
-    const down = this.integrateSlope(L, (t) => -(s0 + (s1 - s0) * (t / L)) * smoothstep((L - t) / easeOut));
-    // v2.74: hump centres as fractions of the run (they used to land past its end and break the track)
-    const humps = T.humps.map((f) => ({ c: f * L + r.range(-6, 6), h: r.range(0.9, 1.25), w: r.range(15, 19) }));
+    const L1 = L * 0.34, L2 = L * 0.41;
+    const sMid = 0.14;
+    const down = this.integrateSlope(L, (t) => {
+      let sl: number;
+      if (t < L1) sl = s0 + (0.42 - s0) * smoothstep(t / L1);
+      else if (t < L1 + L2) sl = 0.42 + (sMid - 0.42) * smoothstep((t - L1) / 35);
+      else sl = sMid + (s1 - sMid) * smoothstep((t - L1 - L2) / 60);
+      return -sl * smoothstep((L - t) / easeOut);
+    });
+    const humps: { c: number; h: number; w: number }[] = [];
+    let hx = L1 + 45;
+    for (let i = 0; i < T.nHumps; i++) {
+      const w = r.range(20, 27);
+      humps.push({ c: hx + w / 2, h: r.range(T.hMin, T.hMax), w });
+      hx += w + r.range(16, 26);
+    }
     const hump = (t: number) => {
       let h = 0;
       for (const b of humps) {
         const u = (t - (b.c - b.w / 2)) / b.w;
-        if (u > 0 && u < 1) h += b.h * Math.sin(Math.PI * u) ** 2;
+        if (u <= 0 || u >= 1) continue;
+        // steeper take-off face, longer back side to land on
+        const a = 0.42;
+        h += u < a ? b.h * Math.sin((Math.PI / 2) * (u / a)) ** 2 : b.h * Math.cos((Math.PI / 2) * ((u - a) / (1 - a))) ** 2;
       }
       return h;
     };
@@ -1006,7 +1024,7 @@ export class Generator {
     // (they show the line to take), more scenery on the sides, and the speed is shown at every hump
     const F = (t: number) => down(t) + hump(t);
     const cuts = [0];
-    for (const b of humps) cuts.push(b.c - b.w / 2 - 12, b.c + b.w / 2 + 12);
+    for (const b of humps) cuts.push(b.c - b.w / 2 - 6, b.c + b.w / 2 + 6); // humps are ≥ 16 m apart: no overlap
     cuts.push(L);
     const runPieces: Segment[] = [];
     for (let k = 0; k + 1 < cuts.length; k++) {

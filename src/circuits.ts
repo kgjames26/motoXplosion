@@ -47,8 +47,8 @@ export function circuitLength(mode: CircuitMode, n: number): number {
 /**
  * Fuite (v2.70, v2.74): a rockslide chasing the rider. Same plan every time for a level: the front
  * of the slide starts gap0 m behind, rolls at v (m/s), with a few announced surges (progress range
- * 0..1 and speed factor). v2.74: the slide never drops more than FUITE_VIEW m behind (it stays on
- * screen, at the left edge) and it slows down while the rider is on the ground after a fall.
+ * 0..1 and speed factor). v2.75: its speed never depends on the rider; at each waypoint a rider who
+ * left it far behind gets a new slide FUITE_VIEW m behind him.
  * rocks = the stones of the slide: metres behind the front, radius, bounce phase.
  */
 export interface RockPlan {
@@ -59,11 +59,13 @@ export interface RockPlan {
 }
 /** The slide is held at most this far behind the rider (m): always in view. */
 export const FUITE_VIEW = 20;
+/** v2.75: every FUITE_WAYPOINT m a waypoint; a rider far ahead of the slide gets a new one just behind. */
+export const FUITE_WAYPOINT = 250;
 export function fuitePlan(n: number): RockPlan {
   const g = circuitGrade(n);
   const lin = Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1)));
   const surges: [number, number, number][] = [];
-  if (n >= 6) surges.push([0.45, 0.53, 1.06]);
+  if (n >= 6 && n < 24) surges.push([0.45, 0.53, 1.06]);
   if (n >= 14) surges.push([0.75, 0.82, 1.1]);
   if (n >= 24) surges.push([0.25, 0.31, 1.06]);
   surges.sort((a, b) => a[0] - b[0]);
@@ -76,8 +78,8 @@ export function fuitePlan(n: number): RockPlan {
   return { gap0: FUITE_VIEW + 4, v: FUITE_V0 + (lin + g) * 0.5 * FUITE_V1, surges, rocks };
 }
 /** Slide speed (m/s): level 1, and how much more at level 30 (see the simulation). */
-export const FUITE_V0 = 10.5;
-export const FUITE_V1 = 9;
+export const FUITE_V0 = 15;
+export const FUITE_V1 = 6.5;
 /** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
 export const FUITE_GOLD = 21;
 

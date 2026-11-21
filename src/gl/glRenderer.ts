@@ -676,7 +676,9 @@ export class GLRenderer {
       const hop = moving ? Math.abs(Math.sin(t * (rk.r < 1 ? 6 : 2.5) + rk.ph)) * (rk.r < 1 ? 1.4 : 0.35) : 0;
       m.visible = true;
       m.scale.set(rk.r, rk.r, rk.r * 0.8);
-      m.position.set(x, gy + rk.r * 0.9 + hop, -0.2 - (i % 3) * 0.35 * Math.min(1, rk.r));
+      // a new slide comes down from the mountainside (from above), the small stones first
+      const drop = game.rockDrop > 0 ? game.rockDrop * game.rockDrop * (16 + (i % 4) * 3) : 0;
+      m.position.set(x, gy + rk.r * 0.9 + hop + drop, -0.2 - (i % 3) * 0.35 * Math.min(1, rk.r));
       m.rotation.set(rk.ph, rk.ph * 0.5, -x / rk.r);
     });
   }
