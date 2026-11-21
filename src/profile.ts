@@ -42,6 +42,8 @@ export interface Profile {
   totalDist: number;
   /** v2.15 gadgets bought in the garage (cruise control). */
   gear: string[];
+  /** v2.77 Envol: the 5 longest jumps (m), with their date (ISO) and bike id. Absent in older saves. */
+  envolTop?: { d: number; date: string; bike: string }[];
 }
 
 const KEY = 'mx.profile.v1';

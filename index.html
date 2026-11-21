@@ -313,6 +313,7 @@
             <div class="new-record hidden" id="over-record">NOUVEAU RECORD !</div>
             <div class="over-medal hidden" id="over-medal"></div>
             <ol class="standings panel hidden" id="over-standings"></ol>
+            <div class="panel envol-top over-envol hidden" id="over-envol"><h3>Mes 5 meilleurs sauts</h3><table id="over-envol-top"></table></div>
           </div>
           <div class="over-coins panel">
             <h3><i class="coin-ico"></i> Gains</h3>
@@ -327,6 +328,21 @@
           <button class="btn-primary hidden" id="btn-next">SUIVANT <svg viewBox="0 0 24 24"><path d="M6 5v14l9-7zM16 5h3v14h-3z" /></svg></button>
           <button class="btn-secondary" id="btn-garage2">GARAGE</button>
           <button class="btn-secondary" id="btn-home2">ACCUEIL</button>
+        </div>
+      </div>
+
+      <div id="screen-envol" class="screen hidden">
+        <div class="garage-top">
+          <button class="btn-secondary" id="btn-envol-back">‹ RETOUR</button>
+          <div class="circ-title"><b>Envol</b><span>Record de saut</span></div>
+          <div></div>
+        </div>
+        <div class="envol-body">
+          <div class="panel envol-top">
+            <h3>Mes 5 meilleurs sauts</h3>
+            <table id="envol-top"></table>
+          </div>
+          <button class="btn-primary circ-go" id="btn-envol-go"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg> PARTIR</button>
         </div>
       </div>
 

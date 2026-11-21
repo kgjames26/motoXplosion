@@ -141,6 +141,8 @@ export class GLRenderer {
   camY = 0;
   /** v2.74: extra framing height for Envol / Fuite (m), eased. */
   private modeZoom = 0;
+  /** v2.77: painting foot below the line of sight (far-plane units), eased. */
+  private footOff: number | null = null;
   private time = 0;
   private W = 1;
   private H = 1;
@@ -827,7 +829,17 @@ export class GLRenderer {
     const imgW = imgH * bd.aspect;
     const planeW = screenH * aspect * 1.25;
     const centerY = this.camera.position.y + (this.camY - this.camera.position.y) * scale; // line of sight
-    const bottomY = centerY + screenH * (0.5 - 0.37);
+    // v2.77: on a steep descent (Envol, Fuite) the ground runs diagonally across the screen and dips far
+    // below the painting's foot, leaving a bare band and a misplaced horizon. The foot follows the lowest
+    // ground in view instead (projected onto the far plane), never above its usual place.
+    const visW = visH * aspect;
+    let minG = Infinity;
+    for (let k = 0; k <= 24; k++) minG = Math.min(minG, w.visualAt(this.camX - visW * 0.6 + (visW * 1.2 * k) / 24));
+    const camPY = this.camera.position.y;
+    const terrFoot = camPY + (minG + 1.2 - camPY) * scale;
+    const footT = Math.min(centerY + screenH * (0.5 - 0.37), terrFoot) - centerY;
+    this.footOff = this.footOff === null || Math.abs(this.footOff - footT) > screenH ? footT : approach(this.footOff, footT, 4, this.frameDt);
+    const bottomY = centerY + this.footOff;
     this.backdrop.scale.set(planeW, imgH, 1);
     this.backdrop.position.set(this.camX, bottomY + imgH / 2, -dist);
     bd.tex.repeat.set(planeW / imgW, 1);

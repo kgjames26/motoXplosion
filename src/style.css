@@ -4678,3 +4678,21 @@ button.wallet {
 .title-menu .tm-row .neon-sel .ns-arrow {
   width: calc(var(--u) * 3);
 }
+
+/* v2.77 : Envol, tableau des 5 meilleurs sauts (avant le départ et sur l'écran de fin) */
+.envol-body { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 3); }
+.envol-top { padding: calc(var(--u) * 1.6) calc(var(--u) * 3); min-width: calc(var(--u) * 80); }
+.envol-top h3 { margin: 0 0 calc(var(--u) * 1) 0; font-size: calc(var(--u) * 3.2); text-align: center; }
+.envol-top table { width: 100%; border-collapse: collapse; font-size: calc(var(--u) * 2.6); }
+.envol-top td { padding: calc(var(--u) * 0.6) calc(var(--u) * 1.2); border-top: 1px solid rgba(255, 255, 255, 0.12); white-space: nowrap; }
+.envol-top td.rk { width: 1%; font-weight: 900; color: #f6c23a; }
+.envol-top td.len { font-weight: 900; text-align: right; }
+.envol-top td.date { opacity: 0.75; text-align: right; }
+.envol-top tr.you td { background: rgba(255, 210, 63, 0.22); color: #fff; }
+.envol-top tr.you td.rk::after { content: ' ◀'; }
+.envol-top tr.out td { opacity: 0.85; font-style: italic; }
+.envol-top tr.empty td { opacity: 0.45; }
+.over-envol { min-width: 0; margin-top: calc(var(--u) * 1); padding: calc(var(--u) * 1) calc(var(--u) * 2); }
+.over-envol table { font-size: calc(var(--u) * 2.1); }
+.over-envol h3 { font-size: calc(var(--u) * 2.4); }
+.envol-body .circ-go { width: auto; flex: none; min-width: calc(var(--u) * 44); padding-left: calc(var(--u) * 6); padding-right: calc(var(--u) * 6); }

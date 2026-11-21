@@ -82,7 +82,7 @@ const hud = new Hud();
 const audio = new Audio();
 audio.setVolumes(settings.music, settings.sfx);
 
-type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'stats' | 'sleep' | 'album' | 'none';
+type ScreenName = 'title' | 'pause' | 'over' | 'settings' | 'garage' | 'circuits' | 'multi' | 'champ' | 'mpwait' | 'stats' | 'sleep' | 'album' | 'envol' | 'none';
 const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   title: $('screen-title'),
   circuits: $('screen-circuits'),
@@ -96,6 +96,7 @@ const screens: Record<Exclude<ScreenName, 'none'>, HTMLElement> = {
   stats: $('screen-stats'),
   sleep: $('screen-sleep'),
   album: $('screen-album'),
+  envol: $('screen-envol'),
 };
 let garageReturn: ScreenName = 'title';
 const hudEl = $('hud');
@@ -1025,6 +1026,17 @@ function finishRun(display: boolean): void {
     }
     bestText = 'Record : ' + (profile.best[key] ?? 0).toLocaleString('fr-FR') + ' m';
   }
+  // v2.77 Envol: the personal top 5 (date, bike, length) and where this jump lands in it
+  let envolYou = -1;
+  let envolOut: number | undefined;
+  if (mode === 'envol' && r.reason === 'finish' && r.score > 0) {
+    const me = { d: r.score, date: new Date().toISOString(), bike: profile.bike };
+    const top = [...(profile.envolTop ?? []), me].sort((a, b) => b.d - a.d);
+    const idx = top.indexOf(me);
+    profile.envolTop = top.slice(0, 5);
+    if (idx < 5) envolYou = idx;
+    else envolOut = r.score;
+  }
   profile.coins += r.total;
   profile.totalEarned += r.total;
   if (!devMode) {
@@ -1049,6 +1061,9 @@ function finishRun(display: boolean): void {
   const om = $('over-medal');
   om.classList.toggle('hidden', !r.medal && !unlockMsg);
   om.innerHTML = (r.medal ? `<span>${medalIco(r.medal)} Médaille ${MEDAL_NAMES[r.medal]}</span>` : '') + (unlockMsg ? `<span class="unlock">${unlockMsg}</span>` : '');
+  const oe = $('over-envol');
+  oe.classList.toggle('hidden', mode !== 'envol');
+  if (mode === 'envol') $('over-envol-top').innerHTML = envolRows(envolYou, envolOut);
   const st = $('over-standings');
   st.classList.toggle('hidden', !r.standings);
   st.innerHTML = (r.standings ?? []).map((s) => `<li class="${s.you ? 'you' : ''}">${s.name}${s.you ? '' : `<small>Niv.${s.level}</small>`}</li>`).join('');
@@ -1089,11 +1104,34 @@ $('btn-cruising').addEventListener('click', () => {
   start();
 });
 /** Envol (v2.68): the record jump, one tap from the home screen as well. */
-$('btn-envol').addEventListener('click', () => {
+// v2.77: the personal top 5 is shown first, then PARTIR
+/** Rows of the top-5 table; `you` = index of this run's jump (or -1), `out` = this jump when outside the top 5. */
+function envolRows(you = -1, out?: number): string {
+  const top = profile.envolTop ?? [];
+  const fmtD = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const rows: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const j = top[i];
+    rows.push(j ? `<tr class="${i === you ? 'you' : ''}"><td class="rk">${i + 1}</td><td class="len">${j.d} m</td><td>${bikeById(j.bike).name}</td><td class="date">${fmtD(j.date)}</td></tr>` : `<tr class="empty"><td class="rk">${i + 1}</td><td class="len">—</td><td></td><td></td></tr>`);
+  }
+  if (out !== undefined) rows.push(`<tr class="out"><td class="rk">·</td><td class="len">${out} m</td><td colspan="2">ce saut (hors du top 5)</td></tr>`);
+  return rows.join('');
+}
+function openEnvol(): void {
   profile.mode = 'envol';
   profile.crossSel = false;
   saveP();
+  $('envol-top').innerHTML = envolRows();
+  show('envol');
+}
+$('btn-envol').addEventListener('click', openEnvol);
+$('btn-envol-go').addEventListener('click', () => {
+  profile.mode = 'envol';
   start();
+});
+$('btn-envol-back').addEventListener('click', () => {
+  refreshTitle();
+  show('title');
 });
 // ---------------------------------------------------------------- album (v2.70)
 let albumPage = 0;
@@ -1144,9 +1182,7 @@ $('album-page').addEventListener('click', (e) => {
   const r = c.req;
   profile.crossSel = false;
   if (r.kind === 'envol') {
-    profile.mode = 'envol';
-    saveP();
-    start();
+    openEnvol();
     return;
   }
   const mode: CircuitMode = r.kind === 'fuite' ? 'fuite' : r.mode;
