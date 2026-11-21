@@ -408,6 +408,103 @@ export class TerrainBuilder {
     return g;
   }
 
+  // ---- v2.80 Envol: the jump structure (wooden deck on the table and the kicker, red and white
+  // band on the lip, dark wooden fascia on the front face), laid on the track band
+  private deckMats: { deck: THREE.Material; band: THREE.Material; side: THREE.Material } | null = null;
+  private envolMats(): { deck: THREE.Material; band: THREE.Material; side: THREE.Material } {
+    if (this.deckMats) return this.deckMats;
+    const mk = (w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.Texture => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      draw(c.getContext('2d')!);
+      const tx = new THREE.CanvasTexture(c);
+      tx.colorSpace = THREE.SRGBColorSpace;
+      tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+      tx.anisotropy = 4;
+      return tx;
+    };
+    // planks across the way (u along the track: 8 planks per texture), wood grain, dark joints, nails
+    const deck = mk(256, 128, (g) => {
+      for (let p = 0; p < 8; p++) {
+        const tone = 0.86 + ((p * 37) % 7) * 0.035;
+        g.fillStyle = `rgb(${Math.round(196 * tone)},${Math.round(150 * tone)},${Math.round(98 * tone)})`;
+        g.fillRect(p * 32, 0, 32, 128);
+        for (let k = 0; k < 14; k++) {
+          g.strokeStyle = `rgba(110,70,35,${0.12 + ((k * 13 + p) % 5) * 0.03})`;
+          g.lineWidth = 1;
+          g.beginPath();
+          const x = p * 32 + 2 + ((k * 7 + p * 3) % 28);
+          g.moveTo(x, 0);
+          g.bezierCurveTo(x + 3, 40, x - 3, 90, x + 1, 128);
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(40,24,12,0.85)';
+        g.fillRect(p * 32, 0, 2, 128);
+        g.fillStyle = 'rgba(60,60,60,0.8)';
+        for (const y of [14, 64, 114]) g.fillRect(p * 32 + 5, y, 2, 2), g.fillRect(p * 32 + 25, y, 2, 2);
+      }
+      // two worn lanes where the wheels run
+      const grd = g.createLinearGradient(0, 0, 0, 128);
+      grd.addColorStop(0.42, 'rgba(0,0,0,0)');
+      grd.addColorStop(0.55, 'rgba(60,40,25,0.22)');
+      grd.addColorStop(0.68, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, 256, 128);
+    });
+    const band = mk(128, 32, (g) => {
+      for (let k = -1; k <= 8; k++) {
+        g.fillStyle = (k + 2) % 2 ? '#ffffff' : '#e8322a'; // one stripe past each edge: tiles without a seam
+        g.beginPath();
+        g.moveTo(k * 16, 0);
+        g.lineTo(k * 16 + 16, 0);
+        g.lineTo(k * 16 + 8, 32);
+        g.lineTo(k * 16 - 8, 32);
+        g.fill();
+      }
+    });
+    const side = mk(128, 64, (g) => {
+      g.fillStyle = '#5a3a22';
+      g.fillRect(0, 0, 128, 64);
+      for (let k = 0; k < 4; k++) {
+        g.fillStyle = k % 2 ? '#4c311c' : '#634029';
+        g.fillRect(0, k * 16, 128, 15);
+      }
+      g.fillStyle = '#2b1a0d';
+      for (let x = 0; x < 128; x += 32) g.fillRect(x, 0, 4, 64);
+    });
+    this.deckMats = {
+      deck: new THREE.MeshLambertMaterial({ map: deck, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      band: new THREE.MeshLambertMaterial({ map: band, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+      side: new THREE.MeshLambertMaterial({ map: side }),
+    };
+    return this.deckMats;
+  }
+  private envolDeck(w: World, x0: number, x1: number, group: THREE.Group): void {
+    const lip = w.envolLipX;
+    if (lip <= 0) return;
+    const d0 = Math.max(x0, lip - 70), d1 = Math.min(x1, lip);
+    if (d1 - d0 < 0.2) return;
+    const mats = this.envolMats();
+    const cols = Math.max(2, Math.ceil((d1 - d0) / DX) + 1);
+    const xAt = (c: number) => d0 + ((d1 - d0) * c) / (cols - 1);
+    const zs = [Z_BACK + 0.08, -0.25, Z_FRONT - 0.02];
+    // deck: u = metres along the way / 2 (8 planks of 25 cm per texture), v across
+    const deck = grid(cols, zs.length, (c, r) => [xAt(c), w.visualAt(xAt(c)) + 0.03, zs[r]], (x, _y, z) => [x / 2, (z - Z_BACK) / (Z_FRONT - Z_BACK)], () => [1, 1, 1]);
+    group.add(new THREE.Mesh(deck, mats.deck));
+    // front fascia: from the deck down 0.7 m, just in front of the track edge
+    const fas = grid(cols, 2, (c, r) => [xAt(c), w.visualAt(xAt(c)) + 0.05 - r * 0.7, Z_FRONT + 0.01], (x, y) => [x / 4, y / 0.7], () => [1, 1, 1]);
+    group.add(new THREE.Mesh(fas, mats.side));
+    // red and white band over the last 1.5 m before the lip
+    const b0 = Math.max(d0, lip - 1.5);
+    if (d1 > b0 + 0.05) {
+      const bc = Math.max(2, Math.ceil((d1 - b0) / DX) + 1);
+      const bx = (c: number) => b0 + ((d1 - b0) * c) / (bc - 1);
+      const bandG = grid(bc, 2, (c, r) => [bx(c), w.visualAt(bx(c)) + 0.04, r ? Z_FRONT - 0.02 : Z_BACK + 0.08], (_x, _y, z) => [(z - Z_BACK) * 2.5, 0.5], () => [1, 1, 1]);
+      group.add(new THREE.Mesh(bandG, mats.band));
+    }
+  }
+
   build(w: World, ci: number): ChunkVisual {
     const group = new THREE.Group();
     const i0 = ci * CHUNK_SAMPLES;
@@ -746,6 +843,7 @@ export class TerrainBuilder {
       group.add(im);
     }
     if (w.dynamic) this.dynamicWeather(w, group);
+    if (w.mode === 'envol') this.envolDeck(w, x0, x1, group);
     return { index: ci, group, anims };
   }
 }

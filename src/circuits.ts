@@ -58,7 +58,7 @@ export interface RockPlan {
   rocks: { off: number; r: number; ph: number }[];
 }
 /** The slide is held at most this far behind the rider (m): always in view. */
-export const FUITE_VIEW = 20;
+export const FUITE_VIEW = 16; // v2.80: the rider is centred again, ~20 m of view behind
 /** v2.75: every FUITE_WAYPOINT m a waypoint; a rider far ahead of the slide gets a new one just behind. */
 export const FUITE_WAYPOINT = 250;
 export function fuitePlan(n: number): RockPlan {
@@ -79,7 +79,7 @@ export function fuitePlan(n: number): RockPlan {
 }
 /** Slide speed (m/s): level 1, and how much more at level 30 (see the simulation). */
 export const FUITE_V0 = 15;
-export const FUITE_V1 = 6.5;
+export const FUITE_V1 = 5.5;
 /** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
 export const FUITE_GOLD = 21;
 

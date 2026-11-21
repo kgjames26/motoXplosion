@@ -543,14 +543,14 @@ export class GLRenderer {
     const envolAir = !title && w.mode === 'envol' && game.envolState !== 'run';
     const envolBelow = envolAir ? w.heightAt(b.x + 8) : 0;
     if (!title && w.mode === 'envol') modeH = envolAir ? clamp((b.y - envolBelow) * 1.3 + 16, 24, 62) : 16 + clamp(b.speed / 32, 0, 1) * 10;
-    else if (!title && w.mode === 'fuite') modeH = 16;
+    else if (!title && w.mode === 'fuite') modeH = 18;
     this.modeZoom = snap ? modeH : approach(this.modeZoom, modeH, 0.8, dt);
     visH = Math.max(visH, this.modeZoom);
     if (this.debugZoom) visH = this.debugZoom;
     const visW = visH * aspect;
     let lookAhead = (clamp(b.vx * 0.3, -2, 6) + visW * 0.12) * (1 - this.sunset);
     // Fuite: the rider right of centre, the slide in the left part of the screen
-    if (!title && w.mode === 'fuite') lookAhead = -visW * 0.22; // ~25 m visible behind the rider
+    if (!title && w.mode === 'fuite') lookAhead = 0; // v2.80: centred like the other modes (~20 m visible behind)
     // Envol in the air: look far down the landing hill
     if (envolAir) lookAhead = visW * 0.18;
     const tx = b.x + lookAhead;

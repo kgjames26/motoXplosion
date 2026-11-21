@@ -1063,6 +1063,8 @@ export class Generator {
         this.world.envolLipX = x0 + Lk;
       },
     };
+    // v2.80: known from the start (the jump structure is drawn before the generator reaches it)
+    this.world.envolLipX = this.segX0 + 30 + L + 45 + Lk;
     return [this.flat(30, Surface.Dirt), ...runPieces, this.flat(45, Surface.Dirt), kicker];
   }
 
