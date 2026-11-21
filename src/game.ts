@@ -124,8 +124,12 @@ const PRIZES = [80, 55, 40, 30, 22, 16, 12, 8];
 /** Trial: seconds added for each fall. */
 export const TRIAL_PENALTY = 25;
 /** Cruising: the distance bonus multiplier grows by this much each km (a fall costs one step). */
-export const CRUISE_STEP = 0.25; // per 500 m (= +0.5 per km)
-export const CRUISE_MAX = 8;
+export const CRUISE_STEP = 0.3; // per 500 m (= +0.6 per km); v2.67: was 0.25
+export const CRUISE_MAX = 12; // v2.67: was 8
+/** v2.67: lump-sum bonuses (distance in m, coins) paid once per ride when a long distance is reached without quitting. */
+export const CRUISE_MILESTONES: [number, number][] = [[1000, 150], [2000, 400], [5000, 1500], [10000, 5000], [15000, 9000], [20000, 15000]];
+/** A fall now costs this many bonus steps (was 1). */
+const CRUISE_FALL_STEPS = 2;
 /** Cruising pays more (v2.14): coins and stunts, and distance. */
 // v2.21: doubled again — cruising is where the money is made
 const CRUISE_PAY = 3.6; // v2.25: +20 %
@@ -161,6 +165,9 @@ export class Game {
   // cruising "long ride" bonus
   cruiseLevel = 0;
   cruiseCoins = 0;
+  /** Lump-sum milestone bonuses earned this ride (coins, paid as is). */
+  cruiseBonusCoins = 0;
+  private cruiseMilestone = 0;
   private cruiseLastDist = 0;
   world!: World;
   bike = new Bike();
@@ -346,6 +353,8 @@ export class Game {
     this.cruiseLevel = 0;
     this.world.cruiseAssist = 0;
     this.cruiseCoins = 0;
+    this.cruiseBonusCoins = 0;
+    this.cruiseMilestone = 0;
     this.cruiseLastDist = 0;
     this.finished = false;
     this.finishOrder = [];
@@ -485,6 +494,13 @@ export class Game {
       if (dd > 0) {
         this.cruiseCoins += (dd / 20) * this.cruiseMult;
         this.cruiseLastDist = this.distance;
+      }
+      // v2.67: milestone bonuses, a big announced payout at the long distances
+      while (this.cruiseMilestone < CRUISE_MILESTONES.length && this.distance >= CRUISE_MILESTONES[this.cruiseMilestone][0]) {
+        const [km, gain] = CRUISE_MILESTONES[this.cruiseMilestone++];
+        this.cruiseBonusCoins += gain;
+        this.popup(bike.x + 2, bike.y + 4, `${km / 1000} km !  BONUS +${gain}`, '#ffe27a');
+        this.events.checkpoint = true;
       }
       const cp = Math.floor(this.distance / CHECKPOINT_EVERY);
       if (cp > this.lastCheckpoint) {
@@ -1293,6 +1309,7 @@ export class Game {
         score = Math.round(this.distance);
         scoreLabel = `${score.toLocaleString('fr-FR')} m`;
         lines.push({ label: this.cruiseMult > 1 ? `Distance (bonus jusqu’à ×${fmtMult(this.cruiseMult)})` : 'Distance', coins: Math.floor(this.cruiseCoins * CRUISE_DIST_PAY) });
+        if (this.cruiseBonusCoins > 0) lines.push({ label: 'Bonus d’étape', coins: this.cruiseBonusCoins });
         break;
       case 'enduro':
       case 'trial':
@@ -1490,7 +1507,7 @@ export class Game {
     // v2.65: a quiet assist, three falls in a short time make the terrain ahead noticeably gentler
     if (this.mode === 'cruising') this.world.cruiseAssist = Math.min(1, this.world.cruiseAssist + 0.34);
     if (this.mode === 'cruising' && this.cruiseLevel > 0) {
-      this.cruiseLevel--;
+      this.cruiseLevel = Math.max(0, this.cruiseLevel - CRUISE_FALL_STEPS);
       this.popup(hx, hy + 2.3, `BONUS ×${fmtMult(this.cruiseMult)}`, '#ffb070');
     }
   }
