@@ -987,7 +987,20 @@ export class Generator {
       }
       return h;
     };
-    const run: Segment = { len: L, shape: (t) => down(t) + hump(t), surface: () => Surface.Dirt, noPickup: [[0, L]], props: 0.5 };
+    // v2.72: the run-up is cut into pieces around each hump: coins follow the ground over the humps
+    // (they show the line to take), more scenery on the sides, and the speed is shown at every hump
+    const F = (t: number) => down(t) + hump(t);
+    const cuts = [0];
+    for (const b of humps) cuts.push(b.c - b.w / 2 - 12, b.c + b.w / 2 + 12);
+    cuts.push(L);
+    const runPieces: Segment[] = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const a = cuts[k], len = cuts[k + 1] - a;
+      const onHump = k % 2 === 1;
+      const piece: Segment = { len, shape: (t) => F(a + t) - F(a), surface: () => Surface.Dirt, noPickup: [[0, len]], props: 1.4, coins: onHump ? 'line' : undefined };
+      if (k === 0) piece.onStart = (x0) => (this.world.envolHumps = humps.map((b) => x0 + b.c));
+      runPieces.push(piece);
+    }
     // --- the kicker, then the landing slope (steep, long) and the run-out
     const { Hk, Lk, kickPow, sLand, extra, decay } = T;
     const Lland = 520, easeL = 90, Lrun = 2500;
@@ -998,12 +1011,12 @@ export class Generator {
       shape: (t) => (t < Lk ? Hk * Math.pow(t / Lk, kickPow) : Hk + land(t - Lk)),
       surface: () => Surface.Dirt,
       noPickup: [[0, Lk + Lland + Lrun]],
-      props: 0.3,
+      props: 1.2,
       onStart: (x0) => {
         this.world.envolLipX = x0 + Lk;
       },
     };
-    return [this.flat(30, Surface.Dirt), run, this.flat(45, Surface.Dirt), kicker];
+    return [this.flat(30, Surface.Dirt), ...runPieces, this.flat(45, Surface.Dirt), kicker];
   }
 
   /**

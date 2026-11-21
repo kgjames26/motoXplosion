@@ -176,6 +176,7 @@ export class Game {
   envolSpeed = 0;
   private envolT = 0;
   private envolFx = 0;
+  private envolHumpN = 0;
   /** Fuite (v2.70): the scripted rock chasing the rider (x of its centre, radius, current speed). */
   rockX = -1e9;
   rockR = 2;
@@ -379,6 +380,7 @@ export class Game {
     this.envolSpeed = 0;
     this.envolT = 0;
     this.envolFx = 0;
+    this.envolHumpN = 0;
     this.rockPlan = this.mode === 'fuite' ? fuitePlan(this.circuit) : null;
     this.rockX = this.rockPlan ? this.startX - this.rockPlan.gap0 : -1e9;
     this.rockR = this.rockPlan?.radius ?? 2;
@@ -729,6 +731,11 @@ export class Game {
     const lip = this.world.envolLipX;
     if (this.envolState === 'run') {
       if (lip <= 0) return;
+      const hs = this.world.envolHumps;
+      if (this.envolHumpN < hs.length && bike.x >= hs[this.envolHumpN]) {
+        this.envolHumpN++;
+        this.popup(bike.x + 2, bike.y + 2.4, `BUTTE ${this.envolHumpN}/${hs.length} · ${Math.round(bike.speed * 3.6)} km/h`, '#7dff7a');
+      }
       if (bike.x >= lip - 0.5 && !bike.grounded && this.crashTimer <= 0) {
         this.envolState = 'flight';
         this.envolSpeed = Math.round(bike.speed * 3.6);
