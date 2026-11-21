@@ -324,12 +324,7 @@ function buildMxCircuits(show: boolean): void {
 function buildModes(): void {
   $('modes').innerHTML =
     MODES.filter((m) => !isSolo(m.id)).map((m) => `<button class="mode-card" data-mode="${m.id}">${MODE_ICONS[m.id]}<b>${m.name}</b><small>${MODE_SHORT[m.id]}</small><span class="medals"></span></button>`).join('') +
-    `<button class="mode-card multi" id="mode-multi"><svg viewBox="0 0 48 36" aria-hidden="true"><circle cx="15" cy="11" r="5"/><circle cx="33" cy="11" r="5"/><path d="M5 31c1-7 5-11 10-11s9 4 10 11M23 31c1-7 5-11 10-11s9 4 10 11"/></svg><b>Multijoueur</b><small>2 à 4 pilotes</small></button>` +
     `<button class="mode-card" id="mode-cross"><svg viewBox="0 0 48 36" aria-hidden="true"><path d="M4 30c6 0 8-12 14-12s6 8 12 8 6-14 14-14"/><path d="M4 33h40"/></svg><b>Circuit 3D</b><small>Style MXGP</small><span class="medals"></span></button>`;
-  $('mode-multi').addEventListener('click', () => {
-    closePickers();
-    mp.open();
-  });
   $('mode-cross').addEventListener('click', () => {
     if (!crossOpen()) {
       toast(`🔒 Circuit 3D : termine ${CROSS_UNLOCK} niveaux dans l'univers (${Math.min(universeDone(), CROSS_UNLOCK)}/${CROSS_UNLOCK}).`);
@@ -1206,6 +1201,11 @@ $('album-page').addEventListener('click', (e) => {
   openCircuits();
 });
 
+/** v2.81: Multijoueur in the left column, under Cruising, Envol and Fuite. */
+$('btn-multi').addEventListener('click', () => {
+  closePickers();
+  mp.open();
+});
 /** Fuite (v2.70): the rock chase, under Envol on the home screen. */
 $('btn-fuite').addEventListener('click', () => {
   profile.mode = 'fuite';

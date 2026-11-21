@@ -4696,3 +4696,23 @@ button.wallet {
 .over-envol table { font-size: calc(var(--u) * 2.1); }
 .over-envol h3 { font-size: calc(var(--u) * 2.4); }
 .envol-body .circ-go { width: auto; flex: none; min-width: calc(var(--u) * 44); padding-left: calc(var(--u) * 6); padding-right: calc(var(--u) * 6); }
+
+/* v2.81 : Multijoueur dans la colonne de gauche, sous Envol et Fuite */
+.title-menu #btn-multi.neon-sel {
+  margin-top: 0;
+  width: calc(var(--u) * 58);
+  min-width: 0;
+  min-height: calc(var(--u) * 10);
+  grid-template-columns: calc(var(--u) * 6.4) 1fr calc(var(--u) * 3);
+  gap: calc(var(--u) * 1.8);
+  padding-left: calc(var(--u) * 1.2);
+  padding-right: calc(var(--u) * 0.8);
+}
+.title-menu #btn-multi.neon-sel .ns-ico { width: calc(var(--u) * 6.4); height: calc(var(--u) * 6.4); background: radial-gradient(circle at 35% 30%, #d8f3ff, #3fa9e0 55%, #0d4f7a); }
+.title-menu #btn-multi.neon-sel b { font-size: calc(var(--u) * 3.6); }
+.title-menu #btn-multi.neon-sel small { font-size: calc(var(--u) * 1.7); }
+/* v2.81 : colonne plus compacte pour loger Multijoueur sans toucher la bande des mondes */
+#screen-title .title-menu { gap: calc(var(--u) * 1.3); top: calc(var(--u) * 13.5); }
+.title-menu #btn-cruising.neon-sel { min-height: calc(var(--u) * 12); grid-template-columns: calc(var(--u) * 9) 1fr calc(var(--u) * 4.2); }
+.title-menu #btn-cruising.neon-sel .ns-ico { width: calc(var(--u) * 9); height: calc(var(--u) * 9); }
+.title-menu .tm-row .neon-sel, .title-menu #btn-multi.neon-sel { min-height: calc(var(--u) * 8.6) !important; }

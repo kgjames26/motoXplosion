@@ -15,7 +15,7 @@ import { expectedBike, moduleClimb } from '../bikes';
 /** Envol track shape (v2.68). Exported so it can be tuned (and swept in simulation). */
 // v2.74: longer, steeper in-run; the landing hill of a ski jump: a gentle knoll after the lip, then a
 // slope that follows the flight a few metres below the rider (vRef = speed it is drawn for), never steeper than sMax
-export const ENVOL_TRACK = { runLen: 640, s0: 0.1, s1: 0.5, nHumps: 5, hMin: 2.0, hMax: 3.2, Hk: 2.5, Lk: 12, kickPow: 1.2, vRef: 27, clr0: 1.2, clrK: 0.03, sMax: 1.0, knoll: 0.25, Lsteep: 430, glide: 0.45 };
+export const ENVOL_TRACK = { runLen: 480, s0: 0.1, s1: 0.5, nHumps: 5, hMin: 2.0, hMax: 3.2, Hk: 2.5, Lk: 12, kickPow: 1.2, vRef: 21, clr0: 1.2, clrK: 0.03, sMax: 1.0, knoll: 0.25, Lsteep: 430, glide: 0.45 };
 // glide: gravity multiplier in the air after the lip (a ski jumper's gliding flight)
 
 /**
@@ -462,7 +462,9 @@ export class Generator {
     });
     const all = assetsFor(['trial'], 'obstacle');
     const obstacles = all.filter((a) => a.obstacle!.tier <= tierMax && !!a.obstacle!.big === circ && !a.obstacle!.rock && !a.obstacle!.module);
-    const count = circ ? 3 + Math.round(this.grade * 2 + pos) : 3 + Math.min(4, Math.floor(n / 2));
+    // v2.81: busier zones much earlier (linear with the circuit, not only with the grade)
+    const lin = circ ? (this.circuit - 1) / 29 : 0;
+    const count = circ ? 3 + Math.round(lin * 5 + pos * 2) : 3 + Math.min(4, Math.floor(n / 2));
     // circuits: mostly rocks of the world's stone, bigger with the circuit number; the last
     // zone always holds the biggest one
     const kind = rockKindFor(this.region.id);
@@ -532,11 +534,19 @@ export class Generator {
     const height = () => lo + (hi - lo) * Math.pow(r.next(), 1.3 - pos * 0.6);
     // more run-up when the ground is slippery (rain, snow): the bike needs room to get going
     const wet = [1, 1.25, 1.5][this.diff];
-    const gap = () => (r.range(1.1, 2.2) + (1 - g) * 1.5) * wet;
+    // v2.81: the level makes the zones far more complex, not just higher: tighter run-ups, chained
+    // obstacles, staircases on slopes, drops between obstacles, several module structures in a row
+    const lin = (Math.max(1, this.circuit) - 1) / 29;
+    const gap = () => (r.range(1.1, 2.2) + (1 - lin) * 1.5) * wet * (1 - lin * 0.25);
     let left = count;
     let first = true;
     while (left > 0) {
-      const p = first && n === this.trialZones ? 'single' : r.weighted(['single', 'pair', 'stair', 'slope', 'drop', 'modules', 'giant'], [2, 1 + g * 2, 0.6 + g * 2, 0.6 + g, 0.5 + g * 1.5, 3.5, 1 + g * 1.5]);
+      const p =
+        first && n === this.trialZones
+          ? 'single'
+          : r.weighted(['single', 'pair', 'stair', 'slope', 'drop', 'modules', 'giant', 'chain', 'slopeStair', 'dropPair', 'complex'], [
+              Math.max(0.2, 2 - lin * 2), 1 + lin * 2, 0.6 + lin * 2.5, 0.6 + lin, 0.5 + lin * 2, 3 - lin, 1 + g * 1.5, lin * 3, lin * 2.5, lin * 2.5, lin * 2.5,
+            ]);
       const h = first && n === this.trialZones ? hi : height();
       first = false;
       if (p === 'pair' && left >= 2) {
@@ -558,6 +568,35 @@ export class Generator {
         const L = r.range(5, 8);
         this.queue.push(this.dirt(this.slopeProfile([[L, s]], 0, 0, 2)), this.obstacleSeg(pick(Math.min(h, hi * 0.85))), this.dirt(this.slopeProfile([[L * 0.8, 0.02], [L, -s]], 0, 0, 2)));
         left--;
+      } else if (p === 'chain' && left >= 2) {
+        // v2.81: 3 to 4 obstacles in a row, very little room between them (pure control)
+        const k = Math.min(left, 3 + (lin > 0.6 ? 1 : 0));
+        for (let j = 0; j < k; j++) {
+          const hj = lo + (h - lo) * r.range(0.5, 1);
+          this.queue.push(this.obstacleSeg(pick(hj)));
+          if (j < k - 1) this.queue.push(this.flat(Math.max(0.9, (0.8 + hj * 0.9) * wet * (1 - lin * 0.2)), Surface.Dirt));
+        }
+        left -= k;
+      } else if (p === 'slopeStair' && left >= 2) {
+        // v2.81: a staircase of obstacles up a climb: no run-up speed on any of them
+        const s = r.range(0.1, 0.16);
+        const k = Math.min(left, 3);
+        this.queue.push(this.dirt(this.slopeProfile([[4, s]], 0, 0, 2)));
+        for (let j = 0; j < k; j++) {
+          const hj = lo + ((Math.min(h, hi * 0.85) - lo) * (j + 1)) / k;
+          this.queue.push(this.obstacleSeg(pick(hj)), this.dirt(this.slopeProfile([[Math.max(1.6, 1 + hj * 1.2), s]], 0, 0, 1)));
+        }
+        this.queue.push(this.dirt(this.slopeProfile([[3, 0.02], [5, -s * 1.5]], 0, 0, 2)));
+        left -= k;
+      } else if (p === 'dropPair' && left >= 2) {
+        // v2.81: up, a step down, and straight into the next obstacle
+        const D = r.range(0.5, 0.7 + lin * 0.5) * (this.diff ? 0.8 : 1);
+        this.queue.push(this.obstacleSeg(pick(h)), this.flat(1, Surface.Dirt), this.dirt(this.slopeProfile([[D / 0.9, -0.9]], 0, 0, 0.6)), this.flat(Math.max(1.6, 2.4 - lin), Surface.Dirt), this.obstacleSeg(pick(height())));
+        left -= 2;
+      } else if (p === 'complex' && left >= 2) {
+        // v2.81: two module structures back to back, then an obstacle
+        this.queue.push(this.moduleStructure(hi), this.flat(Math.max(1.4, 2.5 - lin), Surface.Dirt), this.moduleStructure(hi), this.flat(Math.max(1.4, 2.2 - lin), Surface.Dirt), this.obstacleSeg(pick(height())));
+        left -= 2;
       } else if (p === 'giant') {
         // v2.18: one big module, about as high as the bike can climb here
         const capH = Math.min(hi + 0.15, moduleClimb(expectedBike(Math.max(1, this.circuit), true).id, this.diff) - 0.1);
@@ -578,7 +617,7 @@ export class Generator {
         left--;
       }
       // a real run-up before whatever comes next (also where you restart after a fall)
-      this.queue.push(this.flat(Math.max(gap() + 1, (3.2 + hi * 0.8) * wet), Surface.Dirt));
+      this.queue.push(this.flat(Math.max(gap() + 1, (3.2 + hi * 0.8) * wet * (1 - lin * 0.2)), Surface.Dirt));
     }
     void rocks;
   }

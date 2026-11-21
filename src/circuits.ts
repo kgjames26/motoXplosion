@@ -75,17 +75,21 @@ export function fuitePlan(n: number): RockPlan {
   for (let i = 0; i < big; i++) rocks.push({ off: 3 + i * 6.5, r: 1.6 + ((i * 7) % 5) * 0.2 + lin * 0.6, ph: i * 1.3 + 0.5 });
   const small = 7 + Math.round(lin * 6);
   for (let i = 0; i < small; i++) rocks.push({ off: 1 + ((i * 37) % 23), r: 0.45 + ((i * 13) % 7) * 0.12, ph: i * 2.1 });
-  return { gap0: FUITE_VIEW + 4, v: FUITE_V0 + (lin + g) * 0.5 * FUITE_V1, surges, rocks };
+  // v2.81: hard from the start: level 5 is as fast as the old level 30, then a little more up to 30
+  const v = lin < 0.138 ? FUITE_V0 + 2 * (lin / 0.138) : FUITE_V0 + 2 + FUITE_V1 * ((lin - 0.138) / 0.862);
+  void g;
+  return { gap0: FUITE_VIEW + 4, v, surges, rocks };
 }
 /** Slide speed (m/s): level 1, and how much more at level 30 (see the simulation). */
-export const FUITE_V0 = 15;
-export const FUITE_V1 = 5.5;
+export const FUITE_V0 = 18.5;
+export const FUITE_V1 = 1.5;
 /** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
 export const FUITE_GOLD = 21;
 
 /** Trial: number of zones in the circuit (4 → 10). */
 export function trialZones(n: number): number {
-  return 4 + Math.floor(circuitGrade(n) * 6.99);
+  // v2.81: zone count grows linearly (complexity comes early, not only on the last circuits)
+  return 4 + Math.floor(Math.min(1, Math.max(0, (n - 1) / (CIRCUITS - 1))) * 6.99);
 }
 
 /** Course: opponents' championship level for a circuit (1 → 10). */
@@ -118,7 +122,7 @@ export function parTimes(mode: CircuitMode, n: number, diff = 0): { gold: number
   const g = circuitGrade(n);
   let gold: number;
   // trial: a fast, clean ride (a careful rider gets silver)
-  if (mode === 'trial') gold = (trialZones(n) * (10 + g * 14) + 6) * 0.92;
+  if (mode === 'trial') gold = (trialZones(n) * (10 + g * 14 + ((n - 1) / (CIRCUITS - 1)) * 8) + 6) * 0.92; // v2.81: busier zones
   // enduro: set for the bike the player can afford by then (see expectedBike)
   else if (mode === 'fuite') gold = circuitLength(mode, n) / FUITE_GOLD;
   else gold = circuitLength(mode, n) / (mode === 'enduro' ? 22.5 + g * 2.5 : 22);
