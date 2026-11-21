@@ -177,6 +177,8 @@ export class Game {
   private envolT = 0;
   private envolFx = 0;
   private envolHumpN = 0;
+  /** Bumped by every new run, so a delayed end never ends the next run (v2.73). */
+  private runId = 0;
   /** Fuite (v2.70): the scripted rock chasing the rider (x of its centre, radius, current speed). */
   rockX = -1e9;
   rockR = 2;
@@ -324,7 +326,7 @@ export class Game {
     this.weather = weatherFor(this.difficulty);
     this.world = new World(seed, this.region, this.mode, this.raceLevel, this.circuit, this.mode === 'cruising' ? 0 : this.weather);
     // cruising: no weather to choose, it changes by itself along the ride
-    this.world.dynamic = this.mode === 'cruising' && !opts.calm && !this.multi;
+    this.world.dynamic = (this.mode === 'cruising' || this.mode === 'fuite') && !opts.calm && !this.multi; // v2.73: Fuite = snow at the summit only
     if (this.mode === 'cruising') this.weather = 0;
     if (opts.tyres) this.tyres = opts.tyres;
     this.world.tyres = this.world.dynamic ? this.tyres : [];
@@ -381,6 +383,7 @@ export class Game {
     this.envolT = 0;
     this.envolFx = 0;
     this.envolHumpN = 0;
+    this.runId++;
     this.rockPlan = this.mode === 'fuite' ? fuitePlan(this.circuit) : null;
     this.rockX = this.rockPlan ? this.startX - this.rockPlan.gap0 : -1e9;
     this.rockR = this.rockPlan?.radius ?? 2;
@@ -717,7 +720,7 @@ export class Game {
     const t = this.chrono;
     this.popup(this.bike.x + 2, this.bike.y + 3, `ARRIVÉE !  ${fmtClock(t)}`, '#ffd23f');
     this.events.finish = 1;
-    setTimeout(() => this.endRun('finish'), 1800);
+    this.endLater('finish', 1800);
   }
 
   // ---------------------------------------------------------------- modes
@@ -780,7 +783,7 @@ export class Game {
     this.envolState = 'fail';
     this.envolDist = 0;
     this.popup(this.bike.x, this.bike.y + 3, msg, '#ff6b5a');
-    setTimeout(() => this.endRun('quit'), 1600);
+    this.endLater('quit', 1600);
   }
 
   /** Fuite: metres between the rock's front and the rider's rear wheel. */
@@ -829,7 +832,7 @@ export class Game {
         if (this.crashTimer <= 0) this.crash();
         this.popup(bike.x, bike.y + 3.2, 'ÉCRASÉ PAR LE ROCHER !', '#ff6b5a');
         this.shake = 1;
-        setTimeout(() => this.endRun('quit'), 1500);
+        this.endLater('quit', 1500);
       }
     }
     this.checkFinish();
@@ -1534,6 +1537,14 @@ export class Game {
     }
     const total = lines.reduce((a, l) => a + l.coins, 0);
     return { reason, lines, total, score, scoreLabel, newRecord: false, standings, place, time, medal, circuit: this.circuit || undefined, mx: this.mxKind ?? undefined, tricks: this.mxKind === 'tricks' ? this.mxScore : undefined };
+  }
+
+  /** End this run after a short delay (the message is read first), unless a new run started meanwhile. */
+  private endLater(reason: OverReason, ms: number): void {
+    const id = this.runId;
+    setTimeout(() => {
+      if (id === this.runId) this.endRun(reason);
+    }, ms);
   }
 
   private endRun(reason: OverReason): void {

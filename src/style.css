@@ -4643,3 +4643,38 @@ button.wallet {
   color: #7dff7a;
   font-size: calc(var(--u) * 2.2);
 }
+
+/* v2.73 : colonne de l'accueil sur 3 lignes (Garage | Album, Cruising, Envol | Fuite) pour ne pas
+   recouvrir la bande des mondes et des modes */
+.title-menu .tm-row {
+  display: flex;
+  gap: calc(var(--u) * 1.6);
+  width: calc(var(--u) * 58);
+}
+.title-menu .tm-row .neon-sel,
+.title-menu .tm-row #btn-garage.neon-sel,
+.title-menu .tm-row #btn-envol.neon-sel,
+.title-menu .tm-row #btn-fuite.neon-sel,
+.title-menu .tm-row #btn-album.neon-sel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(var(--u) * 10);
+  margin-top: 0;
+  grid-template-columns: calc(var(--u) * 6.4) 1fr calc(var(--u) * 3);
+  gap: calc(var(--u) * 1.8);
+  padding-left: calc(var(--u) * 1.2);
+  padding-right: calc(var(--u) * 0.8);
+}
+.title-menu .tm-row .neon-sel .ns-ico {
+  width: calc(var(--u) * 6.4);
+  height: calc(var(--u) * 6.4);
+}
+.title-menu .tm-row .neon-sel b {
+  font-size: calc(var(--u) * 3.6);
+}
+.title-menu .tm-row .neon-sel small {
+  display: none;
+}
+.title-menu .tm-row .neon-sel .ns-arrow {
+  width: calc(var(--u) * 3);
+}

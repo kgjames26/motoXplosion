@@ -135,26 +135,29 @@ export class World {
   }
 
   /**
-   * Fuite (v2.70): one mountain, from the snowy summit down to the city. Altitude decides the scenery
-   * (alpes → foret → sf), with patches of the next world over the last 140 m before each change.
+   * Fuite (v2.70, v2.73): one mountain, from the snowy summit down to the city. Altitude decides the
+   * scenery: 0 = snowy summit (Alpes, mountain), 1 = forest, 2 = plains (Alpes meadows), 3 = city.
    */
-  private fuiteRegionAt(x: number): RegionDef {
+  fuiteZoneAt(x: number): number {
     const L = isFinite(this.finishX) ? this.finishX : 3000;
     const f = Math.max(0, x) / L;
-    const cuts = [0.34, 0.72];
-    const ids = ['alpes', 'foret', 'sf'] as const;
-    let i = f < cuts[0] ? 0 : f < cuts[1] ? 1 : 2;
-    if (i < 2) {
-      const dist = cuts[i] * L - x;
-      if (dist < 140) {
-        const t = 1 - dist / 140;
-        const cell = Math.floor(x / 24);
-        let h = (this.seed ^ Math.imul(cell + 7, 0x27d4eb2d)) >>> 0;
-        h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
-        if (((h ^ (h >>> 13)) >>> 0) % 1000 < t * t * (3 - 2 * t) * 1000) i++;
-      }
-    }
-    return REGIONS[ids[i]];
+    return f < 0.3 ? 0 : f < 0.55 ? 1 : f < 0.78 ? 2 : 3;
+  }
+  private fuiteRegionAt(x: number): RegionDef {
+    return REGIONS[(['alpes', 'foret', 'alpes', 'sf'] as const)[this.fuiteZoneAt(x)]];
+  }
+  /** Fuite: snow on the ground at the summit, melting (wet) lower down, dry below. */
+  private fuiteWeather(x: number): { rain: number; snow: number; wet: number; snowGround: number; kind: Weather } {
+    const L = isFinite(this.finishX) ? this.finishX : 3000;
+    const f = Math.max(0, x) / L;
+    const ease = (u: number) => {
+      const c = Math.min(1, Math.max(0, u));
+      return c * c * (3 - 2 * c);
+    };
+    const snowGround = 1 - ease((f - 0.2) / 0.1);
+    const snow = (1 - ease((f - 0.12) / 0.1)) * 0.7;
+    const wet = Math.max(0, Math.min(snowGround, 1 - snowGround) * 1.2 + (f > 0.3 && f < 0.36 ? 0.4 : 0));
+    return { rain: 0, snow, wet, snowGround, kind: (snowGround > 0.5 ? 2 : 0) as Weather };
   }
 
   /** Cruising: the weather changes along the ride (every 2000 m). */
@@ -216,6 +219,7 @@ export class World {
    * gets wet, snow falls then covers the ground little by little, then melts (wet) and dries.
    */
   weatherAt(x: number): { rain: number; snow: number; wet: number; snowGround: number; kind: Weather } {
+    if (this.mode === 'fuite' && this.dynamic) return this.fuiteWeather(x);
     if (!this.dynamic) {
       const k = this.weather;
       return { rain: +(k === 1), snow: +(k === 2), wet: +(k === 1), snowGround: +(k === 2), kind: k };

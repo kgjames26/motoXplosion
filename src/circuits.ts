@@ -65,8 +65,8 @@ export function fuitePlan(n: number): RockPlan {
   if (n >= 24) surges.push([0.25, 0.32, 1.1]);
   surges.sort((a, b) => a[0] - b[0]);
   return {
-    gap0: Math.round(90 - lin * 25),
-    v: FUITE_V0 + g * FUITE_V1,
+    gap0: Math.round(95 - lin * 15),
+    v: FUITE_V0 + (lin + g) * 0.5 * FUITE_V1, // v2.73: halfway between linear and the convex curve
     surges,
     smalls: [4, 9, 15, 23].slice(0, 1 + Math.floor(lin * 3.99)),
     radius: 2.2 + lin * 1.6,
@@ -74,9 +74,9 @@ export function fuitePlan(n: number): RockPlan {
 }
 /** Rock cruise speed (m/s): level 1, and how much more at level 30 (see the simulation). */
 export const FUITE_V0 = 11.5;
-export const FUITE_V1 = 9;
+export const FUITE_V1 = 8;
 /** Gold medal: average speed (m/s) to finish with, set from the simulated rides of the expected bikes. */
-export const FUITE_GOLD = 22.5;
+export const FUITE_GOLD = 21;
 
 /** Trial: number of zones in the circuit (4 → 10). */
 export function trialZones(n: number): number {

@@ -245,7 +245,8 @@ export class Generator {
     this.rng = new Rng(seed);
     if (mode === 'cruising' || mode === 'fuite') this.region = region = world.regionAt(0);
     this.biome = region.start;
-    this.biomeEnd = mode === 'cruising' ? 750 : 380;
+    this.biomeEnd = mode === 'cruising' ? 750 : mode === 'fuite' ? Infinity : 380;
+    if (mode === 'fuite') this.biome = Biome.Mountain; // the summit
     const circ = circuit > 0 && isCircuitMode(mode);
     if (!circ) this.circuit = 0;
     this.grade = circ ? circuitGrade(circuit) : 0;
@@ -348,6 +349,14 @@ export class Generator {
         const all = (Object.keys(reg.biomes) as unknown as string[]).map((k) => Number(k) as Biome);
         if (!all.includes(this.biome)) this.biome = this.rng.weighted(all, all.map((b) => reg.biomes[b]!));
       }
+      if (this.mode === 'fuite') {
+        // v2.73: one environment per altitude band (summit, forest, plains, city)
+        const zb = [Biome.Mountain, Biome.Forest, Biome.Meadow, Biome.City][this.world.fuiteZoneAt(x)];
+        if (zb !== this.biome) {
+          this.biome = zb;
+          this.paletteEnd = 0;
+        }
+      }
       if (this.mode === 'cruising' && reg.id === 'cross' && !this.world.mxAt(x - 1)) {
         // v2.26: the track is ridden in 3D: entry lane, a lap and the main straight, exit lane
         const circ = this.world.crossCircuitAt(x);
@@ -397,8 +406,9 @@ export class Generator {
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6, cruiseJump: 1.2 };
     } else if (this.mode === 'fuite') {
       // v2.70: a mountain descent: big soft hills, descents, jumps that stay visible and fair
+      // v2.73: on the snow of the summit (little grip) no steep climbs: descents and jumps only
       const gf = this.grade * 0.85;
-      feats = { bigHill: 2.5 + gf * 2, techHill: 1 + gf * 2.5, descent: 3, tabletop: 2, double: 1 + gf, gap: 0.2 + gf * 0.8 };
+      feats = this.world.fuiteZoneAt(x) === 0 ? { descent: 4, tabletop: 2.5, double: 1 + gf, bigHill: 0.6 } : { bigHill: 2.5 + gf * 2, techHill: 1 + gf * 2.5, descent: 3, tabletop: 2, double: 1 + gf, gap: 0.2 + gf * 0.8 };
     } else if (this.mode === 'enduro') {
       // v2.18: no small obstacles on the ground — steep, technical hills and big jumps
       feats = { bigHill: 4 + this.grade * 2, techHill: 3 + this.grade * 2, tabletop: 1.5, double: 1.5 + this.grade, gap: 0.6 + this.grade, climb: 1.2, descent: 1.2, ford: 0.6 };

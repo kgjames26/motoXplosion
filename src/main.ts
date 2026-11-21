@@ -1175,7 +1175,7 @@ $('btn-fuite').addEventListener('click', () => {
   profile.mode = 'fuite';
   profile.crossSel = false;
   saveP();
-  start();
+  openCircuits(); // its 30 levels, like the circuit modes
 });
 $('btn-fs-title').addEventListener('click', () => void toggleFullscreen());
 $('btn-fs-settings').addEventListener('click', () => void toggleFullscreen());
