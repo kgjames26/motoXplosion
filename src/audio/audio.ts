@@ -386,6 +386,24 @@ export class Audio {
     [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.14, i * 0.09));
   }
 
+  /** Gift tap: a woody knock that climbs with the spin (p = 0..1 towards opening). */
+  giftTap(p: number): void {
+    this.tone(320 + p * 520, 0.08, 'triangle', 0.16, 0, 1.6);
+    this.tone(640 + p * 1040, 0.05, 'square', 0.04, 0.02);
+  }
+
+  /** Gift opening: a quick rising sweep, then a bright fanfare. */
+  giftOpen(): void {
+    this.tone(400, 0.35, 'sawtooth', 0.06, 0, 4);
+    [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, i === 4 ? 0.6 : 0.16, 'triangle', 0.15, 0.25 + i * 0.08));
+  }
+
+  /** Firework: a soft thump and a few crackles. */
+  firework(): void {
+    this.tone(120, 0.18, 'sine', 0.12, 0, 0.5);
+    for (let i = 0; i < 5; i++) this.tone(2200 + Math.random() * 2400, 0.03, 'square', 0.025, 0.12 + Math.random() * 0.35);
+  }
+
   over(): void {
     [392, 330, 262].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.18, i * 0.18));
   }

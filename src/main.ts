@@ -20,7 +20,8 @@ import { MAX_LEVEL, PARTS, upgradedSpec } from './upgrades';
 import { rockCapacity } from './climb';
 import { DIFF_ORDER, diffIndex, tyreBonus, TYRES, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import { CRUISE_CONTROL } from './upgrades';
-import { ALBUM_PAGE, ALBUM_PAGES, CARDS, cardArt, cardOwned, type Card } from './album';
+import { ALBUM_PAGE, ALBUM_PAGES, CARDS, cardArt, cardOwned, ownedIds, VOLUMES, type Card } from './album';
+import { revealStickers } from './gift';
 import {
   CIRCUITS,
   CircuitMode,
@@ -976,6 +977,7 @@ function finishRun(display: boolean): void {
   // what was locked before this run, to announce what it opens
   const worldsBefore = WORLDS.filter((w) => worldOpen(w));
   const crossBefore = !r.mx && isCircuitMode(mode) ? crossOpen() : true;
+  const stickersBefore = ownedIds(profile.circuits, profile.best);
   if (isCircuitMode(mode) && r.circuit) {
     const key = circuitKey(mode, game.region, r.circuit, game.difficulty);
     const old = profile.circuits[key] ?? { medal: 0, done: false };
@@ -1040,6 +1042,9 @@ function finishRun(display: boolean): void {
     if (!crossBefore && crossOpen()) unlockMsg += (unlockMsg ? '<br>' : '') + `🏁 Circuit 3D débloqué !`;
   }
   saveP();
+  // v2.82: a sticker just won → the gift to tap open, over whatever screen comes next
+  const won = CARDS.filter((c) => !stickersBefore.has(c.id) && cardOwned(c, profile.circuits, profile.best));
+  if (won.length) setTimeout(() => revealStickers(won, cardWhere, audio), display ? 900 : 300);
   if (!display) return;
   let title = OVER_TITLES[mode === 'cruising' && r.reason === 'quit' ? 'stop' : r.reason] ?? 'FIN';
   if (r.reason === 'finish') {
@@ -1138,12 +1143,13 @@ const cardWhere = (c: Card): string => {
 };
 function renderAlbum(): void {
   const owned = (c: Card) => cardOwned(c, profile.circuits, profile.best);
-  $('album-count').textContent = `${CARDS.filter(owned).length}/${CARDS.length} cartes`;
+  $('album-count').textContent = `${CARDS.filter(owned).length}/${CARDS.length} autocollants`;
   const cards = CARDS.slice(albumPage * ALBUM_PAGE, (albumPage + 1) * ALBUM_PAGE);
   $('album-page').innerHTML = cards
     .map((c) => {
       const has = owned(c);
-      return `<button class="acard t${c.tier} ${has ? '' : 'missing'}" data-id="${c.id}"><div class="art">${cardArt(c)}</div><div class="cap"><b>${has ? c.name : 'Carte manquante'}</b><small>${has ? `${c.country} · n°${c.no}` : cardWhere(c)}</small></div><div class="bio"><span><b>${c.name}</b><br>${c.country} · n°${c.no}<br>${c.bio}<br><i>${cardWhere(c)}</i></span></div></button>`;
+      const vol = `Vol. ${c.vol} · ${VOLUMES[c.vol]}`;
+      return `<button class="acard t${c.tier} ${has ? '' : 'missing'}" data-id="${c.id}"><div class="art">${cardArt(c)}</div><div class="cap"><b>${has ? c.name : 'Autocollant manquant'}</b><small>${has ? vol : cardWhere(c)}</small></div><div class="bio"><span><b>${c.name}</b><br>${vol}<br>${c.bio}<br><i>${cardWhere(c)}</i></span></div></button>`;
     })
     .join('');
   $('album-dots').innerHTML = Array.from({ length: ALBUM_PAGES }, (_, i) => `<i class="${i === albumPage ? 'on' : ''}"></i>`).join('');

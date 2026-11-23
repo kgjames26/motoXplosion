@@ -2,9 +2,10 @@ import { circuitKey, CircuitMode } from './circuits';
 import type { RegionId } from './world/regions';
 
 /**
- * Album (v2.70): 60 collectible cards of invented motocross riders (names that sound like the
- * paddock, but none is a real person). A card is won with a bronze medal, so ownership is
- * derived from the saved circuits: nothing new is stored in the profile.
+ * Album (v2.70, autocollants v2.82): 60 stickers « L'épopée du motocross » in 3 volumes of 20
+ * (pictures cut from the posters by tools/build_stickers.py into public/res/stickers/NN.webp).
+ * A sticker is won with a bronze medal, so ownership is derived from the saved circuits:
+ * nothing new is stored in the profile (saves are untouched).
  * Order = pages of 12: 5 worlds × (trial, enduro, course) × levels 10/20/30, then Fuite, then Envol.
  */
 export type CardReq =
@@ -15,11 +16,11 @@ export type CardReq =
 export interface Card {
   id: number;
   name: string;
-  country: string;
-  no: number;
+  /** volume of the poster it comes from (1-3) */
+  vol: 1 | 2 | 3;
   bio: string;
   tier: 1 | 2 | 3;
-  hue: number;
+  img: string;
   req: CardReq;
 }
 
@@ -29,30 +30,71 @@ const MODES: CircuitMode[] = ['trial', 'enduro', 'course'];
 const FUITE_LEVELS = [3, 5, 8, 10, 13, 15, 18, 20, 23, 25, 28, 30];
 export const ENVOL_CARDS = [120, 170, 220]; // v2.75: the humps of the run-up must be ridden well for the long ones
 
-const FIRST = ['Antoine', 'Tonio', 'Jorge', 'Jeremy', 'Romain', 'Max', 'Glenn', 'Ken', 'Dylan', 'Eli', 'Marvin', 'Calvin', 'Gautier', 'Mathys', 'Jago', 'Ryan', 'Tim', 'Brian', 'Kevin', 'Pauls', 'Valentin', 'Lucas', 'Hunter', 'Jett'];
-const LAST = [
-  'Cairelli', 'Herlinx', 'Pradelo', 'Gajsek', 'Februre', 'Jonask', 'Paulard', 'Desallor', 'Seewart', 'Coldenhaf',
-  'Lawrenson', 'Roczen-Vik', 'Tixier-Lan', 'Vlaans', 'Simpsen', 'Barcia-Roy', 'Musquin-Ay', 'Webbel', 'Anderko', 'Plessing',
-  'Strijbos', 'Everts-Dael', 'Geerts', 'Bobryshov', 'Lupinaz', 'Guadagni', 'Olsenn', 'Renaux', 'Marcheau', 'Bogersen',
-  'Van Horbeck', 'Aranzio', 'Beaton-Fell', 'Cooperix', 'Zanchi', 'Karlsson-Be', 'Jasikonis', 'Tonkov-Ray', 'Smetz', 'Mewse',
-  'Ferrandis-L', 'Hofmann-Dy', 'Pichon', 'Vialle', 'Bernardet', 'Lesiardo', 'Mancini-Ro', 'Boissier', 'Frossard', 'Thévenot',
-  'Dubiel', 'Vuillemin', 'Cervellin', 'Stauffer', 'Janssens-Ho', 'Delacroze', 'Fonvieille', 'Hautecour', 'Maillard-Sy', 'Rousseaux',
+export const VOLUMES: Record<1 | 2 | 3, string> = { 1: 'Les fondations', 2: 'Technique & environnement', 3: 'Compétition & logistique' };
+
+/** [name, one line about it], in poster order (vol 1, 2, 3; left to right, top to bottom). */
+const STICKERS: [string, string][] = [
+  ['Le pilote', 'Celui qui tient le guidon et ne lâche rien.'],
+  ['Le casque', 'Léger, solide, avec sa visière : la première protection.'],
+  ['Les lunettes', 'Pour voir la piste malgré la terre et les projections.'],
+  ['Les bottes', 'Rigides et montantes, elles protègent chevilles et tibias.'],
+  ['La protection', 'Le pare-pierres protège la poitrine et les épaules.'],
+  ['Les gants', 'Pour garder la prise sur les poignées, même mouillées.'],
+  ['Le maillot', 'Coloré, aéré, aux couleurs de l’équipe.'],
+  ['Le guidon', 'Large et cintré, avec sa mousse de protection.'],
+  ['L’amortisseur', 'Il encaisse les réceptions à l’arrière de la moto.'],
+  ['La fourche', 'La suspension avant : elle avale bosses et trous.'],
+  ['Le pneu', 'Des crampons pour mordre dans la terre.'],
+  ['La chaîne', 'Elle transmet la force du moteur à la roue arrière.'],
+  ['Le départ', 'Tous alignés derrière la grille, moteur hurlant.'],
+  ['Le virage', 'Le corps penché, la jambe tendue, on garde l’élan.'],
+  ['Le saut', 'Quelques secondes dans les airs, la moto bien droite.'],
+  ['L’atterrissage', 'Bien réceptionner pour repartir sans perdre de vitesse.'],
+  ['La boue', 'Elle colle partout et rend chaque mètre plus dur.'],
+  ['Le stand', 'Là où la moto est préparée entre deux manches.'],
+  ['La piste', 'Bosses, virages, sauts : le terrain de jeu.'],
+  ['Le podium', 'Les trois meilleurs, le trophée et le champagne.'],
+  ['Le moteur', 'Le cœur de la moto, qui donne toute la puissance.'],
+  ['Le pot d’échappement', 'Il évacue les gaz et donne sa voix à la moto.'],
+  ['Le carbu', 'Il mélange l’air et l’essence avant l’explosion.'],
+  ['Le filtre à air', 'Il empêche la poussière d’entrer dans le moteur.'],
+  ['Le disque de frein', 'Pincé par l’étrier, il arrête la moto.'],
+  ['Le radiateur', 'Il refroidit le moteur pendant l’effort.'],
+  ['La poignée de gaz', 'Un quart de tour et la moto bondit.'],
+  ['Le repose-pied', 'Crantés pour que la botte ne glisse pas.'],
+  ['Le sélecteur', 'Du bout du pied, on passe les vitesses.'],
+  ['La visière', 'Elle protège du soleil et des mottes de terre.'],
+  ['Le tour de cou', 'Il protège la nuque lors des chutes.'],
+  ['La genouillère', 'Elle tient le genou bien en place.'],
+  ['L’ornière', 'Un sillon creusé par les roues, à suivre ou à éviter.'],
+  ['Le scrub', 'Coucher la moto en l’air pour rester bas et rapide.'],
+  ['Le whoops', 'Une suite de petites bosses à survoler.'],
+  ['L’échauffement', 'Préparer le corps avant de rouler.'],
+  ['Le panneau de stand', 'L’équipe y affiche place, écart et tours restants.'],
+  ['Le commissaire', 'Ses drapeaux annoncent les dangers et l’arrivée.'],
+  ['Le nettoyage', 'Un coup de jet pour retrouver la moto sous la boue.'],
+  ['Le transport', 'La moto voyage sanglée à l’arrière du pick-up.'],
+  ['Le réservoir', 'Il contient l’essence pour toute la manche.'],
+  ['La selle', 'Striée pour ne pas glisser, même debout.'],
+  ['Le cadre', 'Le squelette de la moto, qui tient tout ensemble.'],
+  ['La plaque numéro', 'Le numéro du pilote, bien visible à l’avant.'],
+  ['Le pignon', 'Sa taille change l’accélération et la vitesse.'],
+  ['Le levier', 'Embrayage à gauche, frein avant à droite.'],
+  ['Le rayon', 'Des dizaines de rayons tendus font une roue solide.'],
+  ['Le moyeu', 'Le centre de la roue, autour duquel tout tourne.'],
+  ['Le pare-pierres', 'Il arrête les cailloux projetés par les autres.'],
+  ['L’orthèse', 'Elle soutient une articulation fragile.'],
+  ['Le tear-off', 'Un film qu’on arrache des lunettes quand elles sont sales.'],
+  ['La poulie de départ', 'Elle cale la fourche basse pour un départ canon.'],
+  ['L’entraînement', 'Des tours et des tours pour progresser.'],
+  ['Le briefing', 'Les consignes de course avant le départ.'],
+  ['L’inspection', 'On vérifie la moto et la piste avant de rouler.'],
+  ['Le chrono', 'Il départage les pilotes au centième.'],
+  ['L’assistance', 'L’équipe qui répare, encourage et fête les succès.'],
+  ['La conduite', 'Doigts sur les leviers, regard loin devant.'],
+  ['Le parc fermé', 'Les motos y attendent, alignées, avant la course.'],
+  ['La victoire', 'Le bras levé : tout ce travail a payé.'],
 ];
-const COUNTRIES = ['Italie', 'Pays-Bas', 'Espagne', 'France', 'Belgique', 'Slovénie', 'Lettonie', 'Allemagne', 'États-Unis', 'Australie', 'Suisse', 'Estonie'];
-
-const TITLES: Record<1 | 2 | 3, string[]> = {
-  1: ['Champion national junior', 'Vainqueur du Motocross de Lommel', 'Vice-champion régional MX2', 'Révélation de la saison', 'Vainqueur de la Coupe des Ardennes'],
-  2: ["Champion d'Europe EMX250", 'Vainqueur du Grand Prix de Belgique', 'Triple vainqueur du Supercross de Bercy', 'Podium au Motocross des Nations', 'Champion de France Élite'],
-  3: ['Quintuple champion du monde MX1', 'Vainqueur du Motocross des Nations', 'Champion du monde MXGP', 'Légende des sables de Lommel', 'Double champion du monde et du Supercross'],
-};
-
-function bio(i: number, tier: 1 | 2 | 3): string {
-  const t = TITLES[tier];
-  const a = t[i % t.length];
-  const b = t[(i * 3 + 1) % t.length];
-  const y = 2004 + ((i * 7) % 22);
-  return `${a} (${y}) · ${b === a ? 'Vainqueur de 12 manches' : b} (${y + 2})`;
-}
 
 function make(): Card[] {
   const reqs: CardReq[] = [];
@@ -73,12 +115,11 @@ function make(): Card[] {
   });
   return reqs.map((req, i) => ({
     id: i,
-    name: `${FIRST[i % FIRST.length]} ${LAST[i]}`,
-    country: COUNTRIES[(i * 5) % COUNTRIES.length],
-    no: 2 + ((i * 17) % 98),
-    bio: bio(i, tiers[i]),
+    name: STICKERS[i][0],
+    vol: (1 + Math.floor(i / 20)) as 1 | 2 | 3,
+    bio: STICKERS[i][1],
     tier: tiers[i],
-    hue: (i * 47) % 360,
+    img: `/res/stickers/${String(i).padStart(2, '0')}.webp`,
     req,
   }));
 }
@@ -94,16 +135,12 @@ export function cardOwned(c: Card, circuits: Record<string, { done: boolean }>, 
   return (['facile', 'normal', 'difficile'] as const).some((d) => circuits[circuitKey(mode, region, r.n, d)]?.done);
 }
 
-/** The card's picture: a stylised rider bust (jersey colour from the card, number on the chest). */
+/** The sticker's picture (lazy: 12 per page, 60 in all). */
 export function cardArt(c: Card): string {
-  const j = `hsl(${c.hue} 70% 50%)`;
-  const j2 = `hsl(${(c.hue + 40) % 360} 75% 35%)`;
-  const h = `hsl(${(c.hue + 180) % 360} 60% 92%)`;
-  return `<svg viewBox="0 0 100 120" aria-hidden="true"><defs><linearGradient id="bg${c.id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${c.hue} 45% 28%)"/><stop offset="1" stop-color="hsl(${(c.hue + 60) % 360} 50% 12%)"/></linearGradient></defs>
-<rect width="100" height="120" fill="url(#bg${c.id})"/><path d="M0 100 L30 70 L52 92 L74 62 L100 96 V120 H0Z" fill="rgba(255,255,255,.08)"/>
-<path d="M14 120 C14 86 30 74 50 74 C70 74 86 86 86 120Z" fill="${j}"/><path d="M14 120 C14 100 20 90 28 84 L36 120Z M86 120 C86 100 80 90 72 84 L64 120Z" fill="${j2}"/>
-<rect x="42" y="66" width="16" height="12" rx="4" fill="#d9a77c"/>
-<ellipse cx="50" cy="46" rx="22" ry="24" fill="${h}"/><path d="M28 46 C28 38 36 38 50 38 C64 38 72 38 72 46 L72 54 C72 58 66 58 50 58 C34 58 28 58 28 54Z" fill="#14181f"/>
-<path d="M30 33 C36 22 64 22 70 33" fill="none" stroke="${j}" stroke-width="5" stroke-linecap="round"/>
-<text x="50" y="108" text-anchor="middle" font-family="Impact,Arial Black,sans-serif" font-size="22" fill="#fff" stroke="rgba(0,0,0,.4)" stroke-width="1">${c.no}</text></svg>`;
+  return `<img src="${c.img}" alt="" loading="lazy" decoding="async" draggable="false">`;
+}
+
+/** Ids of the stickers owned, to spot the ones a run has just won. */
+export function ownedIds(circuits: Record<string, { done: boolean }>, best: Record<string, number>): Set<number> {
+  return new Set(CARDS.filter((c) => cardOwned(c, circuits, best)).map((c) => c.id));
 }

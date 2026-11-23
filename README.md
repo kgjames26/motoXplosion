@@ -25,6 +25,11 @@ sept motos à gagner au garage.
 - L'écran de fin annonce les nouveaux mondes et circuits de cross débloqués.
 - **Mode développeur** (Paramètres, en bas) : mot de passe `Ludogo` (majuscules indifférentes). Il ouvre tous les mondes, circuits, météos et circuits de cross, donne toutes les motos, tenues, pneus et le régulateur, et 999 999 pièces. La partie d'avant est mise de côté : **Désactiver** la remet telle quelle.
 
+## Album d'autocollants (v2.82)
+- **60 autocollants « L'épopée du motocross »** en 3 volumes de 20 : *Les fondations* (pilote, casque, départ, podium…), *Technique & environnement* (moteur, carbu, scrub, whoops, commissaire…) et *Compétition & logistique* (plaque numéro, tear-off, briefing, parc fermé, victoire…). Les images sont découpées dans les trois affiches de `art/source/stickers-vol{1,2,3}.jpg` par `tools/build_stickers.py` (→ `public/res/stickers/00-59.webp`, 240 px) ; le nom est affiché par le jeu sous l'image, avec une petite phrase quand on touche l'autocollant.
+- Mêmes conditions qu'avant (médaille de bronze aux niveaux 10, 20, 30 de chaque mode et monde, 12 en Fuite, 3 en Envol) : rien n'est ajouté à la sauvegarde, les autocollants déjà gagnés restent gagnés.
+- **Au moment du gain** : un cadeau en 3D remplit l'écran. Chaque tapotement le fait tourner plus vite (il ralentit tout seul) ; après environ 3 tours et demi il s'ouvre : le couvercle s'envole, l'autocollant jaillit en tournoyant devant des rayons dorés, avec un feu d'artifice et une petite fanfare. Plusieurs autocollants gagnés d'un coup s'ouvrent l'un après l'autre.
+
 ## Multijoueur (2 à 4 pilotes, gratuit)
 
 - Dans le choix du mode, la carte **Multijoueur** ouvre l'écran des salons : **Créer un salon** (un code de 5 lettres s'affiche) ou **Rejoindre** avec ce code (on peut aussi ouvrir le jeu avec `?salon=CODE`).
