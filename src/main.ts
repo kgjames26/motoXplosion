@@ -20,7 +20,9 @@ import { MAX_LEVEL, PARTS, upgradedSpec } from './upgrades';
 import { rockCapacity } from './climb';
 import { DIFF_ORDER, diffIndex, tyreBonus, TYRES, Weather, WEATHER_ICONS, WEATHER_NAMES } from './weather';
 import { CRUISE_CONTROL } from './upgrades';
-import { ALBUM_PAGE, ALBUM_PAGES, CARDS, cardArt, cardOwned, ownedIds, VOLUMES, type Card } from './album';
+import { CARDS, cardFor, cardOwned, ownedIds, STEP, type Card } from './album';
+import { AlbumBook } from './albumBook';
+import { openSticker } from './stickerView';
 import { revealStickers } from './gift';
 import {
   CIRCUITS,
@@ -397,7 +399,12 @@ function renderCircuits(): void {
     const sub = r?.done ? (mode === 'course' ? `${r.place}${r.place === 1 ? 'er' : 'e'}` : fmtTime(r.time ?? 0)) : '';
     const pips = DIFF_ORDER.map((d, i) => `<i class="pip wx${i}${rec(mode, n, d)?.done ? ' on' : ''}"></i>`).join('');
     const cls = ['circ-tile', open ? '' : 'locked', n === sel ? 'selected' : '', n === next && open ? 'next' : ''].join(' ');
-    tiles.push(`<button class="${cls}" data-n="${n}"${open ? '' : ' disabled'}>${best ? medalIco(best) : ''}<b>${n}</b>${sub ? `<small>${sub}</small>` : ''}<span class="pips">${pips}</span></button>`);
+    tiles.push(`<button class="${cls}" data-n="${n}"${open ? '' : ' disabled'}>${best ? medalIco(best) : ''}<b>${n}</b>${sub ? `<small>${sub}</small>` : ''}<span class="pips">${pips}</span></button>`);    // v2.83: each line of 5 levels ends with the sticker it gives (grey until won)
+    const stk = n % STEP === 0 ? cardFor(mode, regionOf(mode), n) : undefined;
+    if (stk) {
+      const has = stickerOwned(stk);
+      tiles.push(`<button class="circ-stk ${has ? 'has' : 'locked'}" data-id="${stk.id}" aria-label="${stk.name}"><img src="${stk.thumb}" alt="" draggable="false"><small>${has ? stk.name : `Niveau ${n}`}</small></button>`);
+    }
   }
   $('circ-grid').innerHTML = tiles.join('');
   // details of the selected circuit
@@ -435,6 +442,13 @@ function renderCircuits(): void {
 }
 
 $('circ-grid').addEventListener('click', (e) => {
+  const sk = (e.target as HTMLElement).closest<HTMLElement>('.circ-stk');
+  if (sk) {
+    const c = CARDS[Number(sk.dataset.id)];
+    if (stickerOwned(c)) openSticker(c, cardWhere(c));
+    else toast(`🎁 « ${c.name} » : termine le niveau ${c.req.n} (médaille de bronze) pour gagner cet autocollant.`);
+    return;
+  }
   const el = (e.target as HTMLElement).closest<HTMLElement>('.circ-tile');
   if (!el || el.classList.contains('locked')) return;
   const n = Number(el.dataset.n);
@@ -977,7 +991,7 @@ function finishRun(display: boolean): void {
   // what was locked before this run, to announce what it opens
   const worldsBefore = WORLDS.filter((w) => worldOpen(w));
   const crossBefore = !r.mx && isCircuitMode(mode) ? crossOpen() : true;
-  const stickersBefore = ownedIds(profile.circuits, profile.best);
+  const stickersBefore = ownedIds(profile.circuits);
   if (isCircuitMode(mode) && r.circuit) {
     const key = circuitKey(mode, game.region, r.circuit, game.difficulty);
     const old = profile.circuits[key] ?? { medal: 0, done: false };
@@ -1043,7 +1057,7 @@ function finishRun(display: boolean): void {
   }
   saveP();
   // v2.82: a sticker just won → the gift to tap open, over whatever screen comes next
-  const won = CARDS.filter((c) => !stickersBefore.has(c.id) && cardOwned(c, profile.circuits, profile.best));
+  const won = CARDS.filter((c) => !stickersBefore.has(c.id) && cardOwned(c, profile.circuits));
   if (won.length) setTimeout(() => revealStickers(won, cardWhere, audio), display ? 900 : 300);
   if (!display) return;
   let title = OVER_TITLES[mode === 'cruising' && r.reason === 'quit' ? 'stop' : r.reason] ?? 'FIN';
@@ -1133,29 +1147,22 @@ $('btn-envol-back').addEventListener('click', () => {
   refreshTitle();
   show('title');
 });
-// ---------------------------------------------------------------- album (v2.70)
-let albumPage = 0;
+// ---------------------------------------------------------------- album (v2.70, livre v2.83)
 const cardWhere = (c: Card): string => {
   const r = c.req;
-  if (r.kind === 'envol') return `Envol · saut de ${r.dist} m`;
-  if (r.kind === 'fuite') return `Fuite · niveau ${r.n}`;
+  if (r.mode === 'fuite') return `Fuite · niveau ${r.n}`;
   return `${MODES.find((x) => x.id === r.mode)!.name} · ${REGIONS[r.region].name} · niv. ${r.n}`;
 };
-function renderAlbum(): void {
-  const owned = (c: Card) => cardOwned(c, profile.circuits, profile.best);
-  $('album-count').textContent = `${CARDS.filter(owned).length}/${CARDS.length} autocollants`;
-  const cards = CARDS.slice(albumPage * ALBUM_PAGE, (albumPage + 1) * ALBUM_PAGE);
-  $('album-page').innerHTML = cards
-    .map((c) => {
-      const has = owned(c);
-      const vol = `Vol. ${c.vol} · ${VOLUMES[c.vol]}`;
-      return `<button class="acard t${c.tier} ${has ? '' : 'missing'}" data-id="${c.id}"><div class="art">${cardArt(c)}</div><div class="cap"><b>${has ? c.name : 'Autocollant manquant'}</b><small>${has ? vol : cardWhere(c)}</small></div><div class="bio"><span><b>${c.name}</b><br>${vol}<br>${c.bio}<br><i>${cardWhere(c)}</i></span></div></button>`;
-    })
-    .join('');
-  $('album-dots').innerHTML = Array.from({ length: ALBUM_PAGES }, (_, i) => `<i class="${i === albumPage ? 'on' : ''}"></i>`).join('');
-}
+const stickerOwned = (c: Card): boolean => cardOwned(c, profile.circuits);
+const albumBook = new AlbumBook($('album-book'), $('album-dots'), {
+  owned: stickerOwned,
+  where: (c) => (c.req.mode === 'fuite' ? `niv. ${c.req.n}` : `${MODES.find((x) => x.id === c.req.mode)!.name} ${c.req.n}`),
+  label: (c) => (c.req.mode === 'fuite' ? 'Fuite · La Montagne' : `${REGIONS[c.req.region].name} · ${MODES.find((x) => x.id === c.req.mode)!.name}`),
+  tap: (c, owned) => (owned ? openSticker(c, cardWhere(c)) : goToSticker(c)),
+});
 function openAlbum(): void {
-  renderAlbum();
+  $('album-count').textContent = `${CARDS.filter(stickerOwned).length}/${CARDS.length} autocollants`;
+  albumBook.render();
   show('album');
 }
 $('btn-album').addEventListener('click', openAlbum);
@@ -1163,31 +1170,13 @@ $('btn-album-back').addEventListener('click', () => {
   refreshTitle();
   show('title');
 });
-$('album-prev').addEventListener('click', () => {
-  albumPage = (albumPage + ALBUM_PAGES - 1) % ALBUM_PAGES;
-  renderAlbum();
-});
-$('album-next').addEventListener('click', () => {
-  albumPage = (albumPage + 1) % ALBUM_PAGES;
-  renderAlbum();
-});
-$('album-page').addEventListener('click', (e) => {
-  const el = (e.target as HTMLElement).closest<HTMLElement>('.acard');
-  if (!el) return;
-  const c = CARDS[Number(el.dataset.id)];
-  if (cardOwned(c, profile.circuits, profile.best)) {
-    el.classList.toggle('open');
-    return;
-  }
-  // a missing card leads straight to the level that gives it
+$('album-prev').addEventListener('click', () => albumBook.prev());
+$('album-next').addEventListener('click', () => albumBook.next());
+/** A missing sticker leads straight to the level that gives it. */
+function goToSticker(c: Card): void {
   const r = c.req;
   profile.crossSel = false;
-  if (r.kind === 'envol') {
-    openEnvol();
-    return;
-  }
-  const mode: CircuitMode = r.kind === 'fuite' ? 'fuite' : r.mode;
-  if (r.kind === 'circuit') {
+  if (r.mode !== 'fuite') {
     if (!worldOpen(r.region)) {
       toast(`🔒 ${REGIONS[r.region].name} : termine ${WORLD_UNLOCK} niveaux dans le monde précédent.`);
       return;
@@ -1195,17 +1184,17 @@ $('album-page').addEventListener('click', (e) => {
     settings.region = r.region;
     saveSettings(settings);
   }
-  profile.mode = mode;
+  profile.mode = r.mode;
   let n = r.n;
   for (let k = 1; k < r.n; k++)
-    if (!doneAny(mode, k)) {
+    if (!doneAny(r.mode, k)) {
       n = k; // the level is not open yet: go to the first one left to finish
       break;
     }
-  profile.circuitSel[`${mode}:${regionOf(mode)}`] = n;
+  profile.circuitSel[`${r.mode}:${regionOf(r.mode)}`] = n;
   saveP();
   openCircuits();
-});
+}
 
 /** v2.81: Multijoueur in the left column, under Cruising, Envol and Fuite. */
 $('btn-multi').addEventListener('click', () => {

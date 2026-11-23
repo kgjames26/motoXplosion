@@ -1,0 +1,578 @@
+[
+{
+"vol": 1,
+"cell": 0,
+"name": "Le pilote",
+"bio": "Celui qui tient le guidon et ne lâche rien."
+},
+{
+"vol": 1,
+"cell": 1,
+"name": "Le casque",
+"bio": "Léger et solide : la première protection du pilote."
+},
+{
+"vol": 1,
+"cell": 2,
+"name": "Les lunettes",
+"bio": "Pour voir la piste malgré la terre et les projections."
+},
+{
+"vol": 1,
+"cell": 3,
+"name": "Les bottes",
+"bio": "Rigides et montantes, elles protègent chevilles et tibias."
+},
+{
+"vol": 1,
+"cell": 5,
+"name": "Les gants",
+"bio": "Pour garder la prise sur les poignées, même mouillées."
+},
+{
+"vol": 1,
+"cell": 6,
+"name": "Le maillot",
+"bio": "Coloré, aéré, aux couleurs de l’équipe."
+},
+{
+"vol": 1,
+"cell": 4,
+"name": "La protection",
+"bio": "Le pare-pierres protège la poitrine et les épaules."
+},
+{
+"vol": 5,
+"cell": 6,
+"name": "Les coudières",
+"bio": "Coques rigides : les coudes ne craignent plus les chutes."
+},
+{
+"vol": 2,
+"cell": 11,
+"name": "La genouillère",
+"bio": "Articulée, elle tient le genou bien en place."
+},
+{
+"vol": 5,
+"cell": 4,
+"name": "Le pantalon",
+"bio": "Renforcé aux genoux, il résiste aux frottements."
+},
+{
+"vol": 2,
+"cell": 10,
+"name": "Le tour de cou",
+"bio": "Il protège la nuque lors des chutes."
+},
+{
+"vol": 3,
+"cell": 10,
+"name": "Le tear-off",
+"bio": "Un film qu’on arrache des lunettes quand elles sont sales."
+},
+{
+"vol": 1,
+"cell": 12,
+"name": "Le départ",
+"bio": "Tous alignés derrière la grille, moteur hurlant."
+},
+{
+"vol": 1,
+"cell": 13,
+"name": "Le virage",
+"bio": "Le corps penché, la jambe tendue, on garde l’élan."
+},
+{
+"vol": 1,
+"cell": 14,
+"name": "Le saut",
+"bio": "Quelques secondes dans les airs, la moto bien droite."
+},
+{
+"vol": 1,
+"cell": 15,
+"name": "L’atterrissage",
+"bio": "Bien réceptionner pour repartir sans perdre de vitesse."
+},
+{
+"vol": 1,
+"cell": 18,
+"name": "La piste",
+"bio": "Bosses, virages, sauts : le terrain de jeu."
+},
+{
+"vol": 1,
+"cell": 19,
+"name": "Le podium",
+"bio": "Les trois meilleurs, sous les applaudissements."
+},
+{
+"vol": 1,
+"cell": 7,
+"name": "Le guidon",
+"bio": "Large et cintré, avec sa mousse de protection."
+},
+{
+"vol": 3,
+"cell": 5,
+"name": "Le levier",
+"bio": "Embrayage à gauche, frein avant à droite."
+},
+{
+"vol": 2,
+"cell": 6,
+"name": "La poignée de gaz",
+"bio": "Un quart de tour et la moto bondit."
+},
+{
+"vol": 2,
+"cell": 8,
+"name": "Le sélecteur",
+"bio": "Du bout du pied, on passe les vitesses."
+},
+{
+"vol": 2,
+"cell": 7,
+"name": "Le repose-pied",
+"bio": "Cranté pour que la botte ne glisse pas."
+},
+{
+"vol": 4,
+"cell": 1,
+"name": "Le coupe-circuit",
+"bio": "Relié au pilote, il coupe le moteur en cas de chute."
+},
+{
+"vol": 1,
+"cell": 16,
+"name": "La boue",
+"bio": "Elle colle partout et rend chaque mètre plus dur."
+},
+{
+"vol": 2,
+"cell": 12,
+"name": "L’ornière",
+"bio": "Un sillon creusé par les roues, à suivre ou à éviter."
+},
+{
+"vol": 4,
+"cell": 7,
+"name": "Le sable",
+"bio": "Il faut garder les gaz pour ne pas s’enfoncer."
+},
+{
+"vol": 5,
+"cell": 16,
+"name": "La poussière",
+"bio": "Quand le sol est sec, on ne voit plus rien devant."
+},
+{
+"vol": 5,
+"cell": 17,
+"name": "L’arrosage",
+"bio": "On mouille la piste pour retenir la poussière."
+},
+{
+"vol": 5,
+"cell": 18,
+"name": "Le bulldozer",
+"bio": "Il façonne les sauts et refait la piste."
+},
+{
+"vol": 2,
+"cell": 14,
+"name": "Le whoops",
+"bio": "Une suite de petites bosses à survoler."
+},
+{
+"vol": 2,
+"cell": 13,
+"name": "Le scrub",
+"bio": "Coucher la moto en l’air pour rester bas et rapide."
+},
+{
+"vol": 5,
+"cell": 14,
+"name": "La table",
+"bio": "Un saut au sommet plat : on peut le passer ou le survoler."
+},
+{
+"vol": 6,
+"cell": 13,
+"name": "Le double",
+"bio": "Deux bosses d’un seul saut."
+},
+{
+"vol": 7,
+"cell": 12,
+"name": "Le triple",
+"bio": "Trois bosses d’un coup : réservé aux plus audacieux."
+},
+{
+"vol": 5,
+"cell": 12,
+"name": "Le whip",
+"bio": "En l’air, on jette la moto de côté avant de la redresser."
+},
+{
+"vol": 1,
+"cell": 10,
+"name": "Le pneu",
+"bio": "Des crampons pour mordre dans la terre."
+},
+{
+"vol": 1,
+"cell": 11,
+"name": "La chaîne",
+"bio": "Elle transmet la force du moteur à la roue arrière."
+},
+{
+"vol": 3,
+"cell": 4,
+"name": "Le pignon",
+"bio": "La petite roue dentée à la sortie du moteur."
+},
+{
+"vol": 6,
+"cell": 0,
+"name": "La couronne",
+"bio": "La grande roue dentée fixée sur la roue arrière."
+},
+{
+"vol": 3,
+"cell": 7,
+"name": "Le moyeu",
+"bio": "Le centre de la roue, autour duquel tout tourne."
+},
+{
+"vol": 5,
+"cell": 1,
+"name": "Le bras oscillant",
+"bio": "Il relie la roue arrière au cadre et monte et descend."
+},
+{
+"vol": 1,
+"cell": 8,
+"name": "L’amortisseur",
+"bio": "Il encaisse les réceptions à l’arrière de la moto."
+},
+{
+"vol": 1,
+"cell": 9,
+"name": "La fourche",
+"bio": "La suspension avant : elle avale bosses et trous."
+},
+{
+"vol": 3,
+"cell": 2,
+"name": "Le cadre",
+"bio": "Le squelette de la moto, qui tient tout ensemble."
+},
+{
+"vol": 3,
+"cell": 1,
+"name": "La selle",
+"bio": "Striée pour ne pas glisser, même debout."
+},
+{
+"vol": 3,
+"cell": 0,
+"name": "Le réservoir",
+"bio": "Il contient l’essence pour toute la manche."
+},
+{
+"vol": 5,
+"cell": 2,
+"name": "Le garde-boue",
+"bio": "Il arrête la terre projetée par la roue."
+},
+{
+"vol": 5,
+"cell": 15,
+"name": "Le holeshot",
+"bio": "Être le premier au premier virage."
+},
+{
+"vol": 6,
+"cell": 14,
+"name": "Le dépassement",
+"bio": "Trouver la bonne trajectoire pour passer devant."
+},
+{
+"vol": 7,
+"cell": 13,
+"name": "L’appui",
+"bio": "Le virage relevé qui permet de tourner sans freiner."
+},
+{
+"vol": 5,
+"cell": 13,
+"name": "Le wheeling",
+"bio": "Roue avant en l’air, sur la roue arrière."
+},
+{
+"vol": 3,
+"cell": 15,
+"name": "Le chrono",
+"bio": "Il départage les pilotes au centième."
+},
+{
+"vol": 2,
+"cell": 16,
+"name": "Le panneau de stand",
+"bio": "L’équipe y affiche place, écart et tours restants."
+},
+{
+"vol": 2,
+"cell": 0,
+"name": "Le moteur",
+"bio": "Le cœur de la moto, qui donne toute la puissance."
+},
+{
+"vol": 2,
+"cell": 2,
+"name": "Le carbu",
+"bio": "Il mélange l’air et l’essence avant l’explosion."
+},
+{
+"vol": 2,
+"cell": 3,
+"name": "Le filtre à air",
+"bio": "Il empêche la poussière d’entrer dans le moteur."
+},
+{
+"vol": 4,
+"cell": 4,
+"name": "La bougie",
+"bio": "Son étincelle allume le mélange dans le moteur."
+},
+{
+"vol": 5,
+"cell": 0,
+"name": "Le piston",
+"bio": "Il monte et descend des milliers de fois par minute."
+},
+{
+"vol": 7,
+"cell": 1,
+"name": "La bielle",
+"bio": "Elle transforme le va-et-vient du piston en rotation."
+},
+{
+"vol": 2,
+"cell": 1,
+"name": "Le pot d’échappement",
+"bio": "Il évacue les gaz et donne sa voix à la moto."
+},
+{
+"vol": 2,
+"cell": 5,
+"name": "Le radiateur",
+"bio": "Il refroidit le moteur pendant l’effort."
+},
+{
+"vol": 4,
+"cell": 6,
+"name": "L’embrayage",
+"bio": "Ses disques relient ou séparent le moteur et la roue."
+},
+{
+"vol": 2,
+"cell": 4,
+"name": "Le disque de frein",
+"bio": "Pincé par l’étrier, il arrête la moto."
+},
+{
+"vol": 7,
+"cell": 6,
+"name": "Le kick",
+"bio": "Un grand coup de pied pour démarrer."
+},
+{
+"vol": 5,
+"cell": 8,
+"name": "L’huile moteur",
+"bio": "Elle protège les pièces qui frottent dans le moteur."
+},
+{
+"vol": 2,
+"cell": 17,
+"name": "Le commissaire",
+"bio": "Ses drapeaux annoncent les dangers."
+},
+{
+"vol": 6,
+"cell": 16,
+"name": "Le drapeau à damier",
+"bio": "Il s’abaisse quand le vainqueur franchit la ligne."
+},
+{
+"vol": 3,
+"cell": 13,
+"name": "Le briefing",
+"bio": "Les consignes de course avant le départ."
+},
+{
+"vol": 3,
+"cell": 3,
+"name": "La plaque numéro",
+"bio": "Le numéro du pilote, bien visible à l’avant."
+},
+{
+"vol": 3,
+"cell": 18,
+"name": "Le parc fermé",
+"bio": "Les motos y attendent, alignées, avant la course."
+},
+{
+"vol": 5,
+"cell": 19,
+"name": "Le speaker",
+"bio": "Sa voix fait vibrer tout le circuit."
+},
+{
+"vol": 1,
+"cell": 17,
+"name": "Le stand",
+"bio": "Là où la moto est préparée entre deux manches."
+},
+{
+"vol": 4,
+"cell": 10,
+"name": "La caisse à outils",
+"bio": "Tout ce qu’il faut pour réparer, bien rangé."
+},
+{
+"vol": 5,
+"cell": 9,
+"name": "La clé dynamométrique",
+"bio": "Pour serrer chaque vis juste comme il faut."
+},
+{
+"vol": 5,
+"cell": 10,
+"name": "Le démonte-pneu",
+"bio": "Pour changer un pneu en quelques minutes."
+},
+{
+"vol": 4,
+"cell": 11,
+"name": "Le manomètre",
+"bio": "Il mesure la pression des pneus."
+},
+{
+"vol": 4,
+"cell": 9,
+"name": "Le lève-moto",
+"bio": "Il soulève la moto pour travailler sur les roues."
+},
+{
+"vol": 4,
+"cell": 8,
+"name": "Le jerrycan",
+"bio": "La réserve d’essence pour la journée."
+},
+{
+"vol": 2,
+"cell": 18,
+"name": "Le nettoyage",
+"bio": "Un coup de jet pour retrouver la moto sous la boue."
+},
+{
+"vol": 2,
+"cell": 19,
+"name": "Le transport",
+"bio": "La moto voyage sanglée à l’arrière du pick-up."
+},
+{
+"vol": 7,
+"cell": 17,
+"name": "Le mécanicien",
+"bio": "Il connaît chaque vis de la moto."
+},
+{
+"vol": 3,
+"cell": 16,
+"name": "L’assistance",
+"bio": "L’équipe qui répare, encourage et fête les succès."
+},
+{
+"vol": 4,
+"cell": 13,
+"name": "Le contrôle technique",
+"bio": "On vérifie que la moto est prête et sûre."
+},
+{
+"vol": 4,
+"cell": 12,
+"name": "L’inscription",
+"bio": "On s’inscrit et on reçoit son numéro."
+},
+{
+"vol": 3,
+"cell": 12,
+"name": "L’entraînement",
+"bio": "Des tours et des tours pour progresser."
+},
+{
+"vol": 4,
+"cell": 16,
+"name": "Le public",
+"bio": "Des milliers de fans le long des barrières."
+},
+{
+"vol": 4,
+"cell": 17,
+"name": "Le photographe",
+"bio": "Il guette le saut parfait."
+},
+{
+"vol": 6,
+"cell": 17,
+"name": "Le trophée",
+"bio": "La coupe que tout pilote rêve de soulever."
+},
+{
+"vol": 3,
+"cell": 19,
+"name": "La victoire",
+"bio": "Le bras levé : tout ce travail a payé."
+},
+{
+"vol": 7,
+"cell": 14,
+"name": "La descente",
+"bio": "Freiner juste assez, et laisser filer."
+},
+{
+"vol": 6,
+"cell": 7,
+"name": "La caméra embarquée",
+"bio": "Fixée au casque, elle filme la descente."
+},
+{
+"vol": 4,
+"cell": 14,
+"name": "Le médecin",
+"bio": "Toujours prêt au bord de la piste."
+},
+{
+"vol": 7,
+"cell": 19,
+"name": "La médaille",
+"bio": "Le souvenir d’une course réussie."
+},
+{
+"vol": 4,
+"cell": 19,
+"name": "Le feu de camp",
+"bio": "Le soir, on refait la course autour du feu."
+},
+{
+"vol": 6,
+"cell": 19,
+"name": "Le coucher de soleil",
+"bio": "La fin d’une belle journée de moto."
+}
+]
